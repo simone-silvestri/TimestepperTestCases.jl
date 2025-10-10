@@ -1,0 +1,10 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.12.0"
+manifest_format = "2.0"
+project_hash = "e32c8bf17773421f87a49c1818ec5716eebc36d0"
+
+[[deps.TimestepperTestCases]]
+path = "."
+uuid = "8d628e06-8e8e-46bb-a074-537775fcc231"
+version = "1.0.0-DEV"
