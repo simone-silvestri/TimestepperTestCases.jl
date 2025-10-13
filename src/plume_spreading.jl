@@ -73,9 +73,9 @@ end
 function update_open_bcs!(sim)
     v_bcs = sim.model.velocities.v.boundary_conditions.south.condition
     S_bcs =    sim.model.tracers.S.boundary_conditions.south.condition
-    
-    v_bcs .= p.u₀ * min(1, (clock.time - 1hours) / 1hours)
-    S_bcs .= p.S₀ * max(0, (1hours - clock.time) / 1hours)
+
+    v_bcs .= 0.3 .* min(1, (sim.model.clock.time - 1hours) / 1hours)
+    S_bcs .=        max(0, (1hours - sim.model.clock.time) / 1hours)
 
     return nothing
 end
@@ -85,7 +85,7 @@ function plume_spreading_model(timestepper::Symbol; arch = CPU())
     grid = plume_spreading_grid(arch)
     coriolis = FPlane(f = 1.2e-4)
 
-    parameters = (; λ = 1 / 20minutes, u₀ = 0.3, S₀ = 30.0)
+    parameters = (; λ = 1 / 120minutes, u₀ = 0.3, S₀ = 30.0)
     v_rest = Forcing(v_restoring; discrete_form=true, parameters) 
     S_rest = Forcing(S_restoring; discrete_form=true, parameters)
 
@@ -105,9 +105,9 @@ function plume_spreading_model(timestepper::Symbol; arch = CPU())
                                           coriolis,
                                           timestepper,
                                           tracers = :S,
-                                          forcing = (; v=v_rest, S=S_rest),
+                                        #   forcing = (; v=v_rest, S=S_rest),
                                           buoyancy,
-                                        #   boundary_conditions = (; v=v_bcs, S=S_bcs),
+                                          boundary_conditions = (; v=v_bcs, S=S_bcs),
                                           free_surface = SplitExplicitFreeSurface(grid; substeps=50),
                                           momentum_advection = WENOVectorInvariant(),
                                           tracer_advection = WENO(order=7))
