@@ -67,8 +67,8 @@ function plume_spreading_grid(arch)
     return grid
 end
 
-@inline u_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (p.u₀ - fields.u[i, j, k]), zero(u)) * min(1, (t - 1hours) / 1hours)
-@inline S_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (0    - fields.S[i, j, k]), zero(S)) * min(1, (t - 1hours) / 1hours)
+@inline u_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (p.u₀ - fields.u[i, j, k]), zero(u)) * min(1, (clock.time - 1hours) / 1hours)
+@inline S_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (0    - fields.S[i, j, k]), zero(S)) * min(1, (clock.time - 1hours) / 1hours)
 
 @inline u_open(i, k, grid, clock, fields, p) = p.u₀ * min(1, (clock.time - 1hours) / 1hours)
 @inline S_open(i, k, grid, clock, fields, p) = p.S₀ * max(0, (1hours - clock.time) / 1hours)
