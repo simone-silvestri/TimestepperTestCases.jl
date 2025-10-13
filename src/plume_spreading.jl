@@ -1,5 +1,6 @@
 using Oceananigans
 using Oceananigans.Utils: ConsecutiveIterations
+using Oceananigans.BoundaryConditions: OBC
 
 plume_spreading_timestep(::Val{:QuasiAdamsBashforth2}) = 60seconds
 plume_spreading_timestep(::Val{:SplitRungeKutta3})     = 3minutes
@@ -89,10 +90,10 @@ import Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurface
     south_barotropic_velocity_boundary_condition,
     north_barotropic_velocity_boundary_condition
 
-@inline  west_barotropic_velocity_boundary_condition(baroclinic_velocity) = similar(baroclinic_velocity.boundary_conditions.west)
-@inline  east_barotropic_velocity_boundary_condition(baroclinic_velocity) = similar(baroclinic_velocity.boundary_conditions.east)
-@inline south_barotropic_velocity_boundary_condition(baroclinic_velocity) = similar(baroclinic_velocity.boundary_conditions.south)
-@inline north_barotropic_velocity_boundary_condition(baroclinic_velocity) = similar(baroclinic_velocity.boundary_conditions.north)
+@inline  west_barotropic_velocity_boundary_condition(baroclinic_velocity) = deepcopy(baroclinic_velocity.boundary_conditions.west)
+@inline  east_barotropic_velocity_boundary_condition(baroclinic_velocity) = deepcopy(baroclinic_velocity.boundary_conditions.east)
+@inline south_barotropic_velocity_boundary_condition(baroclinic_velocity) = deepcopy(baroclinic_velocity.boundary_conditions.south)
+@inline north_barotropic_velocity_boundary_condition(baroclinic_velocity) = deepcopy(baroclinic_velocity.boundary_conditions.north)
 
 function plume_spreading_model(timestepper::Symbol; arch = CPU())
 
