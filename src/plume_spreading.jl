@@ -67,10 +67,10 @@ function plume_spreading_grid(arch)
     return grid
 end
 
-@inline u_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (p.u₀ - fields.u[i, j, k]), zero(grid)) * min(1, (clock.time - 1hours) / 1hours)
+@inline v_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (p.u₀ - fields.v[i, j, k]), zero(grid)) * min(1, (clock.time - 1hours) / 1hours)
 @inline S_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (0    - fields.S[i, j, k]), zero(grid)) * min(1, (clock.time - 1hours) / 1hours)
 
-@inline u_open(i, k, grid, clock, fields, p) = p.u₀ * min(1, (clock.time - 1hours) / 1hours)
+@inline v_open(i, k, grid, clock, fields, p) = p.u₀ * min(1, (clock.time - 1hours) / 1hours)
 @inline S_open(i, k, grid, clock, fields, p) = p.S₀ * max(0, (1hours - clock.time) / 1hours)
 
 function plume_spreading_model(timestepper::Symbol; arch = CPU())
@@ -79,13 +79,16 @@ function plume_spreading_model(timestepper::Symbol; arch = CPU())
     coriolis = FPlane(f = 1.2e-4)
 
     parameters = (; λ = 1 / 20minutes, u₀ = 0.3, S₀ = 30.0)
-    u_rest = Forcing(u_restoring; discrete_form=true, parameters) 
+    v_rest = Forcing(v_restoring; discrete_form=true, parameters) 
     S_rest = Forcing(S_restoring; discrete_form=true, parameters)
 
-    u_in =  OpenBoundaryCondition(0.3) # u_open; discrete_form=true, parameters)
-    S_in = ValueBoundaryCondition(0.0) # S_open; discrete_form=true, parameters)
-    
-    u_bcs = FieldBoundaryConditions(south=u_in)
+    v_open = Oceananigans.Architectures.on_architecture(arch, zeros(grid.Nx, grid.Nz))
+    S_open = Oceananigans.Architectures.on_architecture(arch, zeros(grid.Nx, grid.Nz))
+
+    v_in =  OpenBoundaryCondition(0.3) # v_open) # v_open; discrete_form=true, parameters)
+    S_in = ValueBoundaryCondition(0.0) # S_open) # S_open; discrete_form=true, parameters)
+
+    v_bcs = FieldBoundaryConditions(south=v_in)
     S_bcs = FieldBoundaryConditions(south=S_in)
 
     equation_of_state = LinearEquationOfState(thermal_expansion = 0.0)
@@ -95,10 +98,10 @@ function plume_spreading_model(timestepper::Symbol; arch = CPU())
                                           coriolis,
                                           timestepper,
                                           tracers = :S,
-                                          forcing = (; u = u_rest, S = S_rest),
+                                          forcing = (; v=v_rest, S=S_rest),
                                           buoyancy,
-                                          boundary_conditions = (; u = u_bcs, S = S_bcs),
-                                          free_surface = SplitExplicitFreeSurface(grid; substeps=10),
+                                          boundary_conditions = (; v=v_bcs, S=S_bcs),
+                                          free_surface = SplitExplicitFreeSurface(grid; substeps=50),
                                           momentum_advection = WENOVectorInvariant(),
                                           tracer_advection = WENO(order=7))
 
