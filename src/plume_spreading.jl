@@ -82,8 +82,8 @@ function plume_spreading_model(timestepper::Symbol; arch = CPU())
     u_rest = Forcing(u_restoring; field_dependencies = :u, parameters) 
     S_rest = Forcing(S_restoring; field_dependencies = :S, parameters)
 
-    u_in =  OpenBoundaryCondition(u_open; discrete_form=true, parameters)
-    S_in = ValueBoundaryCondition(S_open; discrete_form=true, parameters)
+    u_in =  OpenBoundaryCondition(0.3) # u_open; discrete_form=true, parameters)
+    S_in = ValueBoundaryCondition(0.0) # S_open; discrete_form=true, parameters)
     
     u_bcs = FieldBoundaryConditions(south=u_in)
     S_bcs = FieldBoundaryConditions(south=S_in)
