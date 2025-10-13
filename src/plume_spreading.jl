@@ -67,8 +67,8 @@ function plume_spreading_grid(arch)
     return grid
 end
 
-@inline u_restoring(x, y, z, t, u, p) = ifelse(y < 5kilometers, 1 / p.λ * (p.u₀ - u), zero(u))
-@inline S_restoring(x, y, z, t, S, p) = ifelse(y < 5kilometers, 1 / p.λ * (0    - S), zero(S))
+@inline u_restoring(x, y, z, t, u, p) = ifelse(y < 5kilometers, 1 / p.λ * (p.u₀ - u), zero(u)) * max(1, t - 1hours)
+@inline S_restoring(x, y, z, t, S, p) = ifelse(y < 5kilometers, 1 / p.λ * (0    - S), zero(S)) * max(1, t - 1hours)
 
 function plume_spreading_model(timestepper::Symbol; arch = CPU())
 
