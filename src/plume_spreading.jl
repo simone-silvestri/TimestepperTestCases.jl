@@ -67,15 +67,15 @@ function plume_spreading_grid(arch)
     return grid
 end
 
-@inline v_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (p.u₀ - fields.v[i, j, k]), zero(grid)) * min(1, (clock.time - 1hours) / 1hours)
-@inline S_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (0    - fields.S[i, j, k]), zero(grid)) * min(1, (clock.time - 1hours) / 1hours)
+@inline v_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (p.u₀ - fields.v[i, j, k]), zero(grid)) * min(1, clock.time / 1hours)
+@inline S_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (0    - fields.S[i, j, k]), zero(grid)) * min(1, clock.time / 1hours)
 
 function update_open_bcs!(sim)
     v_bcs = sim.model.velocities.v.boundary_conditions.south.condition
     S_bcs =    sim.model.tracers.S.boundary_conditions.south.condition
 
-    v_bcs .= 0.3 .* min(1, (sim.model.clock.time - 1hours) / 1hours)
-    S_bcs .=        max(0, (1hours - sim.model.clock.time) / 1hours)
+    v_bcs .= 0.30 .* min(1, sim.model.clock.time            / 1hours)
+    S_bcs .= 30.0 .* max(0, (1hours - sim.model.clock.time) / 1hours)
 
     return nothing
 end
