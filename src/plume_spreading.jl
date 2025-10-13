@@ -70,8 +70,15 @@ end
 @inline v_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (p.u₀ - fields.v[i, j, k]), zero(grid)) * min(1, (clock.time - 1hours) / 1hours)
 @inline S_restoring(i, j, k, grid, clock, fields, p) = @inbounds ifelse(j ≤ 5, 1 / p.λ * (0    - fields.S[i, j, k]), zero(grid)) * min(1, (clock.time - 1hours) / 1hours)
 
-@inline v_open(i, k, grid, clock, fields, p) = p.u₀ * min(1, (clock.time - 1hours) / 1hours)
-@inline S_open(i, k, grid, clock, fields, p) = p.S₀ * max(0, (1hours - clock.time) / 1hours)
+function update_open_bcs!(sim)
+    v_bcs = sim.model.velocities.v.boundary_conditions.south.condition
+    S_bcs =    sim.model.tracers.S.boundary_conditions.south.condition
+    
+    v_bcs .= p.u₀ * min(1, (clock.time - 1hours) / 1hours)
+    S_bcs .= p.S₀ * max(0, (1hours - clock.time) / 1hours)
+
+    return nothing
+end
 
 function plume_spreading_model(timestepper::Symbol; arch = CPU())
 
@@ -85,8 +92,8 @@ function plume_spreading_model(timestepper::Symbol; arch = CPU())
     v_open = Oceananigans.Architectures.on_architecture(arch, zeros(grid.Nx, grid.Nz))
     S_open = Oceananigans.Architectures.on_architecture(arch, zeros(grid.Nx, grid.Nz))
 
-    v_in =  OpenBoundaryCondition(0.3) # v_open) # v_open; discrete_form=true, parameters)
-    S_in = ValueBoundaryCondition(0.0) # S_open) # S_open; discrete_form=true, parameters)
+    v_in =  OpenBoundaryCondition(v_open) 
+    S_in = ValueBoundaryCondition(S_open) 
 
     v_bcs = FieldBoundaryConditions(south=v_in)
     S_bcs = FieldBoundaryConditions(south=S_in)
@@ -100,7 +107,7 @@ function plume_spreading_model(timestepper::Symbol; arch = CPU())
                                           tracers = :S,
                                           forcing = (; v=v_rest, S=S_rest),
                                           buoyancy,
-                                          boundary_conditions = (; v=v_bcs, S=S_bcs),
+                                        #   boundary_conditions = (; v=v_bcs, S=S_bcs),
                                           free_surface = SplitExplicitFreeSurface(grid; substeps=50),
                                           momentum_advection = WENOVectorInvariant(),
                                           tracer_advection = WENO(order=7))
@@ -110,7 +117,8 @@ function plume_spreading_model(timestepper::Symbol; arch = CPU())
     Δt = plume_spreading_timestep(Val(timestepper))
 
     simulation = Simulation(model; Δt, stop_time=35hours)
-    add_callback!(simulation, print_progress, IterationInterval(10))
+    add_callback!(simulation, print_progress,   IterationInterval(10))
+    add_callback!(simulation, update_open_bcs!, IterationInterval(1))
 
     filename = "plume_spreading"
     save_fields_interval = 10minutes
