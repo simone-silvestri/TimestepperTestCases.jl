@@ -67,20 +67,23 @@ function plume_spreading_grid(arch)
     return grid
 end
 
-@inline u_restoring(x, y, z, t, u, p) = ifelse(y < 5kilometers, 1 / p.λ * (p.u₀ - u), zero(u)) * max(1, t - 1hours)
-@inline S_restoring(x, y, z, t, S, p) = ifelse(y < 5kilometers, 1 / p.λ * (0    - S), zero(S)) * max(1, t - 1hours)
+@inline u_restoring(x, y, z, t, u, p) = ifelse(y < 5kilometers, 1 / p.λ * (p.u₀ - u), zero(u)) * min(1, (t - 1hours) / 1hours
+@inline S_restoring(x, y, z, t, S, p) = ifelse(y < 5kilometers, 1 / p.λ * (0    - S), zero(S)) * min(1, (t - 1hours) / 1hours
+
+@inline u_open(i, k, grid, clock, fields, p) = p.u₀ * min(1, (clock.time - 1hours) / 1hours)
+@inline S_open(i, k, grid, clock, fields, p) = p.S₀ * max(0, (1hours - clock.time) / 1hours)
 
 function plume_spreading_model(timestepper::Symbol; arch = CPU())
 
     grid = plume_spreading_grid(arch)
     coriolis = FPlane(f = 1.2e-4)
 
-    parameters = (; λ = 1 / 20minutes, u₀ = 0.3)
+    parameters = (; λ = 1 / 20minutes, u₀ = 0.3, S₀ = 30.0)
     u_rest = Forcing(u_restoring; field_dependencies = :u, parameters) 
     S_rest = Forcing(S_restoring; field_dependencies = :S, parameters)
 
-    u_in = OpenBoundaryCondition(parameters.u₀)
-    S_in = ValueBoundaryCondition(0.0)
+    u_in =  OpenBoundaryCondition(u_open; discrete_form=true, parameters)
+    S_in = ValueBoundaryCondition(S_open; discrete_form=true, parameters)
     
     u_bcs = FieldBoundaryConditions(south=u_in)
     S_bcs = FieldBoundaryConditions(south=S_in)
