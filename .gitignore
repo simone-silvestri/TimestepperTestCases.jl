@@ -1,5 +1,8 @@
 *.jl.*.cov
 *.jl.cov
 *.jl.mem
+*.mp4
+*.jld2
+*.nc
 /docs/Manifest*.toml
 /docs/build/

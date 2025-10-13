@@ -27,11 +27,17 @@ function baroclinic_adjustment(timestepper::Symbol)
     Lz = 1kilometers    
 
     grid = RectilinearGrid(size = (48, 48, 8),
-                           x = (0, Lx),
+                           x = (-Lx/2, Lx/2),
                            y = (-Ly/2, Ly/2),
                            z = (-Lz, 0), #MutableVerticalDiscretization((-Lz, 0)),
                            halo = (6, 6, 6),
                            topology = (Periodic, Bounded, Bounded))
+
+    # bottom_height = (- Lz - 10) .* ones(48, 50)
+    # bottom_height[:, 1] .= 0
+    # bottom_height[:, end] .= 0
+
+    # grid = ImmersedBoundaryGrid(grid, GridFittedBottom(bottom_height))
 
     model = HydrostaticFreeSurfaceModel(; grid,
                                           coriolis = BetaPlane(latitude = -45),
@@ -39,7 +45,7 @@ function baroclinic_adjustment(timestepper::Symbol)
                                           timestepper,
                                           tracers = :b,
                                           free_surface = SplitExplicitFreeSurface(grid; substeps=50),
-                                        #   closure = HorizontalScalarBiharmonicDiffusivity(ν=1e10),
+                                        #   closure = HorizontalScalarBiharmonicDiffusivity(ν=2e10),
                                           momentum_advection = WENO(),
                                           tracer_advection = WENO(order=7))
 
