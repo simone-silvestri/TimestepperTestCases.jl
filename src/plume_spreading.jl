@@ -74,11 +74,25 @@ function update_open_bcs!(sim)
     v_bcs = sim.model.velocities.v.boundary_conditions.south.condition
     S_bcs =    sim.model.tracers.S.boundary_conditions.south.condition
 
+    V_bcs = sim.model.free_surface.barotropic_velocities.V.boundary_conditions.south.condition
+
+    V_bcs .= 3.00 .* min(1, sim.model.clock.time            / 1hours)
     v_bcs .= 0.30 .* min(1, sim.model.clock.time            / 1hours)
     S_bcs .= 30.0 .* max(0, (1hours - sim.model.clock.time) / 1hours)
 
     return nothing
 end
+
+import Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces: 
+    west_barotropic_velocity_boundary_condition,
+    east_barotropic_velocity_boundary_condition,
+    south_barotropic_velocity_boundary_condition,
+    north_barotropic_velocity_boundary_condition
+
+@inline  west_barotropic_velocity_boundary_condition(baroclinic_velocity) = similar(baroclinic_velocity.boundary_conditions.west)
+@inline  east_barotropic_velocity_boundary_condition(baroclinic_velocity) = similar(baroclinic_velocity.boundary_conditions.east)
+@inline south_barotropic_velocity_boundary_condition(baroclinic_velocity) = similar(baroclinic_velocity.boundary_conditions.south)
+@inline north_barotropic_velocity_boundary_condition(baroclinic_velocity) = similar(baroclinic_velocity.boundary_conditions.north)
 
 function plume_spreading_model(timestepper::Symbol; arch = CPU())
 
