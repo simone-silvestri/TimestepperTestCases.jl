@@ -85,7 +85,7 @@ function idealized_coast(timestepper::Symbol; arch = CPU(), forced = true)
     Δt = idealized_coast_timestep(Val(timestepper))
     simulation = Simulation(model; Δt, stop_time=20days)
 
-    add_callback!(simulation, progress,  IterationInterval(100))
+    add_callback!(simulation, print_progress,  IterationInterval(100))
 
     filename = "idealized_coast"
     save_fields_interval = 1hours
