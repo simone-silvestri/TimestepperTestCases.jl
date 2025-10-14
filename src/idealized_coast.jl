@@ -82,6 +82,7 @@ function idealized_coast(timestepper::Symbol; arch = CPU(), forced = true)
     uᵢ(x, y, z) = y > 60kilometers ? 0.0 : - 1 / f * M²(y) * (z - bottom_height(x, y))
 
     set!(model, S=Sᵢ, T=Tᵢ, u=uᵢ)
+    Δt = idealized_coast_timestep(Val(timestepper))
     
     simulation = Simulation(model, Δt; stop_time=20days)
 
