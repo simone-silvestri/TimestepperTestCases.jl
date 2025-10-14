@@ -90,7 +90,7 @@ function idealized_coast(timestepper::Symbol; arch = CPU(), forced = true)
     filename = "idealized_coast"
     save_fields_interval = 1hours
 
-    simulation.output_writers[:values] = JLD2Writer(model, merge(model.velocities, model.tracers, f);
+    simulation.output_writers[:values] = JLD2Writer(model, merge(model.velocities, model.tracers);
                                                     filename = filename * "_$(string(timestepper))",
                                                     schedule = IterationInterval(300),
                                                     overwrite_existing = true)
