@@ -73,8 +73,7 @@ end
 
 function update_open_bcs!(sim)
     v_bcs = sim.model.velocities.v.boundary_conditions.south.condition
-    S_bcs =    sim.model.tracers.S.boundary_conditions.south.condition
-
+    S_bcs = sim.model.tracers.S.boundary_conditions.south.condition
     V_bcs = sim.model.free_surface.barotropic_velocities.V.boundary_conditions.south.condition
 
     V_bcs .= 3.00 .* min(1, sim.model.clock.time            / 1hours)

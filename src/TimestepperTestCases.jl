@@ -27,7 +27,6 @@ end
 
 include("baroclinic_adjustment.jl")
 include("internal_tide.jl")
-include("overflow.jl")
-include("plume_spreading.jl")
+include("idealized_coast.jl")
 
 end
