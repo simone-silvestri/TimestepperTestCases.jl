@@ -3,7 +3,6 @@ using Statistics: mean
 function get_dissipation(filename, var)
     Ax = FieldTimeSeries(filename, "A" * var * "x")
     Az = FieldTimeSeries(filename, "A" * var * "z")
-    Dz = FieldTimeSeries(filename, "D" * var * "z")
     Gx = FieldTimeSeries(filename, "G" * var * "x")
     Gz = FieldTimeSeries(filename, "G" * var * "z")
     Vx = FieldTimeSeries(filename, "VFC")
@@ -19,5 +18,5 @@ function get_dissipation(filename, var)
         set!(Gz[t], Gz[t] * Vz)
     end
 
-    return (; Ax, Az, Dz, Gx, Gz)
+    return (; Ax, Az, Gx, Gz)
 end

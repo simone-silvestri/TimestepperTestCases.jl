@@ -13,7 +13,7 @@ function internal_tide_parameters()
     ω₂    = 2π / T₂ # radians/sec
     ϵ     = 0.1 # excursion parameter
     U₂    = ϵ * ω₂ * width
-    f     = 1e-4 # coriolis parameter
+    f     = -0.000103126 # coriolis parameter
     A₂    = U₂ * (ω₂^2 - f^2) / ω₂
     Nᵢ²   = 1e-4 # initial stratification (s⁻²)
 
@@ -63,7 +63,7 @@ function internal_tide(timestepper::Symbol)
                                           forcing = (; u = u_forcing))
 
     bᵢ(x, z) = param.Nᵢ² * z
-    cᵢ(x, z) = exp( - (z + 1000kilometers)^2 / (2 * (25meters)^2))
+    cᵢ(x, z) = exp( - (z + 1kilometers)^2 / (2 * (25meters)^2))
     set!(model, u=param.U₂, b=bᵢ, c=cᵢ)
 
     Δt = internal_tide_timestep(Val(timestepper)) 
@@ -95,8 +95,8 @@ function internal_tide(timestepper::Symbol)
 
     g = (; Gbx, Gbz, Gcx, Gcz)
 
-    filename = "internal_tide_$(string(timestepper))_C0_$(round(Δt/minutes))min"
-    save_fields_interval = Δt * 3
+    filename = "internal_tide_$(string(timestepper))_$(round(Δt/minutes))min"
+    save_fields_interval = 1hours
     
     f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
               Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
@@ -124,7 +124,6 @@ end
 function visualize_internal_tide(filename)
     u′_t = FieldTimeSeries(filename, "u′")
      w_t = FieldTimeSeries(filename, "w")
-     b_t = FieldTimeSeries(filename, "b")
      c_t = FieldTimeSeries(filename, "c")
     N²_t = FieldTimeSeries(filename, "N²")
     ϵx_t = FieldTimeSeries(filename, "Abx")
@@ -133,27 +132,25 @@ function visualize_internal_tide(filename)
     umax = maximum(abs, u′_t[end])
     wmax = maximum(abs, w_t[end])
 
+    grid  = u′_t.grid
     times = u′_t.times
 
-    b2 = [sum(b_t[i]^2) for i in 1:length(b_t)]
-
-
     n = Observable(1)
-
+    param = internal_tide_parameters()
     title = @lift @sprintf("t = %1.2f days = %1.2f T₂",
-                        round(times[$n] / day, digits=2) , round(times[$n] / T₂, digits=2))
+                        round(times[$n] / day, digits=2) , round(times[$n] / param.T₂, digits=2))
 
     u′ₙ = @lift interior(u′_t[$n], :, 1, :)
-    wₙ = @lift interior( w_t[$n], :, 1, :)
-    cₙ = @lift interior( c_t[$n], :, 1, :)
+    wₙ =  @lift interior( w_t[$n], :, 1, :)
+    cₙ =  @lift interior( c_t[$n], :, 1, :)
     N²ₙ = @lift interior(N²_t[$n], :, 1, :)
     ϵxₙ = @lift interior(ϵx_t[$n], :, 1, :)
     ϵzₙ = @lift interior(ϵz_t[$n], :, 1, :)
 
     axis_kwargs = (xlabel = "x [m]",
-                ylabel = "z [m]",
-                limits = ((-grid.Lx/2, grid.Lx/2), (-grid.Lz, 0)),
-                titlesize = 20)
+                   ylabel = "z [m]",
+                   limits = ((-grid.Lx/2, grid.Lx/2), (-grid.Lz, 0)),
+                   titlesize = 20)
 
     fig = Figure(size = (700, 1500))
 
@@ -168,7 +165,7 @@ function visualize_internal_tide(filename)
     Colorbar(fig[3, 2], hm_w, label = "m s⁻¹")
 
     ax_N² = Axis(fig[4, 1]; title = "stratification N²")# , axis_kwargs...)
-    hm_N² = heatmap!(ax_N², N²ₙ; nan_color=:gray, colorrange=(0.9Nᵢ², 1.1Nᵢ²), colormap=:magma)
+    hm_N² = heatmap!(ax_N², N²ₙ; nan_color=:gray, colorrange=(0.9param.Nᵢ², 1.1param.Nᵢ²), colormap=:magma)
     Colorbar(fig[4, 2], hm_N², label = "s⁻²")
 
     ax_ϵx = Axis(fig[5, 1]; title = "variance dissipation rate ϵ") #, axis_kwargs...)
