@@ -84,6 +84,7 @@ function internal_tide(timestepper::Symbol)
     u, v, w = model.velocities
     b = model.tracers.b
     c = model.tracers.c
+    U = Average(u, dims = 1)
     u′ = u - U
     N² = ∂z(b)
 
@@ -97,8 +98,10 @@ function internal_tide(timestepper::Symbol)
     g = (; Gbx, Gby, Gbz, Gcx, Gcy, Gcz)
 
     filename = "internal_tide_$(string(timestepper))_C0_$(round(Δt/minutes))min"
-    save_fields_interval = 30minutes
-    f = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵ)
+    save_fields_interval = Δt * 3
+    
+    f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
+              Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
 
     simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N²), f, g); filename,
                                                     schedule = TimeInterval(save_fields_interval),
