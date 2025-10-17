@@ -14,7 +14,7 @@ using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEVertic
 end
 
 idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 60seconds
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 60seconds #3minutes
+idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 3minutes
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
@@ -80,19 +80,22 @@ function idealized_coast(timestepper::Symbol; arch = CPU(), forced = true)
     v_bcs = FieldBoundaryConditions(bottom=v_bottom, immersed=v_immersed)
 
     # cl1 = ConvectiveAdjustmentVerticalDiffusivity(convective_κz=0.1, convective_νz=0.1) 
-    cl1 = RiBasedVerticalDiffusivity(horizontal_Ri_filter=Oceananigans.TurbulenceClosures.FivePointHorizontalFilter())
+    cl1 = CATKEVerticalDiffusivity() # RiBasedVerticalDiffusivity(horizontal_Ri_filter=Oceananigans.TurbulenceClosures.FivePointHorizontalFilter())
     cl2 = VerticalScalarDiffusivity(ν=1e-4)
+
+    buffer_weno = WENO(; order=5, buffer_scheme=Centered())
+    tracer_advection = WENO(; order=7, buffer_scheme=buffer_weno)
 
     model = HydrostaticFreeSurfaceModel(; grid,
                                           coriolis,
                                           timestepper,
-                                          tracers = (:T, :S),
+                                          tracers = (:T, :S, :e),
                                           buoyancy,
                                           closure = (cl1, cl2),
                                           boundary_conditions = (; u=u_bcs, v=v_bcs),
                                           free_surface = SplitExplicitFreeSurface(grid; substeps=50),
                                           momentum_advection = WENOVectorInvariant(),
-                                          tracer_advection = WENO(; order = 7, buffer_scheme = Centered()))
+                                          tracer_advection)
 
     N² = 1e-4
     
@@ -115,24 +118,35 @@ function idealized_coast(timestepper::Symbol; arch = CPU(), forced = true)
 
     add_callback!(simulation, print_progress,  IterationInterval(100))
 
-    filename = "idealized_coast"
-    save_fields_interval = 1hours
+    # Dissipations...
+    ϵT = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:T, grid)
+    ϵS = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:S, grid)
+    fT = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵT)
+    fS = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵS)
 
-    simulation.output_writers[:values] = JLD2Writer(model, merge(model.velocities, model.tracers);
-                                                    filename = filename * "_$(string(timestepper))",
-                                                    schedule = IterationInterval(300),
+    add_callback!(simulation, ϵT, IterationInterval(1))
+    add_callback!(simulation, ϵS, IterationInterval(1))
+
+    filename = "idealized_coast"
+    save_fields_interval = 0.5hours
+    outputs = merge(model.velocities,
+                    model.tracers,  
+                    fT, 
+                    fS, 
+                    (; η = model.free_surface.η,
+                      κu = model.diffusivity_fields[1].κu,
+                      κc = model.diffusivity_fields[1].κc)
+                   )
+
+    closure = cl1 isa CATKEVerticalDiffusivity ? "CATKE" : "RiBased"
+
+    simulation.output_writers[:values] = JLD2Writer(model, outputs;
+                                                    filename = filename * "_$(string(timestepper))_$(closure)",
+                                                    schedule = TimeInterval(save_fields_interval),
+                                                    file_splitting = TimeInterval(1days),
                                                     overwrite_existing = true)
 
-
     @info "Running the simulation..."
-
-    if timestepper == :SplitRungeKutta3
-        conjure_time_step_wizard!(simulation, cfl=0.7, IterationInterval(10), max_Δt=3minutes)
-    end
-    
-#    run!(simulation)
-
-    @info "Simulation completed in " * prettytime(simulation.run_wall_time)
 
     return simulation
 end
