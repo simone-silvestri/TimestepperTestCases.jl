@@ -1,71 +1,186 @@
 using Oceananigans
 using Oceananigans.Units
 using Oceananigans.Grids
-using Printf
 
-function internal_tide(timestepper::Symbol)
-    Nx, Nz = 256, 128
-    H, L = 2kilometers, 1000kilometers
+function internal_tide_parameters() 
+    Nx    = 256
+    Nz    = 128
+    H     = 2kilometers
+    L     = 1000kilometers
+    h₀    = 250meters
+    width = 20kilometers
+    T₂    = 12.421hours
+    ω₂    = 2π / T₂ # radians/sec
+    ϵ     = 0.1 # excursion parameter
+    U₂    = ϵ * ω₂ * width
+    f     = 1e-4 # coriolis parameter
+    A₂    = U₂ * (ω₂^2 - f^2) / ω₂
+    Nᵢ²   = 1e-4 # initial stratification (s⁻²)
+
+    return (; Nx, Nz, H, L, h₀, width, T₂, ω₂, ϵ, U₂, f, A₂, Nᵢ²)
+end
+
+@inline tidal_forcing(x, z, t, p) = p.A₂ * sin(p.ω₂ * t)
+
+internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) = 7.5minutes
+internal_tide_timestep(::Val{:SplitRungeKutta3})     = 22.5minutes
+
+function internal_tide_grid()
+    param = internal_tide_parameters()
+
+    Nx, Nz    = param.Nx, param.Nz
+    h₀, width = param.h₀, param.width
+    H, L      = param.H, param.L
 
     underlying_grid = RectilinearGrid(size = (Nx, Nz), halo = (6, 6),
-                                      x = (-L, L), z = MutableVerticalDiscretization((-H, 0)),
-                                      topology = (Periodic, Flat, Bounded))
+                                    x = (-L, L), z = MutableVerticalDiscretization((-H, 0)),
+                                    topology = (Periodic, Flat, Bounded))
 
-    h₀ = 250meters
-    width = 20kilometers
-    hill(x) = h₀ * exp(-x^2 / 2width^2)
-    bottom(x) = - H + 0 + hill(x)
+    hill(x)   =   h₀ * exp(-x^2 / 2width^2)
+    bottom(x) = - H + hill(x)
 
     grid = ImmersedBoundaryGrid(underlying_grid, GridFittedBottom(bottom))
-    coriolis = FPlane(latitude = -45)
+   
+    return grid
+end
 
-    T₂ = 12.421hours
-    ω₂ = 2π / T₂ # radians/sec
-    ϵ = 0.1 # excursion parameter
-    U₂ = ϵ * ω₂ * width
-    A₂ = U₂ * (ω₂^2 - coriolis.f^2) / ω₂
+function internal_tide(timestepper::Symbol)
+    
+    grid  = internal_tide_grid()
+    param = internal_tide_parameters()
 
-    @inline tidal_forcing(x, z, t, p) = p.A₂ * sin(p.ω₂ * t)
-    u_forcing = Forcing(tidal_forcing, parameters=(; A₂, ω₂))
-    free_surface = SplitExplicitFreeSurface(grid; substeps=50)
+    coriolis     = FPlane(f = param.f)
+    u_forcing    = Forcing(tidal_forcing, parameters=param)
+    free_surface = SplitExplicitFreeSurface(grid; substeps=60)
+
     model = HydrostaticFreeSurfaceModel(; grid, coriolis,
-                                        buoyancy = BuoyancyTracer(),
-                                        tracers = :b,
-                                        momentum_advection = WENO(),
-                                        tracer_advection = WENO(order=7), 
-                                        free_surface,
-                                        timestepper,
-                                        forcing = (; u = u_forcing))
+                                          buoyancy = BuoyancyTracer(),
+                                          tracers = (:b, :c),
+                                          momentum_advection = WENO(),
+                                          tracer_advection,
+                                          free_surface,
+                                          timestepper,
+                                          forcing = (; u = u_forcing))
 
-    Nᵢ² = 1e-4  
-    bᵢ(x, z) = Nᵢ² * z
-    set!(model, u=U₂, b=bᵢ)
-    Δt = 15minutes
+    bᵢ(x, z) = param.Nᵢ² * z
+    cᵢ(x, z) = exp( - (z + 1000kilometers)^2 / (2 * (25meters)^2))
+    set!(model, u=param.U₂, b=bᵢ, c=cᵢ)
+
+    Δt = internal_tide_timestep(Val(timestepper)) 
     stop_time = 40days
     simulation = Simulation(model; Δt, stop_time)
 
-    ϵ = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:b, grid)
-    add_callback!(simulation, ϵ, IterationInterval(1))
-    add_callback!(simulation, progress, IterationInterval(200))
+    ϵb = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:b, grid)
+    ϵc = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:c, grid)
 
-    b = model.tracers.b
+    # Adding the variance dissipation
+    add_callback!(simulation, ϵb, IterationInterval(1))
+    add_callback!(simulation, ϵc, IterationInterval(1))
+
+    wall_clock = Ref(time_ns())
+
+    add_callback!(simulation, print_progress, IterationInterval(200))
+
     u, v, w = model.velocities
-    U = Field(Average(u))
+    b = model.tracers.b
+    c = model.tracers.c
     u′ = u - U
     N² = ∂z(b)
 
-    filename = "internal_tide_$(string(timestepper))_$(round(Δt/minutes))min"
+    Gbx = ∂x(b)^2
+    Gby = ∂y(b)^2
+    Gbz = ∂z(b)^2
+    Gcx = ∂x(c)^2
+    Gcy = ∂y(c)^2
+    Gcz = ∂z(c)^2
+
+    g = (; Gbx, Gby, Gbz, Gcx, Gcy, Gcz)
+
+    filename = "internal_tide_$(string(timestepper))_C0_$(round(Δt/minutes))min"
     save_fields_interval = 30minutes
     f = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵ)
 
-    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, N²), f); filename,
+    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N²), f, g); filename,
                                                     schedule = TimeInterval(save_fields_interval),
                                                     overwrite_existing = true)
 
-    @info "Running the simulation..."
     run!(simulation)
 
-    @info "Simulation completed in " * prettytime(simulation.run_wall_time)
-
     return simulation
+end
+
+function visualize_internal_tide(filename)
+    u′_t = FieldTimeSeries(filename, "u′")
+    w_t = FieldTimeSeries(filename, "w")
+    b_t = FieldTimeSeries(filename, "b")
+    c_t = FieldTimeSeries(filename, "c")
+    N²_t = FieldTimeSeries(filename, "N²")
+    ϵx_t = FieldTimeSeries(filename, "Abx")
+    ϵz_t = FieldTimeSeries(filename, "Abz")
+
+    umax = maximum(abs, u′_t[end])
+    wmax = maximum(abs, w_t[end])
+
+    times = u′_t.times
+
+    b2 = [sum(b_t[i]^2) for i in 1:length(b_t)]
+
+
+    n = Observable(1)
+
+    title = @lift @sprintf("t = %1.2f days = %1.2f T₂",
+                        round(times[$n] / day, digits=2) , round(times[$n] / T₂, digits=2))
+
+    u′ₙ = @lift interior(u′_t[$n], :, 1, :)
+    wₙ = @lift interior( w_t[$n], :, 1, :)
+    cₙ = @lift interior( c_t[$n], :, 1, :)
+    N²ₙ = @lift interior(N²_t[$n], :, 1, :)
+    ϵxₙ = @lift interior(ϵx_t[$n], :, 1, :)
+    ϵzₙ = @lift interior(ϵz_t[$n], :, 1, :)
+
+    axis_kwargs = (xlabel = "x [m]",
+                ylabel = "z [m]",
+                limits = ((-grid.Lx/2, grid.Lx/2), (-grid.Lz, 0)),
+                titlesize = 20)
+
+    fig = Figure(size = (700, 1500))
+
+    fig[1, :] = Label(fig, title, fontsize=24, tellwidth=false)
+
+    ax_u = Axis(fig[2, 1]; title = "u'-velocity") #, axis_kwargs...)
+    hm_u = heatmap!(ax_u, u′ₙ; nan_color=:gray, colorrange=(-0.35, 0.35), colormap=:balance)
+    Colorbar(fig[2, 2], hm_u, label = "m s⁻¹")
+
+    ax_w = Axis(fig[3, 1]; title = "w-velocity") #, axis_kwargs...)
+    hm_w = heatmap!(ax_w, wₙ; nan_color=:gray, colorrange=(-0.0035, 0.0035), colormap=:balance)
+    Colorbar(fig[3, 2], hm_w, label = "m s⁻¹")
+
+    ax_N² = Axis(fig[4, 1]; title = "stratification N²")# , axis_kwargs...)
+    hm_N² = heatmap!(ax_N², N²ₙ; nan_color=:gray, colorrange=(0.9Nᵢ², 1.1Nᵢ²), colormap=:magma)
+    Colorbar(fig[4, 2], hm_N², label = "s⁻²")
+
+    ax_ϵx = Axis(fig[5, 1]; title = "variance dissipation rate ϵ") #, axis_kwargs...)
+    hm_ϵx = heatmap!(ax_ϵx, ϵxₙ; nan_color=:gray, colorrange=(-3e-7, 3e-7), colormap=:magma)
+    Colorbar(fig[5, 2], hm_ϵx, label = "m² s⁻³")
+
+    ax_ϵz = Axis(fig[6, 1]; title = "variance dissipation rate ϵ_z") #, axis_kwargs...)
+    hm_ϵz = heatmap!(ax_ϵz, ϵzₙ; nan_color=:gray, colorrange=(-3e-7, 3e-7), colormap=:magma)
+    Colorbar(fig[6, 2], hm_ϵz, label = "m² s⁻³")
+
+    ax_c = Axis(fig[7, 1]; title = "tracer c") #, axis_kwargs...)
+    hm_c = heatmap!(ax_c, cₙ; nan_color=:gray, colorrange=(0, 1), colormap=:viridis)
+    Colorbar(fig[7, 2], hm_c, label = "concentration")
+
+    fig
+
+    @info "Making an animation from saved data..."
+
+    frames = 1:length(times)
+
+    record(fig, filename * ".mp4", frames, framerate=16) do i
+        @info string("Plotting frame ", i, " of ", frames[end])
+        n[] = i
+    end
+
+    return fig
 end
