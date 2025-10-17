@@ -26,7 +26,10 @@ idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 3minutes
 @inline u_immersed_bottom_drag(i, j, k, grid, clock, fields, μ) = @inbounds - μ * fields.u[i, j, k] * spᶠᶜᶜ(i, j, k, grid, fields)
 @inline v_immersed_bottom_drag(i, j, k, grid, clock, fields, μ) = @inbounds - μ * fields.v[i, j, k] * spᶜᶠᶜ(i, j, k, grid, fields)
 
-function idealized_coast(timestepper::Symbol; arch = CPU(), forced = true)
+function idealized_coast(timestepper::Symbol; 
+                         arch = CPU(), 
+                         forced = true,
+                         closure = CATKEVerticalDiffusivity())
 
     Lx = 97kilometers
     Ly = 97kilometers
@@ -80,7 +83,7 @@ function idealized_coast(timestepper::Symbol; arch = CPU(), forced = true)
     v_bcs = FieldBoundaryConditions(bottom=v_bottom, immersed=v_immersed)
 
     # cl1 = ConvectiveAdjustmentVerticalDiffusivity(convective_κz=0.1, convective_νz=0.1) 
-    cl1 = CATKEVerticalDiffusivity() # RiBasedVerticalDiffusivity(horizontal_Ri_filter=Oceananigans.TurbulenceClosures.FivePointHorizontalFilter())
+    cl1 = closure # RiBasedVerticalDiffusivity(horizontal_Ri_filter=Oceananigans.TurbulenceClosures.FivePointHorizontalFilter())
     cl2 = VerticalScalarDiffusivity(ν=1e-4)
 
     buffer_weno = WENO(; order=5, buffer_scheme=Centered())

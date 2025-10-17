@@ -22,8 +22,8 @@ end
 
 @inline tidal_forcing(x, z, t, p) = p.A₂ * sin(p.ω₂ * t)
 
-internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) = 7.5minutes
-internal_tide_timestep(::Val{:SplitRungeKutta3})     = 22.5minutes
+internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) = 5minutes
+internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
 
 function internal_tide_grid()
     param = internal_tide_parameters()
@@ -100,6 +100,11 @@ function internal_tide(timestepper::Symbol)
     
     f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
               Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
+
+    f = (; Abx = f.Abx,
+           Abz = f.Abz,
+           Acx = f.Acx,
+           Acz = f.Acz)
 
     VFC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
     VCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)

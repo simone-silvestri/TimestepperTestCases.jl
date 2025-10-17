@@ -7,7 +7,7 @@ using Oceananigans.Grids
 using Oceananigans.Units
 using Oceananigans.Models
 using Printf
-using GLMakie
+using CairoMakie
 
 wall_clock = Ref(time_ns())
 
