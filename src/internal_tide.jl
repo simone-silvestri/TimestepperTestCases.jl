@@ -84,18 +84,16 @@ function internal_tide(timestepper::Symbol)
     u, v, w = model.velocities
     b = model.tracers.b
     c = model.tracers.c
-    U = Average(u, dims = 1)
+    U = Field(Average(u))
     u′ = u - U
     N² = ∂z(b)
 
     Gbx = ∂x(b)^2
-    Gby = ∂y(b)^2
     Gbz = ∂z(b)^2
     Gcx = ∂x(c)^2
-    Gcy = ∂y(c)^2
     Gcz = ∂z(c)^2
 
-    g = (; Gbx, Gby, Gbz, Gcx, Gcy, Gcz)
+    g = (; Gbx, Gbz, Gcx, Gcz)
 
     filename = "internal_tide_$(string(timestepper))_C0_$(round(Δt/minutes))min"
     save_fields_interval = Δt * 3
@@ -103,7 +101,13 @@ function internal_tide(timestepper::Symbol)
     f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
               Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
 
-    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N²), f, g); filename,
+    VFC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
+    VCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)
+    VCC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Center), Oceananigans.Operators.volume, grid)
+
+    V = (; VFC, VCF, VCC)
+
+    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N²), f, g, V); filename,
                                                     schedule = TimeInterval(save_fields_interval),
                                                     overwrite_existing = true)
 
@@ -114,9 +118,9 @@ end
 
 function visualize_internal_tide(filename)
     u′_t = FieldTimeSeries(filename, "u′")
-    w_t = FieldTimeSeries(filename, "w")
-    b_t = FieldTimeSeries(filename, "b")
-    c_t = FieldTimeSeries(filename, "c")
+     w_t = FieldTimeSeries(filename, "w")
+     b_t = FieldTimeSeries(filename, "b")
+     c_t = FieldTimeSeries(filename, "c")
     N²_t = FieldTimeSeries(filename, "N²")
     ϵx_t = FieldTimeSeries(filename, "Abx")
     ϵz_t = FieldTimeSeries(filename, "Abz")
