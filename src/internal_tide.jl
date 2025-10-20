@@ -39,19 +39,18 @@ function internal_tide_grid()
     hill(x)   =   h₀ * exp(-x^2 / 2width^2)
     bottom(x) = - H + hill(x)
 
-    grid = ImmersedBoundaryGrid(underlying_grid, GridFittedBottom(bottom))
+    grid = ImmersedBoundaryGrid(underlying_grid, GridFittedBottom(bottom); active_cells_map = true)
    
     return grid
 end
 
-function internal_tide(timestepper::Symbol)
+function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurface(grid; substeps=60))
     
     grid  = internal_tide_grid()
     param = internal_tide_parameters()
 
-    coriolis     = FPlane(f = param.f)
-    u_forcing    = Forcing(tidal_forcing, parameters=param)
-    free_surface = SplitExplicitFreeSurface(grid; substeps=60)
+    coriolis  = FPlane(f = param.f)
+    u_forcing = Forcing(tidal_forcing, parameters=param)
 
     model = HydrostaticFreeSurfaceModel(; grid, coriolis,
                                           buoyancy = BuoyancyTracer(),
@@ -84,6 +83,7 @@ function internal_tide(timestepper::Symbol)
     u, v, w = model.velocities
     b = model.tracers.b
     c = model.tracers.c
+    η = model.free_surface.η
     U = Field(Average(u))
     u′ = u - U
     N² = ∂z(b)
@@ -95,7 +95,13 @@ function internal_tide(timestepper::Symbol)
 
     g = (; Gbx, Gbz, Gcx, Gcz)
 
-    filename = "internal_tide_$(string(timestepper))_$(round(Δt/minutes))min"
+    if free_surface isa SplitExplicitFreeSurface
+        fsname = "split_free_surface"
+    else
+        fsname = "implicit_free_surface"
+    end
+
+    filename = "internal_tide_$(string(timestepper))_$(round(Δt/minutes))min_$(fsname)"
     save_fields_interval = 1hours
     
     f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
@@ -112,7 +118,7 @@ function internal_tide(timestepper::Symbol)
 
     V = (; VFC, VCF, VCC)
 
-    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N²), f, g, V); filename,
+    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N², η), f, g, V); filename,
                                                     schedule = TimeInterval(save_fields_interval),
                                                     overwrite_existing = true)
 
@@ -192,4 +198,40 @@ function visualize_internal_tide(filename)
     end
 
     return fig
+end
+
+function compute_kinetic_energy(filename)
+    u   = FieldTimeSeries(filename, "u")
+    w   = FieldTimeSeries(filename, "w")
+    VFC = FieldTimeSeries(filename, "VFC") 
+    VCF = FieldTimeSeries(filename, "VCF")
+    KE = zeros(length(u))
+
+    for i in 1:length(u)
+        ut = u[i]
+        wt = w[i]
+        KE[i] = 0.5 * mean(ut^2 * VFC[i] + wt^2 * VCF[i])
+    end
+
+    return KE
+end
+
+function compute_dissipation(filename)
+    b   = FieldTimeSeries(filename, "b")
+    b2  = zeros(length(b))
+    VCC = FieldTimeSeries(filename, "VCC")
+    for i in 1:length(b)
+        b2[i] = mean(b[i]^2 * VCC[i])
+    end
+    return b2
+end
+
+function compute_conservation(filename, var)
+    b   = FieldTimeSeries(filename, var)
+    bi  = zeros(length(b))
+    VCC = FieldTimeSeries(filename, "VCC")
+    for i in 1:length(b)
+        bi[i] = sum(b[i] * VCC[i])
+    end
+    return bi
 end

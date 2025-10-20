@@ -29,7 +29,8 @@ idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 3minutes
 function idealized_coast(timestepper::Symbol; 
                          arch = CPU(), 
                          forced = true,
-                         closure = CATKEVerticalDiffusivity())
+                         closure = CATKEVerticalDiffusivity(),
+                         free_surface=SplitExplicitFreeSurface(grid; substeps=50))
 
     Lx = 97kilometers
     Ly = 97kilometers
@@ -96,7 +97,7 @@ function idealized_coast(timestepper::Symbol;
                                           buoyancy,
                                           closure = (cl1, cl2),
                                           boundary_conditions = (; u=u_bcs, v=v_bcs),
-                                          free_surface = SplitExplicitFreeSurface(grid; substeps=50),
+                                          free_surface,
                                           momentum_advection = WENOVectorInvariant(),
                                           tracer_advection)
 
@@ -130,7 +131,13 @@ function idealized_coast(timestepper::Symbol;
     add_callback!(simulation, ϵT, IterationInterval(1))
     add_callback!(simulation, ϵS, IterationInterval(1))
 
-    filename = "idealized_coast"
+    if free_surface isa SplitExplicitFreeSurface
+        fsname = "split_free_surface"
+    else
+        fsname = "implicit_free_surface"
+    end
+
+    filename = "idealized_coast_$(fsname)"
     save_fields_interval = 0.5hours
     outputs = merge(model.velocities,
                     model.tracers,  
