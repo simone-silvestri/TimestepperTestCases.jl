@@ -253,12 +253,9 @@ function compute_kinetic_energy(filename)
 end
 
 function compute_budget_dissipation(filename, var)
-    Ax  = FieldTimeSeries(filename, "A" * var * "x")
-    Az  = FieldTimeSeries(filename, "A" * var * "z")
-    Δ²  = FieldTimeSeries(filename, "Δ" * var * "²")
-    
-    VFC = FieldTimeSeries(filename, "VFC")
-    VCF = FieldTimeSeries(filename, "VCF")
+    Ax  = FieldTimeSeries(filename, "A"  * var * "x")
+    Az  = FieldTimeSeries(filename, "A"  * var * "z")
+    Δ²  = FieldTimeSeries(filename, "Δt" * var * "²")
     VCC = FieldTimeSeries(filename, "VCC")
     
     ∫Ax = zeros(length(Ax))
@@ -266,8 +263,8 @@ function compute_budget_dissipation(filename, var)
     ∫Δ² = zeros(length(Δ²))
     
     for i in 1:length(Ax)
-        ∫Ax[i] = abs(sum(Az[i] * VFC[i]))
-        ∫Az[i] = abs(sum(Az[i] * VCF[i]))
+        ∫Ax[i] = abs(sum(Ax[i]))
+        ∫Az[i] = abs(sum(Az[i]))
         ∫Δ²[i] = abs(sum(Δ²[i] * VCC[i]))
     end
 
