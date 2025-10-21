@@ -24,6 +24,33 @@ end
 
 internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) = 5minutes
 internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
+internal_tide_timestep(::Val{:SplitRungeKutta4})     = 20minutes
+
+@kernel function _compute_dissipation!(Δtc², c⁻, c, Δt)
+    i, j, k = @index(Global, NTuple)
+    @inbounds begin
+        Δtc²[i, j, k] = (c[i, j, k]^2 - c⁻[i, j, k]^2) / Δt
+        c⁻[i, j, k]   = c[i, j, k]
+    end
+end
+
+function compute_tracer_dissipation!(sim)
+    c    = sim.model.tracers.c
+    c⁻   = sim.model.auxiliary_fields.c⁻
+    Δtc² = sim.model.auxiliary_fields.Δtc²
+    Oceananigans.Utils.launch!(CPU(), sim.model.grid, :xyz,
+                               _compute_dissipation!,
+                               Δtc², c⁻, c, sim.Δt)
+
+    b    = sim.model.tracers.b
+    b⁻   = sim.model.auxiliary_fields.b⁻
+    Δtb² = sim.model.auxiliary_fields.Δtb²
+    Oceananigans.Utils.launch!(CPU(), sim.model.grid, :xyz,
+                               _compute_dissipation!,
+                               Δtb², b⁻, b, sim.Δt)
+
+    return nothing
+end
 
 function internal_tide_grid()
     param = internal_tide_parameters()
@@ -44,13 +71,18 @@ function internal_tide_grid()
     return grid
 end
 
-function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurface(grid; substeps=60))
+function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60))
     
     grid  = internal_tide_grid()
     param = internal_tide_parameters()
 
     coriolis  = FPlane(f = param.f)
     u_forcing = Forcing(tidal_forcing, parameters=param)
+
+    c⁻    = CenterField(grid)
+    Δtc²  = CenterField(grid)
+    b⁻    = CenterField(grid)
+    Δtb²  = CenterField(grid)
 
     model = HydrostaticFreeSurfaceModel(; grid, coriolis,
                                           buoyancy = BuoyancyTracer(),
@@ -59,7 +91,9 @@ function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurfac
                                           tracer_advection,
                                           free_surface,
                                           timestepper,
-                                          forcing = (; u = u_forcing))
+                                          forcing = (; u = u_forcing),
+                                          auxiliary_fields=(; Δtc², c⁻, Δtb², b⁻))
+
 
     bᵢ(x, z) = param.Nᵢ² * z
     cᵢ(x, z) = exp( - (z + 1kilometers)^2 / (2 * (25meters)^2))
@@ -75,16 +109,17 @@ function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurfac
     # Adding the variance dissipation
     add_callback!(simulation, ϵb, IterationInterval(1))
     add_callback!(simulation, ϵc, IterationInterval(1))
+    add_callback!(simulation, compute_tracer_dissipation!, IterationInterval(1))
 
     wall_clock = Ref(time_ns())
 
     add_callback!(simulation, print_progress, IterationInterval(200))
 
     u, v, w = model.velocities
-    b = model.tracers.b
-    c = model.tracers.c
-    η = model.free_surface.η
-    U = Field(Average(u))
+    b  = model.tracers.b
+    c  = model.tracers.c
+    η  = model.free_surface.η
+    U  = Field(Average(u))
     u′ = u - U
     N² = ∂z(b)
 
@@ -116,9 +151,10 @@ function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurfac
     VCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)
     VCC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Center), Oceananigans.Operators.volume, grid)
 
-    V = (; VFC, VCF, VCC)
+    V  = (; VFC, VCF, VCC)
+    Δ² = (; Δtc² = model.auxiliary_fields.Δtc², Δtb² = model.auxiliary_fields.Δtb²)
 
-    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N², η), f, g, V); filename,
+    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N², η), f, g, V, Δ²); filename,
                                                     schedule = TimeInterval(save_fields_interval),
                                                     overwrite_existing = true)
 
@@ -216,6 +252,28 @@ function compute_kinetic_energy(filename)
     return KE
 end
 
+function compute_budget_dissipation(filename, var)
+    Ax  = FieldTimeSeries(filename, "A" * var * "x")
+    Az  = FieldTimeSeries(filename, "A" * var * "z")
+    Δ²  = FieldTimeSeries(filename, "Δ" * var * "²")
+    
+    VFC = FieldTimeSeries(filename, "VFC")
+    VCF = FieldTimeSeries(filename, "VCF")
+    VCC = FieldTimeSeries(filename, "VCC")
+    
+    ∫Ax = zeros(length(Ax))
+    ∫Az = zeros(length(Az))
+    ∫Δ² = zeros(length(Δ²))
+    
+    for i in 1:length(Ax)
+        ∫Ax[i] = abs(sum(Az[i] * VFC[i]))
+        ∫Az[i] = abs(sum(Az[i] * VCF[i]))
+        ∫Δ²[i] = abs(sum(Δ²[i] * VCC[i]))
+    end
+
+    return (; ∫Ax, ∫Az, ∫Δ²)
+end
+
 function compute_dissipation(filename)
     b   = FieldTimeSeries(filename, "b")
     b2  = zeros(length(b))
@@ -230,8 +288,10 @@ function compute_conservation(filename, var)
     b   = FieldTimeSeries(filename, var)
     bi  = zeros(length(b))
     VCC = FieldTimeSeries(filename, "VCC")
+
     for i in 1:length(b)
-        bi[i] = sum(b[i] * VCC[i])
+        bi[i] = sum(b[i] * VCC[i]) / sum(VCC[i])
     end
+    
     return bi
 end
