@@ -6,6 +6,7 @@ using Oceananigans
 using Oceananigans.Grids
 using Oceananigans.Units
 using Oceananigans.Models
+using KernelAbstractions: @kernel, @index
 using Printf
 using CairoMakie
 
