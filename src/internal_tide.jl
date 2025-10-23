@@ -163,78 +163,78 @@ function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurfac
     return simulation
 end
 
-function visualize_internal_tide(filename)
-    u′_t = FieldTimeSeries(filename, "u′")
-     w_t = FieldTimeSeries(filename, "w")
-     c_t = FieldTimeSeries(filename, "c")
-    N²_t = FieldTimeSeries(filename, "N²")
-    ϵx_t = FieldTimeSeries(filename, "Abx")
-    ϵz_t = FieldTimeSeries(filename, "Abz")
+# function visualize_internal_tide(filename)
+#     u′_t = FieldTimeSeries(filename, "u′")
+#      w_t = FieldTimeSeries(filename, "w")
+#      c_t = FieldTimeSeries(filename, "c")
+#     N²_t = FieldTimeSeries(filename, "N²")
+#     ϵx_t = FieldTimeSeries(filename, "Abx")
+#     ϵz_t = FieldTimeSeries(filename, "Abz")
 
-    umax = maximum(abs, u′_t[end])
-    wmax = maximum(abs, w_t[end])
+#     umax = maximum(abs, u′_t[end])
+#     wmax = maximum(abs, w_t[end])
 
-    grid  = u′_t.grid
-    times = u′_t.times
+#     grid  = u′_t.grid
+#     times = u′_t.times
 
-    n = Observable(1)
-    param = internal_tide_parameters()
-    title = @lift @sprintf("t = %1.2f days = %1.2f T₂",
-                        round(times[$n] / day, digits=2) , round(times[$n] / param.T₂, digits=2))
+#     n = Observable(1)
+#     param = internal_tide_parameters()
+#     title = @lift @sprintf("t = %1.2f days = %1.2f T₂",
+#                         round(times[$n] / day, digits=2) , round(times[$n] / param.T₂, digits=2))
 
-    u′ₙ = @lift interior(u′_t[$n], :, 1, :)
-    wₙ =  @lift interior( w_t[$n], :, 1, :)
-    cₙ =  @lift interior( c_t[$n], :, 1, :)
-    N²ₙ = @lift interior(N²_t[$n], :, 1, :)
-    ϵxₙ = @lift interior(ϵx_t[$n], :, 1, :)
-    ϵzₙ = @lift interior(ϵz_t[$n], :, 1, :)
+#     u′ₙ = @lift interior(u′_t[$n], :, 1, :)
+#     wₙ =  @lift interior( w_t[$n], :, 1, :)
+#     cₙ =  @lift interior( c_t[$n], :, 1, :)
+#     N²ₙ = @lift interior(N²_t[$n], :, 1, :)
+#     ϵxₙ = @lift interior(ϵx_t[$n], :, 1, :)
+#     ϵzₙ = @lift interior(ϵz_t[$n], :, 1, :)
 
-    axis_kwargs = (xlabel = "x [m]",
-                   ylabel = "z [m]",
-                   limits = ((-grid.Lx/2, grid.Lx/2), (-grid.Lz, 0)),
-                   titlesize = 20)
+#     axis_kwargs = (xlabel = "x [m]",
+#                    ylabel = "z [m]",
+#                    limits = ((-grid.Lx/2, grid.Lx/2), (-grid.Lz, 0)),
+#                    titlesize = 20)
 
-    fig = Figure(size = (700, 1500))
+#     fig = Figure(size = (700, 1500))
 
-    fig[1, :] = Label(fig, title, fontsize=24, tellwidth=false)
+#     fig[1, :] = Label(fig, title, fontsize=24, tellwidth=false)
 
-    ax_u = Axis(fig[2, 1]; title = "u'-velocity") #, axis_kwargs...)
-    hm_u = heatmap!(ax_u, u′ₙ; nan_color=:gray, colorrange=(-0.35, 0.35), colormap=:balance)
-    Colorbar(fig[2, 2], hm_u, label = "m s⁻¹")
+#     ax_u = Axis(fig[2, 1]; title = "u'-velocity") #, axis_kwargs...)
+#     hm_u = heatmap!(ax_u, u′ₙ; nan_color=:gray, colorrange=(-0.35, 0.35), colormap=:balance)
+#     Colorbar(fig[2, 2], hm_u, label = "m s⁻¹")
 
-    ax_w = Axis(fig[3, 1]; title = "w-velocity") #, axis_kwargs...)
-    hm_w = heatmap!(ax_w, wₙ; nan_color=:gray, colorrange=(-0.0035, 0.0035), colormap=:balance)
-    Colorbar(fig[3, 2], hm_w, label = "m s⁻¹")
+#     ax_w = Axis(fig[3, 1]; title = "w-velocity") #, axis_kwargs...)
+#     hm_w = heatmap!(ax_w, wₙ; nan_color=:gray, colorrange=(-0.0035, 0.0035), colormap=:balance)
+#     Colorbar(fig[3, 2], hm_w, label = "m s⁻¹")
 
-    ax_N² = Axis(fig[4, 1]; title = "stratification N²")# , axis_kwargs...)
-    hm_N² = heatmap!(ax_N², N²ₙ; nan_color=:gray, colorrange=(0.9param.Nᵢ², 1.1param.Nᵢ²), colormap=:magma)
-    Colorbar(fig[4, 2], hm_N², label = "s⁻²")
+#     ax_N² = Axis(fig[4, 1]; title = "stratification N²")# , axis_kwargs...)
+#     hm_N² = heatmap!(ax_N², N²ₙ; nan_color=:gray, colorrange=(0.9param.Nᵢ², 1.1param.Nᵢ²), colormap=:magma)
+#     Colorbar(fig[4, 2], hm_N², label = "s⁻²")
 
-    ax_ϵx = Axis(fig[5, 1]; title = "variance dissipation rate ϵ") #, axis_kwargs...)
-    hm_ϵx = heatmap!(ax_ϵx, ϵxₙ; nan_color=:gray, colorrange=(-3e-7, 3e-7), colormap=:magma)
-    Colorbar(fig[5, 2], hm_ϵx, label = "m² s⁻³")
+#     ax_ϵx = Axis(fig[5, 1]; title = "variance dissipation rate ϵ") #, axis_kwargs...)
+#     hm_ϵx = heatmap!(ax_ϵx, ϵxₙ; nan_color=:gray, colorrange=(-3e-7, 3e-7), colormap=:magma)
+#     Colorbar(fig[5, 2], hm_ϵx, label = "m² s⁻³")
 
-    ax_ϵz = Axis(fig[6, 1]; title = "variance dissipation rate ϵ_z") #, axis_kwargs...)
-    hm_ϵz = heatmap!(ax_ϵz, ϵzₙ; nan_color=:gray, colorrange=(-3e-7, 3e-7), colormap=:magma)
-    Colorbar(fig[6, 2], hm_ϵz, label = "m² s⁻³")
+#     ax_ϵz = Axis(fig[6, 1]; title = "variance dissipation rate ϵ_z") #, axis_kwargs...)
+#     hm_ϵz = heatmap!(ax_ϵz, ϵzₙ; nan_color=:gray, colorrange=(-3e-7, 3e-7), colormap=:magma)
+#     Colorbar(fig[6, 2], hm_ϵz, label = "m² s⁻³")
 
-    ax_c = Axis(fig[7, 1]; title = "tracer c") #, axis_kwargs...)
-    hm_c = heatmap!(ax_c, cₙ; nan_color=:gray, colorrange=(0, 1), colormap=:viridis)
-    Colorbar(fig[7, 2], hm_c, label = "concentration")
+#     ax_c = Axis(fig[7, 1]; title = "tracer c") #, axis_kwargs...)
+#     hm_c = heatmap!(ax_c, cₙ; nan_color=:gray, colorrange=(0, 1), colormap=:viridis)
+#     Colorbar(fig[7, 2], hm_c, label = "concentration")
 
-    fig
+#     fig
 
-    @info "Making an animation from saved data..."
+#     @info "Making an animation from saved data..."
 
-    frames = 1:length(times)
+#     frames = 1:length(times)
 
-    record(fig, filename * ".mp4", frames, framerate=16) do i
-        @info string("Plotting frame ", i, " of ", frames[end])
-        n[] = i
-    end
+#     record(fig, filename * ".mp4", frames, framerate=16) do i
+#         @info string("Plotting frame ", i, " of ", frames[end])
+#         n[] = i
+#     end
 
-    return fig
-end
+#     return fig
+# end
 
 function compute_kinetic_energy(filename)
     u   = FieldTimeSeries(filename, "u")

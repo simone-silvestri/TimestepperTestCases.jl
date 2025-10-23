@@ -8,7 +8,6 @@ using Oceananigans.Units
 using Oceananigans.Models
 using KernelAbstractions: @kernel, @index
 using Printf
-using CairoMakie
 
 wall_clock = Ref(time_ns())
 
