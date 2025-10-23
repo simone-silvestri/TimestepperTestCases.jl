@@ -8,13 +8,13 @@ using Oceananigans.Operators
 using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEVerticalDiffusivity
 
 @inline function wind_stress(i, j, grid, clock, fields, p) 
-    force = clock.time > 3days
-    τx = p.τ₀ * sin(0.92 * p.f * clock.time)
+    force = clock.time > 4days
+    τx = p.τ₀ * sin(p.f * clock.time)
     return ifelse(force, τx, zero(grid))
 end
 
-idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 60seconds
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 3minutes
+idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 3minutes
+idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 9minutes
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
@@ -30,15 +30,15 @@ function idealized_coast(timestepper::Symbol;
                          arch = CPU(), 
                          forced = true,
                          closure = CATKEVerticalDiffusivity(),
-                         free_surface=SplitExplicitFreeSurface(grid; substeps=50))
+                         free_surface = nothing)
 
-    Lx = 97kilometers
-    Ly = 97kilometers
+    Lx = 96kilometers
+    Ly = 96kilometers
     Lz = 103meters
 
-    Nx = 194
-    Ny = 194
-    Nz = 120
+    Nx = 250
+    Ny = 250
+    Nz = 60
 
     z_faces = reverse(- [(k / Nz)^(1.25) for k in 0:Nz] .* Lz)
     
@@ -58,13 +58,17 @@ function idealized_coast(timestepper::Symbol;
     β = 7.6e-4
     f = 1.0e-4
 
+    if isnothing(free_surface)
+        free_surface = SplitExplicitFreeSurface(grid; substeps=50)
+    end
+
     coriolis = FPlane(; f)
 
     equation_of_state = LinearEquationOfState(thermal_expansion=α, haline_contraction=β)
     buoyancy = SeawaterBuoyancy(; equation_of_state)
 
     if forced 
-        τ₀ = 0.1 / 1027
+        τ₀ = 0.05 / 1027
     else
         τ₀ = 0.0
     end
@@ -83,11 +87,10 @@ function idealized_coast(timestepper::Symbol;
     u_bcs = FieldBoundaryConditions(bottom=u_bottom, immersed=u_immersed, top=u_top)
     v_bcs = FieldBoundaryConditions(bottom=v_bottom, immersed=v_immersed)
 
-    # cl1 = ConvectiveAdjustmentVerticalDiffusivity(convective_κz=0.1, convective_νz=0.1) 
-    cl1 = closure # RiBasedVerticalDiffusivity(horizontal_Ri_filter=Oceananigans.TurbulenceClosures.FivePointHorizontalFilter())
+    cl1 = closure 
     cl2 = VerticalScalarDiffusivity(ν=1e-4)
 
-    buffer_weno = WENO(; order=5, buffer_scheme=Centered())
+    buffer_weno      = WENO(; order=5, buffer_scheme=Centered())
     tracer_advection = WENO(; order=7, buffer_scheme=buffer_weno)
 
     model = HydrostaticFreeSurfaceModel(; grid,
@@ -102,18 +105,16 @@ function idealized_coast(timestepper::Symbol;
                                           tracer_advection)
 
     N² = 1e-4
-    
-
-    N² = 1e-4
+    S² = 1e-6
     M²(y) = if y > 50kilometers
         0.0
     else
-        1e-6
+        1.5e-6
     end
     g  = buoyancy.gravitational_acceleration
 
     Tᵢ(x, y, z) = 25 + N² / (α * g) * z
-    Sᵢ(x, y, z) = 35 - M²(y) / (β * g) * (50kilometers - y)
+    Sᵢ(x, y, z) = 35 - M²(y) / (β * g) * (50kilometers - y) + S² / (β * g) * z
     uᵢ(x, y, z) = y > 60kilometers ? 0.0 : - 1 / f * M²(y) * (z - bottom_height(x, y))
 
     set!(model, T=Tᵢ, S=Sᵢ, u=uᵢ)

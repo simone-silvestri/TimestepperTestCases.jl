@@ -2,7 +2,7 @@
 
 julia_version = "1.12.1"
 manifest_format = "2.0"
-project_hash = "dc3c252ce31f52e4651abe37f6e4cdb958e381c8"
+project_hash = "8dc53cdb9c0ac8e8fe5c1b7c63570148d96c2e0f"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -1141,7 +1141,7 @@ version = "0.5.5"
 
 [[deps.Oceananigans]]
 deps = ["Adapt", "Crayons", "CubedSphere", "Dates", "Distances", "DocStringExtensions", "DoubleFloats", "FFTW", "GPUArrays", "GPUArraysCore", "Glob", "InteractiveUtils", "JLD2", "KernelAbstractions", "Krylov", "KrylovPreconditioners", "LinearAlgebra", "Logging", "MPI", "MuladdMacro", "OffsetArrays", "OrderedCollections", "Pkg", "Printf", "Random", "ReactantCore", "Rotations", "SeawaterPolynomials", "SparseArrays", "StaticArrays", "Statistics", "StructArrays"]
-path = "/Users/simonesilvestri/development/TestOceananigans.jl/"
+path = "../TestOceananigans.jl"
 uuid = "9e8cae18-63c1-5223-a75c-80ca9d6e9a09"
 version = "0.100.6"
 
