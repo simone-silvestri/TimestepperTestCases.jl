@@ -163,9 +163,9 @@ function idealized_coast(timestepper::Symbol;
     Gby = ∂y(b)^2 * VCFC
     Gbz = ∂z(b)^2 * VCCF
 
-    Abx = g * (β * fS.ASx / VFCC - α * fT.ATx / VFCC)
-    Aby = g * (β * fS.ASy / VCFC - α * fT.ATy / VCFC)
-    Abz = g * (β * fS.ASz / VCCF - α * fT.ATz / VCCF)
+    Abx = g * (α * fT.ATx / VFCC - β * fS.ASx / VFCC)
+    Aby = g * (α * fT.ATy / VCFC - β * fS.ASy / VCFC)
+    Abz = g * (α * fT.ATz / VCCF - β * fS.ASz / VCCF)
 
     G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
     u, v, w = model.velocities
