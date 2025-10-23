@@ -67,6 +67,10 @@ function idealized_coast(timestepper::Symbol;
     equation_of_state = LinearEquationOfState(thermal_expansion=α, haline_contraction=β)
     buoyancy = SeawaterBuoyancy(; equation_of_state)
 
+    if isnothing(free_surface)
+        free_surface = SplitExplicitFreeSurface(grid; substeps=60)
+    end
+
     if forced 
         τ₀ = 0.05 / 1027
     else
@@ -89,9 +93,6 @@ function idealized_coast(timestepper::Symbol;
 
     cl1 = closure 
     cl2 = VerticalScalarDiffusivity(ν=1e-4)
-
-    buffer_weno      = WENO(; order=5, buffer_scheme=Centered())
-    tracer_advection = WENO(; order=7, buffer_scheme=buffer_weno)
 
     model = HydrostaticFreeSurfaceModel(; grid,
                                           coriolis,
@@ -139,23 +140,53 @@ function idealized_coast(timestepper::Symbol;
     end
 
     filename = "idealized_coast_$(fsname)"
-    save_fields_interval = 0.5hours
-    outputs = merge(model.velocities,
-                    model.tracers,  
-                    fT, 
-                    fS, 
-                    (; η = model.free_surface.η,
-                      κu = model.diffusivity_fields[1].κu,
-                      κc = model.diffusivity_fields[1].κc)
-                   )
+    save_fields_interval = 1hours
 
     closure = cl1 isa CATKEVerticalDiffusivity ? "CATKE" : "RiBased"
 
-    simulation.output_writers[:values] = JLD2Writer(model, outputs;
+    VFCC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
+    VCFC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Face,   Center), Oceananigans.Operators.volume, grid)
+    VCCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)
+    VCCC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Center), Oceananigans.Operators.volume, grid)
+
+    T, S = model.tracers
+
+    GTx = ∂x(T)^2 * VFCC
+    GTy = ∂y(T)^2 * VCFC
+    GTz = ∂z(T)^2 * VCCF
+    GSx = ∂x(S)^2 * VFCC
+    GSy = ∂y(S)^2 * VCFC
+    GSz = ∂z(S)^2 * VCCF
+
+    g = (; GTx, GTy, GTz, GSx, GSy, GSz)
+    u, v, w = model.velocities
+    η = model.free_surface.η
+    T, S = model.tracers
+    κu = model.diffusivity_fields[1].κu
+    κc = model.diffusivity_fields[1].κc
+
+    outputs = merge((; u = u * VFCC,
+                       v = v * VCFC,
+                       w = w * VCCF,
+                       T = T * VCCC,
+                       S = S * VCCC,
+                       κu, κc), fT, fS, g)
+
+    average_outputs = NamedTuple{keys(outputs)}(Average(output, dims=1) for output in values(outputs))
+
+    simulation.output_writers[:values] = JLD2Writer(model, merge(outputs, (; η));
                                                     filename = filename * "_$(string(timestepper))_$(closure)",
                                                     schedule = TimeInterval(save_fields_interval),
                                                     file_splitting = TimeInterval(1days),
+                                                    array_type = Array{Float32},
                                                     overwrite_existing = true)
+
+    simulation.output_writers[:averages] = JLD2Writer(model, average_outputs;
+                                                      filename = filename * "_averages_$(string(timestepper))_$(closure)",
+                                                      schedule = TimeInterval(save_fields_interval),
+                                                      file_splitting = TimeInterval(1days),
+                                                      array_type = Array{Float32},
+                                                      overwrite_existing = true)
 
     @info "Running the simulation..."
 
