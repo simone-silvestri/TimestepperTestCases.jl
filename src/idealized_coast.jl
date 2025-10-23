@@ -13,8 +13,8 @@ using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEVertic
     return ifelse(force, τx, zero(grid))
 end
 
-idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 3minutes
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 9minutes
+idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 1.5minutes
+idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 4.5minutes
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
@@ -58,17 +58,14 @@ function idealized_coast(timestepper::Symbol;
     β = 7.6e-4
     f = 1.0e-4
 
-    if isnothing(free_surface)
-        free_surface = SplitExplicitFreeSurface(grid; substeps=50)
-    end
-
     coriolis = FPlane(; f)
 
     equation_of_state = LinearEquationOfState(thermal_expansion=α, haline_contraction=β)
     buoyancy = SeawaterBuoyancy(; equation_of_state)
+    Δt = idealized_coast_timestep(Val(timestepper))
 
     if isnothing(free_surface)
-        free_surface = SplitExplicitFreeSurface(grid; substeps=60)
+        free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=Δt+2minutes)
     end
 
     if forced 
@@ -91,7 +88,7 @@ function idealized_coast(timestepper::Symbol;
     u_bcs = FieldBoundaryConditions(bottom=u_bottom, immersed=u_immersed, top=u_top)
     v_bcs = FieldBoundaryConditions(bottom=v_bottom, immersed=v_immersed)
 
-    cl1 = closure 
+    cl1 = forced ? closure : nothing
     cl2 = VerticalScalarDiffusivity(ν=1e-4)
 
     model = HydrostaticFreeSurfaceModel(; grid,
@@ -110,7 +107,7 @@ function idealized_coast(timestepper::Symbol;
     M²(y) = if y > 50kilometers
         0.0
     else
-        1.5e-6
+        1e-6
     end
     g  = buoyancy.gravitational_acceleration
 
@@ -119,8 +116,7 @@ function idealized_coast(timestepper::Symbol;
     uᵢ(x, y, z) = y > 60kilometers ? 0.0 : - 1 / f * M²(y) * (z - bottom_height(x, y))
 
     set!(model, T=Tᵢ, S=Sᵢ, u=uᵢ)
-    Δt = idealized_coast_timestep(Val(timestepper))
-    simulation = Simulation(model; Δt, stop_time=30days)
+    simulation = Simulation(model; Δt, stop_time=20days)
 
     add_callback!(simulation, print_progress,  IterationInterval(100))
 
@@ -142,7 +138,7 @@ function idealized_coast(timestepper::Symbol;
     filename = "idealized_coast_$(fsname)"
     save_fields_interval = 1hours
 
-    closure = cl1 isa CATKEVerticalDiffusivity ? "CATKE" : "RiBased"
+    closure = cl1 isa CATKEVerticalDiffusivity ? "CATKE" : cl1 isa Nothing ? "unforced" : "RiBased"
 
     VFCC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
     VCFC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Face,   Center), Oceananigans.Operators.volume, grid)
@@ -163,9 +159,9 @@ function idealized_coast(timestepper::Symbol;
     Gby = ∂y(b)^2 * VCFC
     Gbz = ∂z(b)^2 * VCCF
 
-    Abx = g * (α * fT.ATx / VFCC - β * fS.ASx / VFCC) * VFCC
-    Aby = g * (α * fT.ATy / VCFC - β * fS.ASy / VCFC) * VCFC
-    Abz = g * (α * fT.ATz / VCCF - β * fS.ASz / VCCF) * VCCF
+    # Abx = g * (α * fT.ATx / VFCC - β * fS.ASx / VFCC) * VFCC
+    # Aby = g * (α * fT.ATy / VCFC - β * fS.ASy / VCFC) * VCFC
+    # Abz = g * (α * fT.ATz / VCCF - β * fS.ASz / VCCF) * VCCF
 
     G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
     u, v, w = model.velocities
@@ -180,7 +176,7 @@ function idealized_coast(timestepper::Symbol;
                        T = T * VCCC,
                        S = S * VCCC,
                        b = b * VCCC,
-                       κu, κc), fT, fS, (; Abx, Aby, Abz), G)
+                       κu, κc), fT, fS, G)
 
     average_outputs = NamedTuple{keys(outputs)}(Average(output, dims=1) for output in values(outputs))
 
