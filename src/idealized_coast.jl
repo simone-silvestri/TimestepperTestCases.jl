@@ -158,14 +158,14 @@ function idealized_coast(timestepper::Symbol;
     GSy = ∂y(S)^2 * VCFC
     GSz = ∂z(S)^2 * VCCF
 
-    b   = buoyancy(model.buoyancy, grid, (; T = T, S = S))
+    b   = Oceananigans.BuoyancyFormulations.buoyancy(model.buoyancy, grid, (; T = T, S = S))
     Gbx = ∂x(b)^2 * VFCC
     Gby = ∂y(b)^2 * VCFC
     Gbz = ∂z(b)^2 * VCCF
 
-    Abx = - g * (α * fT.ATx / VFCC + β * fS.ASx / VFCC)
-    Aby = - g * (α * fT.ATy / VCFC + β * fS.ASy / VCFC)
-    Abz = - g * (α * fT.ATz / VCCF + β * fS.ASz / VCCF)
+    Abx = g * (β * fS.ASx / VFCC - α * fT.ATx / VFCC)
+    Aby = g * (β * fS.ASy / VCFC - α * fT.ATy / VCFC)
+    Abz = g * (β * fS.ASz / VCCF - α * fT.ATz / VCCF)
 
     G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
     u, v, w = model.velocities
