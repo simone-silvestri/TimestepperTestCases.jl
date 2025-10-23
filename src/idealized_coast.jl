@@ -158,7 +158,16 @@ function idealized_coast(timestepper::Symbol;
     GSy = ∂y(S)^2 * VCFC
     GSz = ∂z(S)^2 * VCCF
 
-    g = (; GTx, GTy, GTz, GSx, GSy, GSz)
+    b   = buoyancy(model.buoyancy, grid, (; T = T, S = S))
+    Gbx = ∂x(b)^2 * VFCC
+    Gby = ∂y(b)^2 * VCFC
+    Gbz = ∂z(b)^2 * VCCF
+
+    Abx = - g * (α * fT.ATx / VFCC + β * fS.ASx / VFCC)
+    Aby = - g * (α * fT.ATy / VCFC + β * fS.ASy / VCFC)
+    Abz = - g * (α * fT.ATz / VCCF + β * fS.ASz / VCCF)
+
+    G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
     u, v, w = model.velocities
     η = model.free_surface.η
     T, S = model.tracers
@@ -170,7 +179,8 @@ function idealized_coast(timestepper::Symbol;
                        w = w * VCCF,
                        T = T * VCCC,
                        S = S * VCCC,
-                       κu, κc), fT, fS, g)
+                       b = b * VCCC,
+                       κu, κc), fT, fS, (; Abx, Aby, Abz), G)
 
     average_outputs = NamedTuple{keys(outputs)}(Average(output, dims=1) for output in values(outputs))
 
