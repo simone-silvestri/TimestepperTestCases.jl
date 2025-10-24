@@ -92,10 +92,16 @@ function idealized_coast(timestepper::Symbol;
     cl1 = forced ? closure : nothing
     cl2 = VerticalScalarDiffusivity(ν=3e-5)
 
+    if cl1 isa CATKEVerticalDiffusivity
+        tracers = (:T, :S, :e)
+    else
+        tracers = (:T, :S)
+    end
+
     model = HydrostaticFreeSurfaceModel(; grid,
                                           coriolis,
                                           timestepper,
-                                          tracers = (:T, :S, :e),
+                                          tracers,
                                           buoyancy,
                                           closure = (cl1, cl2),
                                           boundary_conditions = (; u=u_bcs, v=v_bcs),
@@ -118,7 +124,7 @@ function idealized_coast(timestepper::Symbol;
     Sᵢ(x, y, z) = 35 - M²(y) / (β * g) * (50kilometers - y) - S² / (β * g) * z
     uᵢ(x, y, z) = y > 60kilometers ? 0.0 : - 1 / f * M²(y) * (z - bottom_height(x, y))
 
-    set!(model, T=Tᵢ, S=Sᵢ, u=uᵢ)
+    set!(model, T=Tᵢ, S=Sᵢ)
     simulation = Simulation(model; Δt, stop_time=20days)
 
     add_callback!(simulation, print_progress,  IterationInterval(100))
