@@ -2,15 +2,12 @@ using Oceananigans.AbstractOperations: grid_metric_operation
 using Oceananigans.Utils: launch!
 using Oceananigans.Grids: architecture, znode
 using Oceananigans.Architectures: device, on_architecture
+using Oceananigans.Fields: default_indices
 using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
 using KernelAbstractions: @kernel, @index, @unroll
 
 MetricField(loc, grid, metric; indices = default_indices(3)) = compute!(Field(grid_metric_operation(loc, metric, grid); indices))
-
-VolumeField(grid, loc=(Center, Center, Center);  indices = default_indices(3)) = MetricField(loc, grid, Oceananigans.AbstractOperations.volume; indices)
-  AreaField(grid, loc=(Center, Center, Nothing); indices = default_indices(3)) = MetricField(loc, grid, Oceananigans.AbstractOperations.Az; indices)
-
 @inline _density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
 
 DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = 
@@ -67,7 +64,6 @@ function calculate_z★_diagnostics(b::FieldTimeSeries; path = nothing)
         
     return z★
 end
-
 
 function calculate_z★_diagnostics(b::Field)
 

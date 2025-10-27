@@ -30,8 +30,13 @@ end
 const tracer_buffer_scheme = WENO(order=5, buffer_scheme=Centered())
 const tracer_advection     = WENO(order=7, buffer_scheme=tracer_buffer_scheme)
 
+include("BuoyancyVarianceDissipationComputations/BuoyancyVarianceDissipationComputations.jl")
+
+using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation
+
 include("internal_tide.jl")
 include("idealized_coast.jl")
 include("dissipation_diagnostics.jl")
+include("salinity_vortex.jl")
 
 end
