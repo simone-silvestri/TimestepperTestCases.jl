@@ -6,6 +6,7 @@ using Oceananigans.BoundaryConditions
 using KernelAbstractions: @kernel, @index
 using Oceananigans.Operators
 using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEVerticalDiffusivity
+using Random
 
 @inline function wind_stress(i, j, grid, clock, fields, p) 
     force = clock.time > 4days
@@ -14,7 +15,7 @@ using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEVertic
 end
 
 idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 1.5minutes
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 4.5minutes
+idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 4minutes
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
@@ -68,13 +69,9 @@ function idealized_coast(timestepper::Symbol;
         free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=Δt+2minutes)
     end
 
-    if forced 
-        τ₀ = 0.05 / 1027
-    else
-        τ₀ = 0.0
-    end
+    τ₀ = 0.1 / 1027
 
-    bottom_drag_coefficient = 0.03
+    bottom_drag_coefficient = 0.003
 
     u_immersed_drag = FluxBoundaryCondition(u_immersed_bottom_drag, discrete_form=true, parameters=bottom_drag_coefficient)
     v_immersed_drag = FluxBoundaryCondition(v_immersed_bottom_drag, discrete_form=true, parameters=bottom_drag_coefficient)
@@ -85,11 +82,15 @@ function idealized_coast(timestepper::Symbol;
     v_bottom   = FluxBoundaryCondition(v_quadratic_bottom_drag, discrete_form=true, parameters=bottom_drag_coefficient)
     u_top      = FluxBoundaryCondition(wind_stress; discrete_form=true, parameters=(τ₀=τ₀, f=f))
    
-    u_bcs = FieldBoundaryConditions(bottom=u_bottom, immersed=u_immersed, top=u_top)
+    u_bcs = if forced
+        FieldBoundaryConditions(bottom=u_bottom, immersed=u_immersed, top=u_top)
+    else
+        FieldBoundaryConditions(bottom=u_bottom, immersed=u_immersed)
+    end
     v_bcs = FieldBoundaryConditions(bottom=v_bottom, immersed=v_immersed)
 
     cl1 = forced ? closure : nothing
-    cl2 = VerticalScalarDiffusivity(ν=1e-4)
+    cl2 = VerticalScalarDiffusivity(ν=3e-5)
 
     if cl1 isa CATKEVerticalDiffusivity
         tracers = (:T, :S, :e)
@@ -109,16 +110,18 @@ function idealized_coast(timestepper::Symbol;
                                           tracer_advection)
 
     N² = 1e-4
-    S² = 1e-6
+    S² = 1e-8
     M²(y) = if y > 50kilometers
         0.0
     else
-        1e-6
+        1.2e-6
     end
     g  = buoyancy.gravitational_acceleration
 
-    Tᵢ(x, y, z) = 25 + N² / (α * g) * z
-    Sᵢ(x, y, z) = 35 - M²(y) / (β * g) * (50kilometers - y) + S² / (β * g) * z
+    Random.seed!(1234)
+
+    Tᵢ(x, y, z) = 25 + N² / (α * g) * z + 1e-2 * rand()
+    Sᵢ(x, y, z) = 35 - M²(y) / (β * g) * (50kilometers - y) - S² / (β * g) * z
     uᵢ(x, y, z) = y > 60kilometers ? 0.0 : - 1 / f * M²(y) * (z - bottom_height(x, y))
 
     set!(model, T=Tᵢ, S=Sᵢ)
@@ -169,20 +172,23 @@ function idealized_coast(timestepper::Symbol;
     # Aby = g * (α * fT.ATy / VCFC - β * fS.ASy / VCFC) * VCFC
     # Abz = g * (α * fT.ATz / VCCF - β * fS.ASz / VCCF) * VCCF
 
-    G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
+    G = (; GTx, GTy, GTz, GSx, GSy, GSz) # , Gbx, Gby, Gbz)
     u, v, w = model.velocities
     η = model.free_surface.η
     T, S = model.tracers
-    κu = model.diffusivity_fields[1].κu
-    κc = model.diffusivity_fields[1].κc
 
     outputs = merge((; u = u * VFCC,
                        v = v * VCFC,
                        w = w * VCCF,
                        T = T * VCCC,
                        S = S * VCCC,
-                       b = b * VCCC,
-                       κu, κc), fT, fS, G)
+                       b = b * VCCC), fT, fS, G)
+
+    if !isnothing(cl1)
+        κu = model.diffusivity_fields[1].κu
+        κc = model.diffusivity_fields[1].κc
+        outputs = merge(outputs, (; κu, κc))
+    end
 
     average_outputs = NamedTuple{keys(outputs)}(Average(output, dims=1) for output in values(outputs))
 
@@ -193,10 +199,16 @@ function idealized_coast(timestepper::Symbol;
                                                     array_type = Array{Float32},
                                                     overwrite_existing = true)
 
+    simulation.output_writers[:surface] = JLD2Writer(model, outputs;
+                                                    filename = filename * "_surface_$(string(timestepper))_$(closure)",
+                                                    schedule = TimeInterval(save_fields_interval),
+                                                    array_type = Array{Float32},
+                                                    indices = (:, :, grid.Nz),
+                                                    overwrite_existing = true)
+
     simulation.output_writers[:averages] = JLD2Writer(model, average_outputs;
                                                       filename = filename * "_averages_$(string(timestepper))_$(closure)",
                                                       schedule = TimeInterval(save_fields_interval),
-                                                      file_splitting = TimeInterval(1days),
                                                       array_type = Array{Float32},
                                                       overwrite_existing = true)
 
