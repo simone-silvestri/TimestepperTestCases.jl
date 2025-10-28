@@ -31,7 +31,6 @@ function idealized_coast(timestepper::Symbol;
                          arch = CPU(), 
                          forced = true,
                          lowres = false,
-                         closure = CATKEVerticalDiffusivity(),
                          free_surface = nothing)
 
     Lx = 96kilometers
@@ -98,10 +97,10 @@ function idealized_coast(timestepper::Symbol;
     end
     v_bcs = FieldBoundaryConditions(bottom=v_bottom, immersed=v_immersed)
 
-    cl1 = forced ? closure : nothing
+    cl1 = forced ? CATKEVerticalDiffusivity() : nothing
     cl2 = VerticalScalarDiffusivity(ν=3e-5)
 
-    if cl1 isa CATKEVerticalDiffusivity
+    if forced
         tracers = (:T, :S, :e)
     else
         tracers = (:T, :S)
@@ -144,8 +143,12 @@ function idealized_coast(timestepper::Symbol;
     fT = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵT)
     fS = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵS)
 
+    ϵb = TimestepperTestCases.BuoyancyVarianceDissipationComputations.BuoyancyVarianceDissipation(grid)
+    fb = TimestepperTestCases.BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb)
+    
     add_callback!(simulation, ϵT, IterationInterval(1))
     add_callback!(simulation, ϵS, IterationInterval(1))
+    add_callback!(simulation, ϵb, IterationInterval(1))
 
     if free_surface isa SplitExplicitFreeSurface
         fsname = "split_free_surface"
@@ -181,7 +184,7 @@ function idealized_coast(timestepper::Symbol;
     # Aby = g * (α * fT.ATy / VCFC - β * fS.ASy / VCFC) * VCFC
     # Abz = g * (α * fT.ATz / VCCF - β * fS.ASz / VCCF) * VCCF
 
-    G = (; GTx, GTy, GTz, GSx, GSy, GSz) # , Gbx, Gby, Gbz)
+    G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
     u, v, w = model.velocities
     η = model.free_surface.η
     T, S = model.tracers
@@ -191,7 +194,7 @@ function idealized_coast(timestepper::Symbol;
                        w = w * VCCF,
                        T = T * VCCC,
                        S = S * VCCC,
-                       b = b * VCCC), fT, fS, G)
+                       b = b * VCCC), fT, fS, fb, G)
 
     if !isnothing(cl1)
         κu = model.diffusivity_fields[1].κu
