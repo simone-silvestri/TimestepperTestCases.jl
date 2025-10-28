@@ -91,7 +91,7 @@ function BuoyancyVarianceDissipation(grid;
     previous_state   = (; cⁿ⁻¹, Uⁿ⁻¹, Uⁿ)
     advective_fluxes = (; Fⁿ, Fⁿ⁻¹)
 
-    return BuoyancyVarianceDissipation(P, advective_fluxes, diffusive_fluxes, previous_state)
+    return BuoyancyVarianceDissipation(P, advective_fluxes, previous_state)
 end
 
 function (ϵ::BuoyancyVarianceDissipation)(model)
