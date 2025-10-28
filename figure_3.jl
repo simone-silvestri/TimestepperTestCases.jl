@@ -1,249 +1,85 @@
 using TimestepperTestCases, Oceananigans, GLMakie
-using Oceananigans.AbstractOperations: grid_metric_operation
-using Oceananigans.Operators: volume
-using FFTW
+using LaTeXStrings, Statistics
 
-function power_spectrum_1d_x(var, x)
-    Nx  = length(x)
-    Nfx = Int64(Nx)
+# rl = TimestepperTestCases.load_internal_tide("internal_tide/", "QuasiAdamsBashforth2", "split_free_surface")
+# ri = TimestepperTestCases.load_internal_tide("internal_tide/", "SplitRungeKutta3", "implicit_free_surface")
+# al = TimestepperTestCases.load_internal_tide("internal_tide/", "SplitRungeKutta3", "split_free_surface")
 
-    spectra = zeros(ComplexF64, Int(Nfx/2))
-    dx = x[2] - x[1]
+url = Field(rl[:u][end] / rl[:VFCC][end] - mean(rl[:u][end] / rl[:VFCC][end]))
+uri = Field(ri[:u][end] / ri[:VFCC][end] - mean(ri[:u][end] / ri[:VFCC][end]))
+ual = Field(al[:u][end] / al[:VFCC][end] - mean(al[:u][end] / al[:VFCC][end]))
 
-    freqs = fftfreq(Nfx, 1.0 / dx) # 0,+ve freq,-ve freqs (lowest to highest)
-    freqs = freqs[1:Int(Nfx/2)] .* 2.0 .* π
+wrl = Field(rl[:w][end] / rl[:VCCF][end])
+wri = Field(ri[:w][end] / rl[:VCCF][end])
+wal = Field(al[:w][end] / rl[:VCCF][end])
 
-    fourier      = fft(var) / Nfx
-    spectra[1]  += fourier[1] .* conj(fourier[1])
+bu = Float64.(interior(rl[:u][end]) .== 0)
+bu[bu .== 1] .= NaN
 
-    for m in 2:Int(Nfx/2)
-        spectra[m] += 2.0 * fourier[m] * conj(fourier[m]) # factor 2 for neg freq contribution
-    end
+bw = Float64.(interior(wrl) .== 0)
+bw[bw .== 1] .= NaN
 
-    return spectra, freqs
-end
+ηrl = rl[:η][end]
+ηri = ri[:η][end]
+ηal = al[:η][end]
 
-function y_average_spectra(var::Field, irange, jrange; k = 1, spectra = power_spectrum_1d_x)
+Nrl = Field(∂z(rl[:b][end] / rl[:VCCC][end]))
+Nri = Field(∂z(ri[:b][end] / ri[:VCCC][end]))
+Nal = Field(∂z(al[:b][end] / al[:VCCC][end]))
 
-    xdomain = xnodes(var)[irange]
-    ydomain = ynodes(var)[jrange]
-    spec, freq = spectra(interior(var, irange, jrange[1], k), xdomain)
+xu, yu, zu = nodes(rl[:u])
+xw, yw, zw = nodes(rl[:w])
+xη, yη, zη = nodes(rl[:η])
 
-    for j in jrange[2:end]
-        spec .+= spectra(interior(var, irange, j, k), xdomain)[1]
-    end
+xticks  = ([-800, -400, 0, 400, 800] .* 1000, latexstring.(string.([-800, -400, 0, 400, 800])))
+xnticks = ([-800, -400, 0, 400, 800] .* 1000, ["", "", "", "", ""])
 
-    spec .*= 1 / length(jrange)
+yticks = ([-2, -1.5, -1, -0.5, -0] .* 1000, latexstring.(string.([-2.0, -1.5, -1.0, -0.5, -0.0])))
+ynticks = ([-2, -1.5, -1, -0.5, -0] .* 1000, ["", "", "", "", ""])
 
-    return spec, freq
-end
-
-function load_case(folder, closure, suffix, timestepper)
-    path_avg = folder * "idealized_coast_split_free_surface_" * suffix * "averages_" * timestepper * "_" * closure * ".jld2"
-
-    case = Dict()
-    case[:ASx] = FieldTimeSeries(path_avg, "ASx")
-    case[:ASy] = FieldTimeSeries(path_avg, "ASy")
-    case[:ASz] = FieldTimeSeries(path_avg, "ASz")
-    case[:ATx] = FieldTimeSeries(path_avg, "ATx")
-    case[:ATy] = FieldTimeSeries(path_avg, "ATy")
-    case[:ATz] = FieldTimeSeries(path_avg, "ATz")
-
-    Nt = length(case[:ASx])
-
-    grid = case[:ASx].grid
-    VFCC = grid_metric_operation((Face,   Center, Center), volume, grid)
-    VCFC = grid_metric_operation((Center, Face,   Center), volume, grid)
-    VCCF = grid_metric_operation((Center, Center, Face),   volume, grid)
-    VCCC = grid_metric_operation((Center, Center, Center), volume, grid)
-
-    case[:aSx] = [sum(case[:ASx][i] / VFCC) for i in 1:Nt] ./ prod(size(grid)) 
-    case[:aSy] = [sum(case[:ASy][i] / VCFC) for i in 1:Nt] ./ prod(size(grid))
-    case[:aSz] = [sum(case[:ASz][i] / VCCF) for i in 1:Nt] ./ prod(size(grid))
-    case[:aSt] = case[:aSx] .+ case[:aSy] .+ case[:aSz]
-
-    case[:GSx] = FieldTimeSeries(path_avg, "GSx")
-    case[:GSy] = FieldTimeSeries(path_avg, "GSy")
-    case[:GSz] = FieldTimeSeries(path_avg, "GSz")
-    case[:GTx] = FieldTimeSeries(path_avg, "GTx")
-    case[:GTy] = FieldTimeSeries(path_avg, "GTy")
-    case[:GTz] = FieldTimeSeries(path_avg, "GTz")
-    case[:DSz] = FieldTimeSeries(path_avg, "DSz")
-
-    case[:gSx] = [sum(case[:GSx][i] / VFCC) for i in 1:Nt] ./ prod(size(grid))
-    case[:gSy] = [sum(case[:GSy][i] / VCFC) for i in 1:Nt] ./ prod(size(grid))
-    case[:gSz] = [sum(case[:GSz][i] / VCCF) for i in 1:Nt] ./ prod(size(grid))
-    case[:dSz] = [sum(case[:DSz][i] / VCCC) for i in 1:Nt] ./ prod(size(grid))
-    case[:gSt] = case[:gSx] .+ case[:gSy] .+ case[:gSz]
-
-    case[:uX] = FieldTimeSeries(path_avg, "u")
-    case[:vX] = FieldTimeSeries(path_avg, "v")
-    case[:wX] = FieldTimeSeries(path_avg, "w")
-    case[:TX] = FieldTimeSeries(path_avg, "T")
-    case[:SX] = FieldTimeSeries(path_avg, "S")
-    case[:bX] = FieldTimeSeries(path_avg, "b")
-
-    case[:u] = FieldTimeSeries(path_avg, "u", backend=OnDisk())
-    case[:v] = FieldTimeSeries(path_avg, "v", backend=OnDisk())
-    case[:w] = FieldTimeSeries(path_avg, "w", backend=OnDisk())
-    case[:T] = FieldTimeSeries(path_avg, "T", backend=OnDisk())
-    case[:S] = FieldTimeSeries(path_avg, "S", backend=OnDisk())
-    case[:b] = FieldTimeSeries(path_avg, "b", backend=OnDisk())
-
-    u2(i) = (case[:u][i] / VFCC)^2 * VFCC
-    v2(i) = (case[:v][i] / VCFC)^2 * VCFC
-    w2(i) = (case[:w][i] / VCCF)^2 * VCCF
-
-    case[:KE] = [sum(u2(i)) + sum(v2(i)) + sum(w2(i)) for i in 1:Nt] ./ sum(VCCC)
-
-    u2X(i) = (case[:uX][i] / VFCC)^2 * VFCC
-    v2X(i) = (case[:vX][i] / VCFC)^2 * VCFC
-    w2X(i) = (case[:wX][i] / VCCF)^2 * VCCF
-
-    case[:KEX] = [sum(u2X(i)) + sum(v2X(i)) + sum(w2X(i)) for i in 1:Nt] ./ sum(VCCC)
-
-    for i in 1:Nt
-        case[:bX][i] ./= VCCC
-    end
-
-    return case
-end
-
-folder = "idealized_coast/"
-
-# ah = load_case(folder, "CATKE", "",        "QuasiAdamsBashforth2")
-# rh = load_case(folder, "CATKE", "",        "SplitRungeKutta3")
-al = load_case(folder, "CATKE", "lowres_", "QuasiAdamsBashforth2")
-rl = load_case(folder, "CATKE", "lowres_", "SplitRungeKutta3")
-
-# iter = Observable(1)
-
-# xah, yah, zah = nodes(ah[:TX])
-# xrh, yrh, zrh = nodes(rh[:TX])
-# xal, yal, zal = nodes(al[:TX])
-# xrl, yrl, zrl = nodes(rl[:TX])
-
-# bah = @lift(interior(rh[:bX][$iter], 1, :, :))
-# brh = @lift(interior(ah[:bX][$iter], 1, :, :))
-# bal = @lift(interior(rl[:bX][$iter], 1, :, :))
-# brl = @lift(interior(al[:bX][$iter], 1, :, :))
-
-# fig = Figure(size = (1000, 600))
-
-# ax = Axis(fig[1, 1]) 
-# # heatmap!(ax, ya, za,  u_a,  colorrange=(-60000, 60000))
-# contour!(ax, yah, zah, bah, levels=range(-0.24, -0.1748, length=20), color=:blue, linewidth=2, linestyle=:dash)
-# contour!(ax, yrh, zrh, brh, levels=range(-0.24, -0.1748, length=20), color=:red,  linewidth=2, linestyle=:dash)
-# contour!(ax, yal, zal, bal, levels=range(-0.24, -0.1748, length=20), color=:blue, linewidth=2, linestyle=:solid)
-# contour!(ax, yrl, zrl, brl, levels=range(-0.24, -0.1748, length=20), color=:red,  linewidth=2, linestyle=:solid)
+yeticks =  ([-1, -0, 1] .* 1e-1, latexstring.(string.([-10, 0, 10])))
+yenticks = ([-1, -0, 1] .* 1e-1, ["", "", ""])
 
 
-function add_surface_dynamics!(case::Dict, folder, closure, suffix, timestepper)
+fig = Figure(resolution = (1100, 450), fontsize = 18)
+ga = GridLayout(fig[1, 1])
+# gb = GridLayout(fig[1, 2]) 
+ax01 = Axis(ga[1, 1],    title = L"\text{\textbf{QAB2}, split free surface}", xlabel ="", ylabel = L"\eta \text{ [cm]}", xticks=xnticks, yticks=yeticks)
+ax02 = Axis(ga[1, 2],    title = L"\text{\textbf{RK3}, implicit free surface}", xlabel ="", ylabel = "", xticks=xnticks,   yticks=yenticks)
+ax03 = Axis(ga[1, 3],    title = L"\text{\textbf{RK3}, split free surface}", xlabel ="", ylabel = "", xticks=xnticks,   yticks=yenticks)
+ax11 = Axis(ga[2:4, 1],  xlabel ="", ylabel = L"\text{Depth [km]}", xticks=xnticks, yticks=yticks)
+ax12 = Axis(ga[2:4, 2],  xlabel ="", ylabel = "",                   xticks=xnticks, yticks=ynticks)
+ax13 = Axis(ga[2:4, 3],  xlabel ="", ylabel = "",                   xticks=xnticks, yticks=ynticks)
+# ax21 = Axis(ga[5:7, 1],  xlabel ="", ylabel = L"\text{Depth [km]}", xticks=xnticks, yticks=yticks)
+# ax22 = Axis(ga[5:7, 2],  xlabel ="", ylabel ="",                    xticks=xnticks, yticks=ynticks)
+# ax23 = Axis(ga[5:7, 3],  xlabel ="", ylabel ="",                    xticks=xnticks, yticks=ynticks)
+ax21 = Axis(ga[5:7, 1], xlabel =L"\text{x [km]}", ylabel = L"\text{Depth [km]}", xticks=xticks, yticks=yticks)
+ax22 = Axis(ga[5:7, 2], xlabel =L"\text{x [km]}", ylabel ="",                    xticks=xticks, yticks=ynticks)
+ax23 = Axis(ga[5:7, 3], xlabel =L"\text{x [km]}", ylabel ="",                    xticks=xticks, yticks=ynticks)
 
-    path_surf = folder * "idealized_coast_split_free_surface_" * suffix * "surface_" * timestepper * "_" * closure * ".jld2"
-    @show path_surf
+lines!(ax01, xη, interior(ηal, :, 1, 1), color = :grey, linewidth = 2)
+lines!(ax02, xη, interior(ηri, :, 1, 1), color = :grey, linewidth = 2)
+lines!(ax03, xη, interior(ηrl, :, 1, 1), color = :grey, linewidth = 2)
 
-    case[:uS] = FieldTimeSeries(path_surf, "u")
-    case[:vS] = FieldTimeSeries(path_surf, "v")
+xlims!(ax01, -1e6, 1e6)
+xlims!(ax02, -1e6, 1e6)
+xlims!(ax03, -1e6, 1e6)
+ylims!(ax01, -0.15, 0.15)
+ylims!(ax02, -0.15, 0.15)
+ylims!(ax03, -0.15, 0.15)
 
-    case[:specU] = []
-    case[:specV] = []
+hm = heatmap!(ax11, xu, zu, interior(ual, :, 1, :) .+ bu[:, 1, :]; colormap=:bwr, colorrange = (-0.35, 0.35), nan_color=:black)
+hm = heatmap!(ax12, xu, zu, interior(uri, :, 1, :) .+ bu[:, 1, :]; colormap=:bwr, colorrange = (-0.35, 0.35), nan_color=:black)
+hm = heatmap!(ax13, xu, zu, interior(url, :, 1, :) .+ bu[:, 1, :]; colormap=:bwr, colorrange = (-0.35, 0.35), nan_color=:black)
+Colorbar(ga[2:4, 4], hm, label = L"\text{u' [m s}^{-1}\text{]}", ticks = ([-0.2, 0.0, 0.2], latexstring.(string.([-0.2, 0.0, 0.2]))))
+# hm = heatmap!(ax21, xw, zw, interior(wal, :, 1, :) .+ bw[:, 1, :]; colormap=:bwr, colorrange = (-0.0035, 0.0035), nan_color=:black)
+# hm = heatmap!(ax22, xw, zw, interior(wri, :, 1, :) .+ bw[:, 1, :]; colormap=:bwr, colorrange = (-0.0035, 0.0035), nan_color=:black)
+# hm = heatmap!(ax23, xw, zw, interior(wrl, :, 1, :) .+ bw[:, 1, :]; colormap=:bwr, colorrange = (-0.0035, 0.0035), nan_color=:black)
+# Colorbar(ga[5:7, 4], hm, label = L"\text{w [cm s}^{-1}\text{]}", ticks = ([-0.002, 0.0, 0.002], latexstring.(string.([-0.2, 0.0, 0.2]))))
+hm = heatmap!(ax21, xw, zw[2:127], interior(Nal, :, 1, 2:127) .+ bw[:, 1, 2:127]; colormap=:ice, colorrange = (0.00009, 0.00011), nan_color = :green)
+hm = heatmap!(ax22, xw, zw[2:127], interior(Nri, :, 1, 2:127) .+ bw[:, 1, 2:127]; colormap=:ice, colorrange = (0.00009, 0.00011), nan_color = :green)
+hm = heatmap!(ax23, xw, zw[2:127], interior(Nrl, :, 1, 2:127) .+ bw[:, 1, 2:127]; colormap=:ice, colorrange = (0.00009, 0.00011), nan_color = :green)
+Colorbar(ga[5:7, 4], hm, label = L"\text{N}^{2}\text{ } 10^{-4}\text{[s}^{-2}\text{]}", ticks = ([0.95, 0.00, 1.05] .* 1e-4, latexstring.(string.([0.95, 0.00, 1.05]))))
 
-    Nt = length(case[:uS])
-
-    for t in 1:Nt
-        usurf = interior(case[:uS][t], :, :, case[:uS].grid.Nz)
-        vsurf = interior(case[:vS][t], :, :, case[:uS].grid.Nz)
-
-        spec_u, freq = y_average_spectra(usurf, 1:size(usurf, 1), 1:size(usurf, 2))
-        spec_v, freq = y_average_spectra(vsurf, 1:size(vsurf, 1), 1:size(vsurf, 2))
-
-        push!(case[:specU], spec_u)
-        push!(case[:specV], spec_v)
-    end
-
-    return case
-end
-
-@show "Sta"
-
-add_surface_dynamics!(ah, folder, "CATKE", "",        "QuasiAdamsBashforth2")
-add_surface_dynamics!(rh, folder, "CATKE", "",        "SplitRungeKutta3")
-add_surface_dynamics!(al, folder, "CATKE", "lowres_", "QuasiAdamsBashforth2")
-add_surface_dynamics!(rl, folder, "CATKE", "lowres_", "SplitRungeKutta3")
-    
-    # uatmp = XFaceField(usa.grid; indices = (:, :, usa.grid.Nz))
-    # vatmp = YFaceField(usa.grid; indices = (:, :, usa.grid.Nz))
-    # urtmp = XFaceField(usr.grid; indices = (:, :, usr.grid.Nz))
-    # vrtmp = YFaceField(usr.grid; indices = (:, :, usr.grid.Nz))
-
-    # kea = Field(@at((Center, Center, Center), uatmp^2 + vatmp^2))
-    # ker = Field(@at((Center, Center, Center), urtmp^2 + vrtmp^2))
-    # ζa  = Field(KernelFunctionOperation{Face, Face, Center}(Oceananigans.Operators.ζ₃ᶠᶠᶜ, usa.grid, uatmp, vatmp); indices = (:, :, usa.grid.Nz))
-    # ζr  = Field(KernelFunctionOperation{Face, Face, Center}(Oceananigans.Operators.ζ₃ᶠᶠᶜ, usr.grid, urtmp, vrtmp); indices = (:, :, usr.grid.Nz))
-
-    # Va = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Center), Oceananigans.Operators.volume, usa.grid)
-    # Vr = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Center), Oceananigans.Operators.volume, usr.grid)
-
-# us_a = @lift(interior(Field(usa[$iter] / Va), :, :, 1))
-# vs_a = @lift(interior(Field(vsa[$iter] / Va), :, :, 1))
-# us_r = @lift(interior(Field(usr[$iter] / Vr), :, :, 1))
-# vs_r = @lift(interior(Field(vsr[$iter] / Vr), :, :, 1))
-# ke_a = @lift begin
-#     set!(uatmp, usa[$iter]/Va)
-#     set!(vatmp, vsa[$iter]/Va)
-#     Oceananigans.BoundaryConditions.fill_halo_regions!((uatmp, vatmp))
-#     compute!(kea)
-#     interior(kea, :, :, 1)
-# end
-# ke_r = @lift begin
-#     set!(urtmp, usr[$iter]/Vr)
-#     set!(vrtmp, vsr[$iter]/Vr)
-#     Oceananigans.BoundaryConditions.fill_halo_regions!((urtmp, vrtmp))
-#     compute!(ker)
-#     interior(ker, :, :, 1)
-# end
-
-# ζ_a = @lift begin
-#     set!(uatmp, usa[$iter]/Va)
-#     set!(vatmp, vsa[$iter]/Va)
-#     Oceananigans.BoundaryConditions.fill_halo_regions!((uatmp, vatmp))
-#     compute!(ζa)
-#     interior(ζa, :, :, 1)
-# end
-
-# ζ_r = @lift begin
-#     set!(urtmp, usr[$iter]/Vr)
-#     set!(vrtmp, vsr[$iter]/Vr)
-#     Oceananigans.BoundaryConditions.fill_halo_regions!((urtmp, vrtmp))
-#     compute!(ζr)
-#     interior(ζr, :, :, 1)
-# end
-
-# xa, ya, za = nodes(usa)
-# xr, yr, zr = nodes(usr)
-
-# fig  = Figure(size = (800, 400))
-# axua  = Axis(fig[1, 1])
-# axva  = Axis(fig[1, 2])
-# axka  = Axis(fig[2, 1])
-# axza  = Axis(fig[2, 2])
-
-# axur  = Axis(fig[3, 1])
-# axvr  = Axis(fig[3, 2])
-# axkr  = Axis(fig[4, 1])
-# axzr  = Axis(fig[4, 2])
-
-# heatmap!(axua, xa, ya, us_a, colorrange=(-0.5, 0.5))
-# heatmap!(axva, xa, ya, vs_a, colorrange=(-0.5, 0.5))
-# heatmap!(axka, xa, ya, ke_a, colorrange=(0, 0.5), colormap = :ice)
-# heatmap!(axza, xa, ya, ζ_a, colorrange=(-1e-4, 1e-4), colormap = :balance)
-
-# heatmap!(axur, xr, yr, us_r, colorrange=(-0.5, 0.5))
-# heatmap!(axvr, xr, yr, vs_r, colorrange=(-0.5, 0.5))
-# heatmap!(axkr, xr, yr, ke_r, colorrange=(0, 0.5), colormap = :ice)
-# heatmap!(axzr, xr, yr, ζ_r, colorrange=(-1e-4, 1e-4), colormap = :balance)
-
-# for ax in (axua, axva, axka, axza, axur, axvr, axkr, axzr)
-#     hidedecorations!(ax)
-# end
+colgap!(ga, 10)
+rowgap!(ga, 10)

@@ -22,8 +22,8 @@ end
 
 @inline tidal_forcing(x, z, t, p) = p.A₂ * sin(p.ω₂ * t)
 
-internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) = 6minutes
-internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
+internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =    5minutes
+internal_tide_timestep(::Val{:SplitRungeKutta3})     = 12.5minutes
 
 @kernel function _compute_dissipation!(Δtc², c⁻, c, Δt)
     i, j, k = @index(Global, NTuple)
@@ -86,7 +86,7 @@ function internal_tide(timestepper::Symbol;
 
     model = HydrostaticFreeSurfaceModel(; grid, coriolis,
                                           buoyancy = BuoyancyTracer(),
-                                          tracers = (:b, :c),
+                                          tracers = :b,
                                           momentum_advection = WENO(),
                                           tracer_advection,
                                           free_surface,
@@ -104,11 +104,9 @@ function internal_tide(timestepper::Symbol;
     simulation = Simulation(model; Δt, stop_time)
 
     ϵb = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:b, grid)
-    ϵc = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:c, grid)
-
+    
     # Adding the variance dissipation
     add_callback!(simulation, ϵb, IterationInterval(1))
-    add_callback!(simulation, ϵc, IterationInterval(1))
     add_callback!(simulation, compute_tracer_dissipation!, IterationInterval(1))
 
     wall_clock = Ref(time_ns())
@@ -139,8 +137,7 @@ function internal_tide(timestepper::Symbol;
     filename = "internal_tide_$(string(timestepper))_$(fsname)"
     save_fields_interval = 1hours
     
-    f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
-              Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
+    f = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb)
 
     VFC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
     VCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)

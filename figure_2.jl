@@ -79,7 +79,7 @@ function run_simulation(ts, timestepper; χ=nothing, velocities=velocities)
     set!(model.auxiliary_fields.c⁻, c₀)
 
     if timestepper == :SplitRungeKutta3
-        Δt = 0.6 * minimum_xspacing(grid)
+        Δt = 0.5 * minimum_xspacing(grid)
     elseif timestepper == :QuasiAdamsBashforth2
         Δt = 0.2 * minimum_xspacing(grid)
     elseif timestepper == :D0
@@ -127,7 +127,7 @@ cases = Dict()
 
 cases["AB1"]  = run_simulation(:AB2, :QuasiAdamsBashforth2, χ=0.1)
 cases["RK3"]  = run_simulation(:RK3, :SplitRungeKutta3)
-cases["ICC"]  = run_simulation(:D0, :SplitRungeKutta3, velocities=PrescribedVelocityFields())
+cases["ICC"]  = run_simulation(:D0,  :SplitRungeKutta3, velocities=PrescribedVelocityFields())
 
 fig = Figure(size = (1000, 250))
 ax  = Axis(fig[1, 1:2], 

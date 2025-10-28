@@ -1,5 +1,5 @@
-function load_internal_tide(folder, suffix, timestepper)
-    path = folder * "internal_tide_" * suffix * timestepper * ".jld2"
+function load_internal_tide(folder, timestepper, free_surface)
+    path = folder * "internal_tide_" * timestepper * "_" * free_surface * ".jld2"
     case = Dict()
 
     case[:u] = FieldTimeSeries(path, "u")
@@ -58,6 +58,17 @@ function load_internal_tide(folder, suffix, timestepper)
     case[:gct] = case[:gcx] .+ case[:gcz] 
     GC.gc()
 
+    κc = FieldTimeSeries{Center, Center, Center}(grid, case[:Acx].times)
+    κb = FieldTimeSeries{Center, Center, Center}(grid, case[:Acx].times)
+
+    for t in 1:Nt
+        @info "Computing diffusivities for time step $t / $Nt"
+        set!(κc[t], @at((Center, Center, Center),  (case[:Acx][t] + case[:Acz][t]) / 2 / (case[:Gcx][t] + case[:Gcz][t])))
+        set!(κb[t], @at((Center, Center, Center),  (case[:Abx][t] + case[:Abz][t]) / 2 / (case[:Gbx][t] + case[:Gbz][t])))
+    end
+
+    case[:κc]  = κc
+    case[:κb]  = κb
     case[:KE]  = [sum(u2(case, i))  + sum(w2(case, i))  for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
     case[:MKE] = [sum(um2(case, i)) + sum(wm2(case, i)) for i in 1:Nt] ./ [sum(mean(case[:VCCC][i], dims=1)) for i in 1:Nt]
     case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
