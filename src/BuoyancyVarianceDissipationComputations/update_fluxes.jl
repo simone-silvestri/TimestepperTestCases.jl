@@ -1,9 +1,11 @@
 using Oceananigans: fields
 using Oceananigans.Grids: topology, Flat
+using Oceananigans.Utils
 using Oceananigans.BoundaryConditions
+using Oceananigans.BuoyancyFormulations
 
 # Store advective and diffusive fluxes for dissipation computation
-function cache_fluxes!(dissipation, model, tracer_name)
+function cache_fluxes!(dissipation, model)
     grid = model.grid
     sz   = size(model.tracers[1].data)
     of   = model.tracers[1].data.offsets
@@ -17,7 +19,7 @@ function cache_fluxes!(dissipation, model, tracer_name)
     stage = model.clock.stage
 
     update_transport!(Uⁿ, Uⁿ⁻¹, grid, params, timestepper, stage, U)
-    cache_fluxes!(dissipation, model)
+    finally_cache_fluxes!(dissipation, model)
 
     return nothing
 end
@@ -31,7 +33,7 @@ function flux_parameters(grid)
     return KernelParameters(Fx, Fy, Fz)
 end
 
-function cache_fluxes!(dissipation, model)
+function finally_cache_fluxes!(dissipation, model)
 
     # Grab tracer properties
     C    = model.tracers
@@ -50,12 +52,12 @@ function cache_fluxes!(dissipation, model)
 
     Fⁿ   = dissipation.advective_fluxes.Fⁿ
     Fⁿ⁻¹ = dissipation.advective_fluxes.Fⁿ⁻¹
-    advection = getadvection(model.advection, tracer_name)
+    advection = getadvection(model.advection, :T)
 
     cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, timestepper, stage, advection, U, model.buoyancy, C)
 
 
-    cⁿ⁺¹ = Oceananigans.BuoyancyFormulations.buoyancy(model.buoyancy, model.grid, model.tracers)
+    cⁿ⁺¹ = BuoyancyFormulations.buoyancy(model.buoyancy, model.grid, model.tracers)
 
     if timestepper isa QuasiAdamsBashforth2TimeStepper
         set!(cⁿ⁻¹, cⁿ⁺¹)
