@@ -1,5 +1,6 @@
 using Oceananigans: fields
 using Oceananigans.Grids: topology, Flat
+using Oceananigans.BoundaryConditions
 
 # Store advective and diffusive fluxes for dissipation computation
 function cache_fluxes!(dissipation, model, tracer_name)
@@ -16,8 +17,7 @@ function cache_fluxes!(dissipation, model, tracer_name)
     stage = model.clock.stage
 
     update_transport!(Uⁿ, Uⁿ⁻¹, grid, params, timestepper, stage, U)
-    tracer_id = findfirst(x -> x == tracer_name, keys(model.tracers))
-    cache_fluxes!(dissipation, model, tracer_name, Val(tracer_id))
+    cache_fluxes!(dissipation, model)
 
     return nothing
 end
@@ -31,10 +31,10 @@ function flux_parameters(grid)
     return KernelParameters(Fx, Fy, Fz)
 end
 
-function cache_fluxes!(dissipation, model, tracer_name::Symbol, tracer_id)
+function cache_fluxes!(dissipation, model)
 
     # Grab tracer properties
-    c    = model.tracers[tracer_name]
+    C    = model.tracers
     cⁿ⁻¹ = dissipation.previous_state.cⁿ⁻¹
 
     grid = model.grid
@@ -52,47 +52,28 @@ function cache_fluxes!(dissipation, model, tracer_name::Symbol, tracer_id)
     Fⁿ⁻¹ = dissipation.advective_fluxes.Fⁿ⁻¹
     advection = getadvection(model.advection, tracer_name)
 
-    cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, timestepper, stage, advection, U, c)
+    cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, timestepper, stage, advection, U, model.buoyancy, C)
 
-    ####
-    #### Update the diffusive fluxes
-    ####
 
-    Vⁿ   = dissipation.diffusive_fluxes.Vⁿ
-    Vⁿ⁻¹ = dissipation.diffusive_fluxes.Vⁿ⁻¹
-
-    D = model.diffusivity_fields
-    B = model.buoyancy
-    clk  = model.clock
-    clo  = model.closure
-    model_fields = fields(model)
-
-    cache_diffusive_fluxes(Vⁿ, Vⁿ⁻¹, grid, params, timestepper, stage, clo, D, B, c, tracer_id, clk, model_fields)
+    cⁿ⁺¹ = Oceananigans.BuoyancyFormulations.buoyancy(model.buoyancy, model.grid, model.tracers)
 
     if timestepper isa QuasiAdamsBashforth2TimeStepper
-        parent(cⁿ⁻¹) .= parent(c)
+        set!(cⁿ⁻¹, cⁿ⁺¹)
+        fill_halo_regions!(cⁿ⁻¹)
     elseif (timestepper isa RungeKuttaScheme) && (stage == length(timestepper.β))
-        parent(cⁿ⁻¹) .= parent(c)
+        set!(cⁿ⁻¹, cⁿ⁺¹)
+        fill_halo_regions!(cⁿ⁻¹)
     end
 
     return nothing
 end
 
-cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ::QuasiAdamsBashforth2TimeStepper, stage, advection, U, c) =
-    launch!(architecture(grid), grid, params, _cache_advective_fluxes!, Fⁿ, Fⁿ⁻¹, grid, advection, U, c)
+cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ::QuasiAdamsBashforth2TimeStepper, stage, advection, U, b, C) =
+    launch!(architecture(grid), grid, params, _cache_advective_fluxes!, Fⁿ, Fⁿ⁻¹, grid, advection, U, b, C)
 
-function cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ts::SplitRungeKuttaTimeStepper, stage, advection, U, c)
+function cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ts::SplitRungeKuttaTimeStepper, stage, advection, U, b, C)
     if stage == length(ts.β)-1
-        launch!(architecture(grid), grid, params, _cache_advective_fluxes!, Fⁿ, grid, advection, U, c)
-    end
-end
-
-cache_diffusive_fluxes(Vⁿ, Vⁿ⁻¹, grid, params, ::QuasiAdamsBashforth2TimeStepper, stage, clo, D, B, c, tracer_id, clk, model_fields) =
-    launch!(architecture(grid), grid, params, _cache_diffusive_fluxes!, Vⁿ, Vⁿ⁻¹, grid, clo, D, B, c, tracer_id, clk, model_fields)
-
-function cache_diffusive_fluxes(Vⁿ, Vⁿ⁻¹, grid, params, ts::SplitRungeKuttaTimeStepper, stage, clo, D, B, c, tracer_id, clk, model_fields)
-    if stage == length(ts.β)-1
-        launch!(architecture(grid), grid, params, _cache_diffusive_fluxes!, Vⁿ, grid, clo, D, B, c, tracer_id, clk, model_fields)
+        launch!(architecture(grid), grid, params, _cache_advective_fluxes!, Fⁿ, grid, advection, U, b, C)
     end
 end
 

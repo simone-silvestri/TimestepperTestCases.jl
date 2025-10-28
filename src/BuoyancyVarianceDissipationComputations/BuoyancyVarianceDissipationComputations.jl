@@ -39,7 +39,6 @@ struct BuoyancyVarianceDissipation{P, A, S}
     advective_production :: P
     advective_fluxes :: A
     previous_state :: S
-    tracer_name :: Symbol
 end
 
 function c_grid_vector(grid)
@@ -91,9 +90,8 @@ function BuoyancyVarianceDissipation(grid;
     
     previous_state   = (; cⁿ⁻¹, Uⁿ⁻¹, Uⁿ)
     advective_fluxes = (; Fⁿ, Fⁿ⁻¹)
-    diffusive_fluxes = (; Vⁿ, Vⁿ⁻¹)
 
-    return BuoyancyVarianceDissipation(P, K, advective_fluxes, diffusive_fluxes, previous_state, tracer_name)
+    return BuoyancyVarianceDissipation(P, advective_fluxes, diffusive_fluxes, previous_state)
 end
 
 function (ϵ::BuoyancyVarianceDissipation)(model)

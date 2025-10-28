@@ -44,15 +44,5 @@ function compute_dissipation!(dissipation, model, tracer_name)
     !(scheme isa Nothing) &&
         assemble_advective_dissipation!(P, grid, model.timestepper, substep, Fⁿ, Fⁿ⁻¹, Uⁿ, Uⁿ⁻¹, cⁿ⁺¹, cⁿ)
 
-    ####
-    #### Assemble the diffusive dissipation
-    ####
-
-    K    = dissipation.diffusive_production
-    Vⁿ   = dissipation.diffusive_fluxes.Vⁿ
-    Vⁿ⁻¹ = dissipation.diffusive_fluxes.Vⁿ⁻¹
-
-    assemble_diffusive_dissipation!(K, grid, model.timestepper, substep, Vⁿ, Vⁿ⁻¹, cⁿ⁺¹, cⁿ)
-
     return nothing
 end
