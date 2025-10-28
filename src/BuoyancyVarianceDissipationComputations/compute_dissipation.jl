@@ -1,7 +1,7 @@
 using Oceananigans.Models.VarianceDissipationComputations: assemble_advective_dissipation!
 
 """
-    compute_dissipation!(dissipation, model, tracer_name)
+    compute_dissipation!(dissipation, model)
 
 Compute the numerical dissipation for tracer `tracer_name`, from the previously calculated advective and diffusive fluxes,
 the formulation is:
@@ -19,7 +19,7 @@ i.e. for the AB2 scheme:
 
 For a RK3 method (not implemented at the moment), the whole substepping procedure needs to be accounted for.
 """
-function compute_dissipation!(dissipation, model, tracer_name)
+function compute_dissipation!(dissipation, model)
 
     grid = model.grid
 
