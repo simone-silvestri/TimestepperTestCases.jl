@@ -14,8 +14,8 @@ using Random
     return ifelse(force, τx, zero(grid))
 end
 
-idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 1.5minutes
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 4minutes
+idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 1minutes
+idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 2.5minutes
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
@@ -30,6 +30,7 @@ idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 4minutes
 function idealized_coast(timestepper::Symbol; 
                          arch = CPU(), 
                          forced = true,
+                         lowres = false,
                          closure = CATKEVerticalDiffusivity(),
                          free_surface = nothing)
 
@@ -37,8 +38,12 @@ function idealized_coast(timestepper::Symbol;
     Ly = 96kilometers
     Lz = 103meters
 
-    Nx = 250
-    Ny = 250
+    if lowres
+        Nx = Ny = 48
+    else
+        Nx = Ny = 250
+    end
+        
     Nz = 60
 
     z_faces = reverse(- [(k / Nz)^(1.25) for k in 0:Nz] .* Lz)
@@ -64,6 +69,10 @@ function idealized_coast(timestepper::Symbol;
     equation_of_state = LinearEquationOfState(thermal_expansion=α, haline_contraction=β)
     buoyancy = SeawaterBuoyancy(; equation_of_state)
     Δt = idealized_coast_timestep(Val(timestepper))
+
+    if lowres
+        Δt = 2 * Δt
+    end
 
     if isnothing(free_surface)
         free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=Δt+2minutes)
@@ -125,7 +134,7 @@ function idealized_coast(timestepper::Symbol;
     uᵢ(x, y, z) = y > 60kilometers ? 0.0 : - 1 / f * M²(y) * (z - bottom_height(x, y))
 
     set!(model, T=Tᵢ, S=Sᵢ)
-    simulation = Simulation(model; Δt, stop_time=20days)
+    simulation = Simulation(model; Δt, stop_time=40days)
 
     add_callback!(simulation, print_progress,  IterationInterval(100))
 
@@ -144,11 +153,11 @@ function idealized_coast(timestepper::Symbol;
         fsname = "implicit_free_surface"
     end
 
-    filename = "idealized_coast_$(fsname)"
-    save_fields_interval = 1hours
+    filename = "idealized_coast_$(fsname)_$(lowres ? "lowres" : "")"
+    save_fields_interval = 2hours
 
     closure = cl1 isa CATKEVerticalDiffusivity ? "CATKE" : cl1 isa Nothing ? "unforced" : "RiBased"
-
+   
     VFCC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
     VCFC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Face,   Center), Oceananigans.Operators.volume, grid)
     VCCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)
