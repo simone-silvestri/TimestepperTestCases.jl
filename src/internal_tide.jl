@@ -22,9 +22,8 @@ end
 
 @inline tidal_forcing(x, z, t, p) = p.A₂ * sin(p.ω₂ * t)
 
-internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) = 5minutes
+internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) = 6minutes
 internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
-internal_tide_timestep(::Val{:SplitRungeKutta4})     = 20minutes
 
 @kernel function _compute_dissipation!(Δtc², c⁻, c, Δt)
     i, j, k = @index(Global, NTuple)
@@ -71,7 +70,8 @@ function internal_tide_grid()
     return grid
 end
 
-function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60))
+function internal_tide(timestepper::Symbol; 
+                       free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60))
     
     grid  = internal_tide_grid()
     param = internal_tide_parameters()
@@ -136,16 +136,11 @@ function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurfac
         fsname = "implicit_free_surface"
     end
 
-    filename = "internal_tide_$(string(timestepper))_$(round(Δt/minutes))min_$(fsname)"
+    filename = "internal_tide_$(string(timestepper))_$(fsname)"
     save_fields_interval = 1hours
     
     f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
               Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
-
-    f = (; Abx = f.Abx,
-           Abz = f.Abz,
-           Acx = f.Acx,
-           Acz = f.Acz)
 
     VFC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
     VCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)
@@ -154,7 +149,24 @@ function internal_tide(timestepper::Symbol; free_surface=SplitExplicitFreeSurfac
     V  = (; VFC, VCF, VCC)
     Δ² = (; Δtc² = model.auxiliary_fields.Δtc², Δtb² = model.auxiliary_fields.Δtb²)
 
-    simulation.output_writers[:fields] = JLD2Writer(model, merge((; u, u′, w, b, c, N², η), f, g, V, Δ²); filename,
+    outputs = ( u = u * VFC,
+                w = w * VCF,
+                b = b * VCC,
+                c = c * VCC,
+                η = η,
+                Δtc² = Δ².Δtc² * VCC,
+                Δtb² = Δ².Δtb² * VCC,
+                Gbx = Gbx * VFC,
+                Gbz = Gbz * VCF,
+                Gcx = Gcx * VFC,
+                Gcz = Gcz * VCF,
+                Abx = f.Abx,
+                Abz = f.Abz,
+                Acx = f.Acx,
+                Acz = f.Acz)
+
+    simulation.output_writers[:fields] = JLD2Writer(model, outputs; 
+                                                    filename,
                                                     schedule = TimeInterval(save_fields_interval),
                                                     overwrite_existing = true)
 
@@ -236,59 +248,3 @@ end
 #     return fig
 # end
 
-function compute_kinetic_energy(filename)
-    u   = FieldTimeSeries(filename, "u")
-    w   = FieldTimeSeries(filename, "w")
-    VFC = FieldTimeSeries(filename, "VFC") 
-    VCF = FieldTimeSeries(filename, "VCF")
-    KE = zeros(length(u))
-
-    for i in 1:length(u)
-        ut = u[i]
-        wt = w[i]
-        KE[i] = 0.5 * mean(ut^2 * VFC[i] + wt^2 * VCF[i])
-    end
-
-    return KE
-end
-
-function compute_budget_dissipation(filename, var)
-    Ax  = FieldTimeSeries(filename, "A"  * var * "x")
-    Az  = FieldTimeSeries(filename, "A"  * var * "z")
-    Δ²  = FieldTimeSeries(filename, "Δt" * var * "²")
-    VCC = FieldTimeSeries(filename, "VCC")
-    
-    ∫Ax = zeros(length(Ax))
-    ∫Az = zeros(length(Az))
-    ∫Δ² = zeros(length(Δ²))
-    
-    for i in 1:length(Ax)
-        ∫Ax[i] = abs(sum(Ax[i]))
-        ∫Az[i] = abs(sum(Az[i]))
-        ∫Δ²[i] = abs(sum(Δ²[i] * VCC[i]))
-    end
-
-    return (; ∫Ax, ∫Az, ∫Δ²)
-end
-
-function compute_dissipation(filename)
-    b   = FieldTimeSeries(filename, "b")
-    b2  = zeros(length(b))
-    VCC = FieldTimeSeries(filename, "VCC")
-    for i in 1:length(b)
-        b2[i] = mean(b[i]^2 * VCC[i])
-    end
-    return b2
-end
-
-function compute_conservation(filename, var)
-    b   = FieldTimeSeries(filename, var)
-    bi  = zeros(length(b))
-    VCC = FieldTimeSeries(filename, "VCC")
-
-    for i in 1:length(b)
-        bi[i] = sum(b[i] * VCC[i]) / sum(VCC[i])
-    end
-    
-    return bi
-end

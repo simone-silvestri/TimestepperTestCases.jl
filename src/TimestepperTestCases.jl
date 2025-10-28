@@ -34,9 +34,32 @@ include("BuoyancyVarianceDissipationComputations/BuoyancyVarianceDissipationComp
 
 using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation
 
+# Simulations!
 include("internal_tide.jl")
 include("idealized_coast.jl")
 include("dissipation_diagnostics.jl")
 include("salinity_vortex.jl")
+
+using Oceananigans
+using Oceananigans.AbstractOperations: grid_metric_operation
+using Oceananigans.Operators
+using Oceananigans.BoundaryConditions
+using Oceananigans.ImmersedBoundaries: column_depthᶜᶜᵃ,
+                                       static_column_depthᶜᶜᵃ,
+                                       column_depthᶠᶜᵃ,
+                                       static_column_depthᶠᶜᵃ,
+                                       column_depthᶜᶠᵃ,
+                                       static_column_depthᶜᶠᵃ
+
+using Oceananigans.Operators: volume
+using Oceananigans.Utils
+using Statistics
+
+using KernelAbstractions: @kernel, @index
+
+# Diagnostics!
+include("diagnostics.jl")
+include("load_idealized_coast_case.jl")
+include("load)_internal_tide_case.jl")
 
 end

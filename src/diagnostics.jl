@@ -7,16 +7,45 @@ using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
 using KernelAbstractions: @kernel, @index, @unroll
 
+@kernel function _compute_volumes!(VCCC, VFCC, VCFC, VCCF, grid, η)
+    i, j, k = @index(Global, NTuple)
+
+    @inbounds begin
+        VCCC[i, j, k] = Δxᶜᶜᶜ(i, j, k, grid) * Δyᶜᶜᶜ(i, j, k, grid) * Δrᶜᶜᶜ(i, j, k, grid) * column_depthᶜᶜᵃ(i, j, grid.Nz+1, grid, η) / static_column_depthᶜᶜᵃ(i, j, grid)
+        VFCC[i, j, k] = Δxᶠᶜᶜ(i, j, k, grid) * Δyᶠᶜᶜ(i, j, k, grid) * Δrᶠᶜᶜ(i, j, k, grid) * column_depthᶠᶜᵃ(i, j, grid.Nz+1, grid, η) / static_column_depthᶠᶜᵃ(i, j, grid)
+        VCFC[i, j, k] = Δxᶜᶠᶜ(i, j, k, grid) * Δyᶜᶠᶜ(i, j, k, grid) * Δrᶜᶠᶜ(i, j, k, grid) * column_depthᶜᶠᵃ(i, j, grid.Nz+1, grid, η) / static_column_depthᶜᶠᵃ(i, j, grid)
+        VCCF[i, j, k] = Δxᶜᶜᶠ(i, j, k, grid) * Δyᶜᶜᶠ(i, j, k, grid) * Δrᶜᶜᶠ(i, j, k, grid) * column_depthᶜᶜᵃ(i, j, grid.Nz+1, grid, η) / static_column_depthᶜᶜᵃ(i, j, grid)
+    end
+end
+
 MetricField(loc, grid, metric; indices = default_indices(3)) = compute!(Field(grid_metric_operation(loc, metric, grid); indices))
 @inline _density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
+
+AreaField(grid, loc=(Center, Center, Center)) = MetricField(loc, grid, Oceananigans.Operators.Az)
 
 DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = 
     KernelFunctionOperation{Center, Center, Center}(_density_operation, b.grid, b, ρ₀, g)
 
 DensityField(b::Field; ρ₀ = 1000.0, g = 9.80655) = compute!(Field(DensityOperation(b; ρₒ, g)))
 
-function compute_rpe_density(b::Field)
-    ze = calculate_z★_diagnostics(b)
+function compute_rpe_density(case::Dict)
+
+    rpe = []
+    ape = []
+
+    for t in 1:length(case[:b])
+        @info "time $t of $(length(case[:b]))"
+        push!(rpe, sum(compute_rpe_density(case[:b][t] /  case[:VCCC][t], case[:VCCC][t]).εe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+        push!(ape, sum(compute_rpe_density(case[:b][t] /  case[:VCCC][t], case[:VCCC][t]).αe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+    end
+
+    return (; rpe, ape)
+end
+
+compute_rpe_density(b::Oceananigans.AbstractOperations.AbstractOperation, vol) = compute_rpe_density(Field(b), vol)
+
+function compute_rpe_density(b::Field, vol)
+    ze = calculate_z★_diagnostics(b, vol)
     εe = CenterField(b.grid) 
     αe = CenterField(b.grid) 
     zh = HeightField(ze.grid)
@@ -65,11 +94,10 @@ function calculate_z★_diagnostics(b::FieldTimeSeries; path = nothing)
     return z★
 end
 
-function calculate_z★_diagnostics(b::Field)
+function calculate_z★_diagnostics(b::Field, vol)
 
-    vol = VolumeField(b.grid)
-    z★  = CenterField(b.grid)
     total_area = sum(AreaField(b.grid))
+    z★ = CenterField(b.grid)
     calculate_z★!(z★, b, vol, total_area)
         
     return z★
