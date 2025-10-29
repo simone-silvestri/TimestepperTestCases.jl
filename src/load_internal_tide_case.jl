@@ -14,6 +14,7 @@ function load_internal_tide(folder, timestepper, free_surface)
     VFCC = FieldTimeSeries{Face,   Center, Center}(grid, case[:u].times)
     VCFC = FieldTimeSeries{Center, Face,   Center}(grid, case[:u].times)
     VCCF = FieldTimeSeries{Center, Center, Face  }(grid, case[:u].times)
+    GC.gc()
 
     Nt = length(case[:u])
 
@@ -48,7 +49,8 @@ function load_internal_tide(folder, timestepper, free_surface)
     case[:Gbz] = FieldTimeSeries(path, "Gbz")
     case[:Gcx] = FieldTimeSeries(path, "Gcx")
     case[:Gcz] = FieldTimeSeries(path, "Gcz")
-    
+    GC.gc()
+
     case[:gbx] = [sum(case[:Gbx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
     case[:gbz] = [sum(case[:Gbz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
     case[:gcx] = [sum(case[:Gcx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]

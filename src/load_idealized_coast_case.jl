@@ -12,7 +12,7 @@ function load_idealized_coast(folder, closure, suffix, timestepper)
     path = folder * "idealized_coast_" * suffix * timestepper * "_" * closure * ".jld2"
     case = Dict()
 
-    case[:u] = FieldTimeSeries(path, "u")
+    case[:u] = FieldTimeSeries(path, "u") 
     case[:v] = FieldTimeSeries(path, "v")
     case[:w] = FieldTimeSeries(path, "w")
     case[:T] = FieldTimeSeries(path, "T")
@@ -58,11 +58,21 @@ function load_idealized_coast(folder, closure, suffix, timestepper)
     case[:GSz] = FieldTimeSeries(path, "GSz")
     case[:DSz] = FieldTimeSeries(path, "DSz")
 
+    case[:Gbx] = FieldTimeSeries(path, "Gbx")
+    case[:Gby] = FieldTimeSeries(path, "Gby")
+    case[:Gbz] = FieldTimeSeries(path, "Gbz")
+    
     case[:gSx] = [sum(case[:GSx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
     case[:gSy] = [sum(case[:GSy][i]) for i in 1:Nt] ./ [sum(case[:VCFC][i]) for i in 1:Nt]
     case[:gSz] = [sum(case[:GSz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
     case[:dSz] = [sum(case[:DSz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
+
+    case[:gbx] = [sum(case[:Gbx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
+    case[:gby] = [sum(case[:Gby][i]) for i in 1:Nt] ./ [sum(case[:VCFC][i]) for i in 1:Nt]
+    case[:gbz] = [sum(case[:Gbz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
+    
     case[:gSt] = case[:gSx] .+ case[:gSy] .+ case[:gSz]
+    case[:gbt] = case[:gbx] .+ case[:gby] .+ case[:gbz]
     GC.gc()
 
     case[:KE]  = [sum(u2(case, i))  + sum(v2(case, i))  + sum(w2(case, i))  for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
@@ -73,6 +83,18 @@ function load_idealized_coast(folder, closure, suffix, timestepper)
     EDIAG = compute_rpe_density(case)
     case[:RPE] = EDIAG.rpe
     case[:APE] = EDIAG.ape
+
+    # κS = FieldTimeSeries{Center, Center, Center}(grid, case[:ASx].times)
+    # κT = FieldTimeSeries{Center, Center, Center}(grid, case[:ASx].times)
+
+    # for t in 1:Nt
+    #     @info "Computing diffusivities for time step $t / $Nt"
+    #     set!(κS[t], @at((Center, Center, Center),  (case[:ASx][t] + case[:ASy][t] + case[:ASz][t]) / 2 / (case[:GSx][t] + case[:GSy][t] + case[:GSz][t])))
+    #     set!(κT[t], @at((Center, Center, Center),  (case[:ATx][t] + case[:ATy][t] + case[:ATz][t]) / 2 / (case[:GTx][t] + case[:GTy][t] + case[:GTz][t])))
+    # end
+
+    # case[:κS] = κS
+    # case[:κT] = κT
 
     return case
 end
