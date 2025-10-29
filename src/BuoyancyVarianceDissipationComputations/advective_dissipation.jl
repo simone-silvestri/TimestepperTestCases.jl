@@ -1,4 +1,4 @@
-using Oceananigans.BuoyancyFormulations: LinearSeawaterBuoyancy
+using Oceananigans.BuoyancyFormulations: LinearSeawaterBuoyancy, BuoyancyForce
 
 @kernel function _cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid::AbstractGrid, advection, U, buoyancy, C)
     i, j, k = @index(Global, NTuple)
@@ -42,6 +42,8 @@ end
         Fⁿ.z[i, j, k] = buoyancy_flux(FTz, FSz, buoyancy)
     end
 end
+
+@inline buoyancy_flux(FT, FS, bf::BuoyancyForce) = buoyancy_flux(FT, FS, bf.formulation)
 
 @inline function buoyancy_flux(FT, FS, buoyancy::LinearSeawaterBuoyancy)
     g = buoyancy.gravitational_acceleration
