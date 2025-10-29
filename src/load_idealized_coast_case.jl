@@ -75,9 +75,9 @@ function load_idealized_coast(folder, closure, suffix, timestepper)
     case[:gbt] = case[:gbx] .+ case[:gby] .+ case[:gbz]
     GC.gc()
 
-    case[:KE]  = [sum(u2(case, i))  + sum(v2(case, i))  + sum(w2(case, i))  for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
-    case[:MKE] = [sum(um2(case, i)) + sum(vm2(case, i)) + sum(wm2(case, i)) for i in 1:Nt] ./ [sum(mean(case[:VCCC][i], dims=1)) for i in 1:Nt]
-    case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
+    # case[:KE]  = [sum(u2(case, i))  + sum(v2(case, i))  + sum(w2(case, i))  for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
+    # case[:MKE] = [sum(um2(case, i)) + sum(vm2(case, i)) + sum(wm2(case, i)) for i in 1:Nt] ./ [sum(mean(case[:VCCC][i], dims=1)) for i in 1:Nt]
+    # case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
 
     GC.gc()
     EDIAG = compute_rpe_density(case)
