@@ -60,5 +60,6 @@ using KernelAbstractions: @kernel, @index
 include("diagnostics.jl")
 include("load_idealized_coast_case.jl")
 include("load_internal_tide_case.jl")
+include("load_channel_case.jl")
 
 end
