@@ -22,8 +22,8 @@ end
 
 @inline tidal_forcing(x, z, t, p) = p.A₂ * sin(p.ω₂ * t)
 
-internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =    5minutes
-internal_tide_timestep(::Val{:SplitRungeKutta3})     = 12.5minutes
+internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =  5minutes
+internal_tide_timestep(::Val{:SplitRungeKutta3})     = 10minutes
 
 @kernel function _compute_dissipation!(Δtc², c⁻, c, Δt)
     i, j, k = @index(Global, NTuple)
@@ -71,7 +71,8 @@ function internal_tide_grid()
 end
 
 function internal_tide(timestepper::Symbol; 
-                       free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60))
+                       free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60),
+                       tracer_advection=TimestepperTestCases.tracer_advection)
     
     grid  = internal_tide_grid()
     param = internal_tide_parameters()
@@ -86,7 +87,7 @@ function internal_tide(timestepper::Symbol;
 
     model = HydrostaticFreeSurfaceModel(; grid, coriolis,
                                           buoyancy = BuoyancyTracer(),
-                                          tracers = :b,
+                                          tracers = (:b, :c),
                                           momentum_advection = WENO(),
                                           tracer_advection,
                                           free_surface,
@@ -97,16 +98,18 @@ function internal_tide(timestepper::Symbol;
 
     bᵢ(x, z) = param.Nᵢ² * z
     cᵢ(x, z) = exp( - (z + 1kilometers)^2 / (2 * (25meters)^2))
-    set!(model, u=param.U₂, b=bᵢ, c=cᵢ)
+    set!(model, u=param.U₂, b=bᵢ)
 
     Δt = internal_tide_timestep(Val(timestepper)) 
     stop_time = 40days
     simulation = Simulation(model; Δt, stop_time)
 
     ϵb = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:b, grid)
-    
+    ϵc = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:c, grid)
+
     # Adding the variance dissipation
     add_callback!(simulation, ϵb, IterationInterval(1))
+    add_callback!(simulation, ϵc, IterationInterval(1))
     add_callback!(simulation, compute_tracer_dissipation!, IterationInterval(1))
 
     wall_clock = Ref(time_ns())
@@ -134,10 +137,15 @@ function internal_tide(timestepper::Symbol;
         fsname = "implicit_free_surface"
     end
 
+    if tracer_advection != TimestepperTestCases.tracer_advection
+        fsname *= "_$(typeof(tracer_advection).name.name)"
+    end
+
     filename = "internal_tide_$(string(timestepper))_$(fsname)"
     save_fields_interval = 1hours
     
-    f = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb)
+    f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
+              Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
 
     VFC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
     VCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)

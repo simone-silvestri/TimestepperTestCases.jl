@@ -37,7 +37,6 @@ using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation
 # Simulations!
 include("internal_tide.jl")
 include("idealized_coast.jl")
-include("salinity_vortex.jl")
 
 using Oceananigans
 using Oceananigans.AbstractOperations: grid_metric_operation

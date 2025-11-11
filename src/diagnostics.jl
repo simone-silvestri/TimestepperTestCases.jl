@@ -5,7 +5,7 @@ using Oceananigans.Architectures: device, on_architecture
 using Oceananigans.Fields: default_indices
 using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
-using KernelAbstractions: @kernel, @index, @unroll
+using KernelAbstractions: @kernel, @index
 
 @kernel function _compute_volumes!(VCCC, VFCC, VCFC, VCCF, grid, η)
     i, j, k = @index(Global, NTuple)
@@ -18,14 +18,12 @@ using KernelAbstractions: @kernel, @index, @unroll
     end
 end
 
-MetricField(loc, grid, metric; indices = default_indices(3)) = compute!(Field(grid_metric_operation(loc, metric, grid); indices))
+HeightField(grid) = Field(KernelFunctionOperation{Center, Center, Center}(Oceananigans.Grids.znode, grid, Center(), Center(), Center()))
+AreaField(grid)   = Field(KernelFunctionOperation{Center, Center, Nothing}(Oceananigans.Operators.Azᶜᶜᶜ, grid))
+
 @inline _density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
 
-AreaField(grid, loc=(Center, Center, Center)) = MetricField(loc, grid, Oceananigans.Operators.Az)
-
-DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = 
-    KernelFunctionOperation{Center, Center, Center}(_density_operation, b.grid, b, ρ₀, g)
-
+DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = KernelFunctionOperation{Center, Center, Center}(_density_operation, b.grid, b, ρ₀, g)
 DensityField(b::Field; ρ₀ = 1000.0, g = 9.80655) = compute!(Field(DensityOperation(b; ρₒ, g)))
 
 function compute_rpe_density(case::Dict)
@@ -55,43 +53,6 @@ function compute_rpe_density(b::Field, vol)
     set!(αe, (zh - ze) * ρ)
 
     return (; ze, εe, αe)
-end
-
-function HeightField(grid, loc=(Center(), Center(), Center()))  
-
-    zf = Field(loc, grid)
-    Lz = grid.Lz
-
-    for k in 1:size(zf, 3)
-        interior(zf, :, :, k) .= Lz + znode(k, grid, loc[3])
-    end
-
-    return zf
-end
-
-function calculate_z★_diagnostics(b::FieldTimeSeries; path = nothing)
-
-    times = b.times
-
-    if path isa Nothing
-        path = b.path
-    end
-
-    vol = VolumeField(b.grid)
-    z★  = FieldTimeSeries{Center, Center, Center}(b.grid, b.times; backend = OnDisk(), path, name = "z★")
-
-    total_area = sum(AreaField(b.grid))
-    
-    z★t = CenterField(b.grid)
-
-    for iter in 1:length(times)
-        @info "time $iter of $(length(times))"
-
-        calculate_z★!(z★t, b[iter], vol, total_area)
-        set!(z★, z★t, iter)
-    end
-        
-    return z★
 end
 
 function calculate_z★_diagnostics(b::Field, vol)

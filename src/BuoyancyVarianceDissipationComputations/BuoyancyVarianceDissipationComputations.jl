@@ -11,7 +11,6 @@ using Oceananigans.Fields: Field, VelocityFields
 using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
 using Oceananigans.TimeSteppers: QuasiAdamsBashforth2TimeStepper,
-                                 RungeKutta3TimeStepper,
                                  SplitRungeKuttaTimeStepper
 
 using Oceananigans.TurbulenceClosures: viscosity,
@@ -33,7 +32,7 @@ using Oceananigans.Operators: volume
 using Oceananigans.Utils: IterationInterval, ConsecutiveIterations
 using KernelAbstractions: @kernel, @index
 
-const RungeKuttaScheme = Union{RungeKutta3TimeStepper, SplitRungeKuttaTimeStepper}
+const RungeKuttaScheme = SplitRungeKuttaTimeStepper
 
 struct BuoyancyVarianceDissipation{P, A, S}
     advective_production :: P
@@ -95,11 +94,6 @@ function BuoyancyVarianceDissipation(grid;
 end
 
 function (ϵ::BuoyancyVarianceDissipation)(model)
-
-    # Check if the timestepper is supported
-    if model.timestepper isa RungeKutta3TimeStepper
-        throw(ArgumentError("BuoyancyVarianceDissipation  using a RungeKutta3TimeStepper is not supported."))
-    end
 
     # Check if the model has a velocity field
     if !hasproperty(model, :velocities)
