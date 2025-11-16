@@ -33,8 +33,8 @@ function compute_rpe_density(case::Dict)
 
     for t in 1:length(case[:b])
         @info "time $t of $(length(case[:b]))"
-        push!(rpe, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).εe * case[:VCCC][t]) / sum(case[:VCCC][t]))
-        push!(ape, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).αe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+        push!(rpe, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).εe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
+        push!(ape, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).αe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
     end
 
     return (; rpe, ape)
@@ -47,8 +47,8 @@ function compute_rpe_density_two(case::Dict)
 
     for t in 1:length(case[:b])
         @info "time $t of $(length(case[:b]))"
-        push!(rpe, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).εe * case[:VCCC][t]) / sum(case[:VCCC][t]))
-        push!(ape, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).αe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+        push!(rpe, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).εe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
+        push!(ape, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).αe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
     end
 
     return (; rpe, ape)
@@ -57,12 +57,14 @@ end
 compute_rpe_density(b::Oceananigans.AbstractOperations.AbstractOperation, vol) = compute_rpe_density(Field(b), vol)
 
 function compute_rpe_density(b::Field, vol)
-    ze = calculate_z★_diagnostics(b, vol)
-    εe = CenterField(b.grid) 
-    αe = CenterField(b.grid) 
+    bcpu = on_architecture(CPU(), b)
+    volcpu = on_architecture(CPU(), vol)
+    ze = calculate_z★_diagnostics(bcpu, volcpu)
+    εe = CenterField(bcpu.grid) 
+    αe = CenterField(bcpu.grid) 
     zh = HeightField(ze.grid)
 
-    ρ = DensityOperation(b)
+    ρ = DensityOperation(bcpu)
     set!(εe, ze * ρ)
     set!(αe, (zh - ze) * ρ)
 
