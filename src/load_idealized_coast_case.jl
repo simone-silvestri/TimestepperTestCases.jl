@@ -79,14 +79,16 @@ function load_idealized_coast(folder, closure, suffix, timestepper)
     fill_halo_regions!(case[:η])
 
     grid = case[:u].grid
+    times = case[:u].times
+
     Nx, Ny, Nz = size(grid)
 
-    VCCC = FieldTimeSeries{Center, Center, Center}(grid, case[:u].times)
-    VFCC = FieldTimeSeries{Face,   Center, Center}(grid, case[:u].times)
-    VCFC = FieldTimeSeries{Center, Face,   Center}(grid, case[:u].times)
-    VCCF = FieldTimeSeries{Center, Center, Face  }(grid, case[:u].times)
+    VCCC = FieldTimeSeries{Center, Center, Center}(grid, times)
+    VFCC = FieldTimeSeries{Face,   Center, Center}(grid, times)
+    VCFC = FieldTimeSeries{Center, Face,   Center}(grid, times)
+    VCCF = FieldTimeSeries{Center, Center, Face  }(grid, times)
 
-    Nt = length(case[:u])
+    Nt = length(times)
 
     params = Oceananigans.Utils.KernelParameters(0:Nx+1, 0:Ny+1, 0:Nz+1)
     _compute_volumes_kernel! = Oceananigans.Utils.configure_kernel(CPU(), grid, params, _compute_volumes!)[1]

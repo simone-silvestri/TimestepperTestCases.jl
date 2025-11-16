@@ -33,15 +33,6 @@ end
 
 @inline ϕ²(i, j, k, ϕ) = @inbounds ϕ[i, j, k]^2
 
-@inline spᶠᶜᶜ(i, j, k, grid, Ψ) = sqrt(Ψ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Ψ.v))
-@inline spᶜᶠᶜ(i, j, k, grid, Ψ) = sqrt(Ψ.v[i, j, k]^2 + ℑxyᶜᶠᵃ(i, j, k, grid, ϕ², Ψ.u))
-
-@inline u_bottom_drag(i, j, grid, clock, fields, p) = @inbounds - p.μ * fields.u[i, j, 1] * spᶠᶜᶜ(i, j, 1, grid, fields)
-@inline v_bottom_drag(i, j, grid, clock, fields, p) = @inbounds - p.μ * fields.v[i, j, 1] * spᶜᶠᶜ(i, j, 1, grid, fields)
-
-@inline u_immersed_drag(i, j, k, grid, clock, fields, p) = @inbounds - p.μ * fields.u[i, j, k] * spᶠᶜᶜ(i, j, k, grid, fields)
-@inline v_immersed_drag(i, j, k, grid, clock, fields, p) = @inbounds - p.μ * fields.v[i, j, k] * spᶜᶠᶜ(i, j, k, grid, fields)
-
 default_bottom_height = (x, y) -> y < 1000kilometers ?  5.600000000000001e-15 * y^3 - 8.4e-9 * y^2 - 200 : -3000.0
 
 function default_grid(arch, zstar, bottom_height)
@@ -88,7 +79,7 @@ simulation_Δt(::Val{:SplitRungeKutta6}) = 20minutes
 function default_closure()
     mixing_length = CATKEMixingLength()
     turbulent_kinetic_energy_equation = CATKEEquation(Cᵂϵ=1.0)
-    return CATKEVerticalDiffusivity(; mixing_length, turbulent_kinetic_energy_equation, minimum_tke=1e-6)
+    return CATKEVerticalDiffusivity(; mixing_length, turbulent_kinetic_energy_equation, minimum_tke=1e-7)
 end
 
 function run_channel_simulation(; momentum_advection = WENOVectorInvariant(), 
@@ -136,11 +127,11 @@ function run_channel_simulation(; momentum_advection = WENOVectorInvariant(),
     buoyancy_flux_bc = FluxBoundaryCondition(buoyancy_flux, discrete_form = true, parameters = parameters)
 
     # Drag is added as a forcing to allow both bottom drag _and_ a no-slip BC
-    u_bottom_bc = FluxBoundaryCondition(u_bottom_drag; discrete_form = true, parameters)
-    v_bottom_bc = FluxBoundaryCondition(v_bottom_drag; discrete_form = true, parameters)
+    u_bottom_bc = FluxBoundaryCondition(u_quadratic_bottom_drag; discrete_form = true, parameters)
+    v_bottom_bc = FluxBoundaryCondition(u_quadratic_bottom_drag; discrete_form = true, parameters)
 
-    u_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(u_immersed_drag; discrete_form = true, parameters))
-    v_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(v_immersed_drag; discrete_form = true, parameters))
+    u_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(u_immersed_bottom_drag; discrete_form = true, parameters))
+    v_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(v_immersed_bottom_drag; discrete_form = true, parameters))
     
     b_bcs = FieldBoundaryConditions(top = buoyancy_flux_bc)
     u_bcs = FieldBoundaryConditions(bottom = u_bottom_bc, immersed = u_ibcs, top = u_stress_bc)
@@ -157,9 +148,9 @@ function run_channel_simulation(; momentum_advection = WENOVectorInvariant(),
     tracers = hasclosure(closure, CATKEVerticalDiffusivity) ? (:b, :e) : (:b, )
     
     if closure isa Tuple
-       closure = (closure..., VerticalScalarDiffusivity(ν=1e-4))
+       closure = (closure..., VerticalScalarDiffusivity(κ=1e-5, ν=1e-4))
     else
-       closure = (closure, VerticalScalarDiffusivity(ν=1e-4))
+       closure = (closure, VerticalScalarDiffusivity(κ=1e-5,ν=1e-4))
     end
 
     model = HydrostaticFreeSurfaceModel(; grid,
