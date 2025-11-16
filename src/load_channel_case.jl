@@ -1,3 +1,4 @@
+using Oceananigans.Operators
 import Oceananigans.BoundaryConditions: fill_halo_event!
 
 const NoBCs = Union{Nothing, Missing, Tuple{Vararg{Nothing}}}
@@ -52,8 +53,8 @@ function load_channel(folder, case_number)
     GC.gc()
 
     @info "Computing Kinetic Energy"
-    case[:KE]  = [sum(u2a(case, i))  + sum(v2a(case, i))  + sum(w2a(case, i))  for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
-    case[:MKE] = [sum(um2a(case, i)) + sum(vm2a(case, i)) + sum(wm2a(case, i)) for i in 1:Nt] ./ [sum(mean(case[:VCCC][i], dims=1)) for i in 1:Nt]
+    case[:KE]  = [sum(KineticEnergy(case, i)) for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
+    case[:MKE] = [sum(MeanKineticEnergy(case, i)) for i in 1:Nt] ./ [sum(mean(case[:VCCC][i], dims=1)) for i in 1:Nt]
     case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
     GC.gc()
 
@@ -64,4 +65,37 @@ function load_channel(folder, case_number)
     case[:APE] = EDIAG.ape
 
     return case
+end
+
+@inline Vφ²(i, j, k, grid, φ, V) = @inbounds φ[i, j, k]^2 * V[i, j, k]
+
+@inline function _kinetic_energy(i, j, k, grid, u, v, w, Vfcc, Vcfc, Vccf)
+    u2n = ℑxᶜᵃᵃ(i, j, k, grid, Vφ², u, Vfcc)
+    v2n = ℑyᵃᶜᵃ(i, j, k, grid, Vφ², v, Vcfc)
+    w2n = ℑzᵃᵃᶜ(i, j, k, grid, Vφ², w, Vccf)
+    return u2n + v2n + w2n
+end
+
+function KineticEnergy(case, i)
+    Vccc = case[:VCCC][i]
+    Vfcc = case[:VFCC][i]
+    Vcfc = case[:VCFC][i]
+    Vccf = case[:VCCF][i]
+    u = case[:u][i]
+    v = case[:v][i]
+    w = case[:w][i]
+
+    return KernelFunctionOperation{Center, Center, Center}(_kinetic_energy, grid, u, v, w, Vfcc, Vcfc, Vccf)
+end
+
+function MeanKineticEnergy(case, i)
+    Vccc = mean(case[:VCCC][i], dims=1)
+    Vfcc = mean(case[:VFCC][i], dims=1)
+    Vcfc = mean(case[:VCFC][i], dims=1)
+    Vccf = mean(case[:VCCF][i], dims=1)
+    u = mean(case[:u][i], dims=1) 
+    v = mean(case[:v][i], dims=1) 
+    w = mean(case[:w][i], dims=1) 
+
+    return KernelFunctionOperation{Nothing, Center, Center}(_kinetic_energy, grid, u, v, w, Vfcc, Vcfc, Vccf)
 end
