@@ -84,6 +84,7 @@ function KineticEnergy(case, i)
     u = case[:u][i]
     v = case[:v][i]
     w = case[:w][i]
+    grid = u.grid
 
     return KernelFunctionOperation{Center, Center, Center}(_kinetic_energy, grid, u, v, w, Vfcc, Vcfc, Vccf)
 end
@@ -96,6 +97,7 @@ function MeanKineticEnergy(case, i)
     u = mean(case[:u][i], dims=1) 
     v = mean(case[:v][i], dims=1) 
     w = mean(case[:w][i], dims=1) 
+    grid = u.grid
 
     return KernelFunctionOperation{Nothing, Center, Center}(_kinetic_energy, grid, u, v, w, Vfcc, Vcfc, Vccf)
 end
