@@ -74,11 +74,7 @@ function load_channel(folder, case_number; arch = CPU())
     return case
 end
 
-@inline Vφ²(i, j, k, grid, φ, V) = @inbounds φ[i, j, k]^2 * V[i, j, k]
-
-@inline function _kinetic_energy(i, j, k, grid, u, V)
-    return @inbounds u[i, j, k]^2 * V[i, j, k]
-end
+@inline _Vφ²(i, j, k, grid, φ, V) = @inbounds φ[i, j, k]^2 * V[i, j, k]
 
 function KineticEnergy(case, i)
     Vccc = case[:VCCC][i]
@@ -90,9 +86,9 @@ function KineticEnergy(case, i)
     w = case[:w][i]
     grid = u.grid
 
-    u2 = KernelFunctionOperation{Face, Center, Center}(_kinetic_energy, grid, u, Vfcc)
-    v2 = KernelFunctionOperation{Center, Face, Center}(_kinetic_energy, grid, v, Vcfc)
-    w2 = KernelFunctionOperation{Center, Center, Face}(_kinetic_energy, grid, w, Vccf)
+    u2 = KernelFunctionOperation{Face, Center, Center}(_Vφ², grid, u, Vfcc)
+    v2 = KernelFunctionOperation{Center, Face, Center}(_Vφ², grid, v, Vcfc)
+    w2 = KernelFunctionOperation{Center, Center, Face}(_Vφ², grid, w, Vccf)
     
     return (sum(u2) + sum(v2) + sum(w2)) / sum(Vccc)
 end
@@ -107,9 +103,9 @@ function MeanKineticEnergy(case, i)
     w = mean(case[:w][i], dims=1) 
     grid = u.grid
 
-    u2 = KernelFunctionOperation{Nothing, Center, Center}(_kinetic_energy, grid, u, Vfcc)
-    v2 = KernelFunctionOperation{Nothing, Face,   Center}(_kinetic_energy, grid, v, Vcfc)
-    w2 = KernelFunctionOperation{Nothing, Center, Face}(  _kinetic_energy, grid, w, Vccf)
+    u2 = KernelFunctionOperation{Nothing, Center, Center}(_Vφ², grid, u, Vfcc)
+    v2 = KernelFunctionOperation{Nothing, Face,   Center}(_Vφ², grid, v, Vcfc)
+    w2 = KernelFunctionOperation{Nothing, Center, Face}(  _Vφ², grid, w, Vccf)
     
     return (sum(u2) + sum(v2) + sum(w2)) / sum(Vccc)
 end
