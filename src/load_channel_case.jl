@@ -16,16 +16,16 @@ wm2a(case, i) = (mean(case[:w][i], dims=1))^2 * mean(case[:VCCF][i], dims=1)
 
 Sm(case, i)   = mean(case[:S][i] / case[:VCCC][i], dims=1)
 
-function load_channel(folder, case_number)
+function load_channel(folder, case_number; arch = CPU())
     path = folder * "snapshots_$(case_number).jld2"
     @show path
     case = Dict()
 
-    case[:u] = FieldTimeSeries(path, "u"; backend=OnDisk())
-    case[:v] = FieldTimeSeries(path, "v"; backend=OnDisk())
-    case[:w] = FieldTimeSeries(path, "w"; backend=OnDisk())
-    case[:b] = FieldTimeSeries(path, "b"; backend=OnDisk())
-    case[:η] = FieldTimeSeries(path, "η"; backend=OnDisk())
+    case[:u] = FieldTimeSeries(path, "u"; architecture=arch, backend=OnDisk())
+    case[:v] = FieldTimeSeries(path, "v"; architecture=arch, backend=OnDisk())
+    case[:w] = FieldTimeSeries(path, "w"; architecture=arch, backend=OnDisk())
+    case[:b] = FieldTimeSeries(path, "b"; architecture=arch, backend=OnDisk())
+    case[:η] = FieldTimeSeries(path, "η"; architecture=arch, backend=OnDisk())
 
     grid = case[:u].grid
     Nx, Ny, Nz = size(grid)
@@ -39,7 +39,7 @@ function load_channel(folder, case_number)
     Nt = length(case[:u])
 
     params = Oceananigans.Utils.KernelParameters(0:Nx+1, 0:Ny+1, 0:Nz+1)
-    _compute_volumes_kernel! = Oceananigans.Utils.configure_kernel(CPU(), grid, params, _compute_volumes!)[1]
+    _compute_volumes_kernel! = Oceananigans.Utils.configure_kernel(arch, grid, params, _compute_volumes!)[1]
 
     for t in 1:Nt
         @info "Computing volumes $t of $Nt" 
