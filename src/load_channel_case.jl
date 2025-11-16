@@ -58,8 +58,8 @@ function load_channel(folder, case_number; arch = CPU())
 
     for t in 2:Nt
         @info "computing index $t"
-        push!(case[:KE] , sum(KineticEnergy(case, t)) / sum(case[:VCCC][t]))
-        push!(case[:MKE], sum(MeanKineticEnergy(case, t)) / sum(mean(case[:VCCC][t], dims=1)))
+        push!(case[:KE] , KineticEnergy(case, t)     / sum(case[:VCCC][t]))
+        push!(case[:MKE], MeanKineticEnergy(case, t) / sum(mean(case[:VCCC][t], dims=1)))
     end
     
     case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
@@ -76,11 +76,8 @@ end
 
 @inline Vφ²(i, j, k, grid, φ, V) = @inbounds φ[i, j, k]^2 * V[i, j, k]
 
-@inline function _kinetic_energy(i, j, k, grid, u, v, w, Vfcc, Vcfc, Vccf)
-    u2n = ℑxᶜᵃᵃ(i, j, k, grid, Vφ², u, Vfcc)
-    v2n = ℑyᵃᶜᵃ(i, j, k, grid, Vφ², v, Vcfc)
-    w2n = ℑzᵃᵃᶜ(i, j, k, grid, Vφ², w, Vccf)
-    return u2n + v2n + w2n
+@inline function _kinetic_energy(i, j, k, grid, u, V)
+    return @inbounds u[i, j, k]^2 * V[i, j, k]
 end
 
 function KineticEnergy(case, i)
@@ -93,7 +90,11 @@ function KineticEnergy(case, i)
     w = case[:w][i]
     grid = u.grid
 
-    return KernelFunctionOperation{Center, Center, Center}(_kinetic_energy, grid, u, v, w, Vfcc, Vcfc, Vccf)
+    u2 = KernelFunctionOperation{Face, Center, Center}(_kinetic_energy, grid, u, Vfcc)
+    v2 = KernelFunctionOperation{Center, Face, Center}(_kinetic_energy, grid, v, Vcfc)
+    w2 = KernelFunctionOperation{Center, Center, Face}(_kinetic_energy, grid, w, Vccf)
+    
+    return (sum(u2) + sum(v2) + sum(w2)) / sum(Vccc)
 end
 
 function MeanKineticEnergy(case, i)
@@ -106,5 +107,9 @@ function MeanKineticEnergy(case, i)
     w = mean(case[:w][i], dims=1) 
     grid = u.grid
 
-    return KernelFunctionOperation{Nothing, Center, Center}(_kinetic_energy, grid, u, v, w, Vfcc, Vcfc, Vccf)
+    u2 = KernelFunctionOperation{Nothing, Center, Center}(_kinetic_energy, grid, u, Vfcc)
+    v2 = KernelFunctionOperation{Nothing, Face,   Center}(_kinetic_energy, grid, v, Vcfc)
+    w2 = KernelFunctionOperation{Nothing, Center, Face}(  _kinetic_energy, grid, w, Vccf)
+    
+    return (sum(u2) + sum(v2) + sum(w2)) / sum(Vccc)
 end
