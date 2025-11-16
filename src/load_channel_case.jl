@@ -59,7 +59,7 @@ function load_channel(folder, case_number)
     for t in 2:Nt
         @info "computing index $t"
         push!(case[:KE] , sum(KineticEnergy(case, t)) / sum(case[:VCCC][t]))
-        push!(case[:MKE], sum(MeanKineticEnergy(case, t)) / sum(mean(case[:VCCC][1], dims=t)))
+        push!(case[:MKE], sum(MeanKineticEnergy(case, t)) / sum(mean(case[:VCCC][t], dims=t)))
     end
     
     case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
