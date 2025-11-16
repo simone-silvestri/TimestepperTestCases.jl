@@ -11,10 +11,10 @@ function load_internal_tide(folder, timestepper, free_surface)
     grid = case[:u].grid
     Nx, Ny, Nz = size(grid)
 
-    VCCC = FieldTimeSeries{Center, Center, Center}(grid, times)
-    VFCC = FieldTimeSeries{Face,   Center, Center}(grid, times)
-    VCFC = FieldTimeSeries{Center, Face,   Center}(grid, times)
-    VCCF = FieldTimeSeries{Center, Center, Face  }(grid, times)
+    VCCC = FieldTimeSeries{Center, Center, Center}(grid, case[:u].times)
+    VFCC = FieldTimeSeries{Face,   Center, Center}(grid, case[:u].times)
+    VCFC = FieldTimeSeries{Center, Face,   Center}(grid, case[:u].times)
+    VCCF = FieldTimeSeries{Center, Center, Face  }(grid, case[:u].times)
     GC.gc()
 
     Nt = length(case[:u])
@@ -23,7 +23,7 @@ function load_internal_tide(folder, timestepper, free_surface)
     _compute_volumes_kernel! = Oceananigans.Utils.configure_kernel(CPU(), grid, params, _compute_volumes!)[1]
 
     for t in 1:Nt
-        _compute_volumes_kernel!(VCCC[t], VFCC[t], VCFC[t], VCCF[t], grid, η[t])
+        _compute_volumes_kernel!(VCCC[t], VFCC[t], VCFC[t], VCCF[t], grid, case[:η][t])
     end
     
     case[:VCCC] = VCCC
@@ -59,7 +59,6 @@ function load_internal_tide(folder, timestepper, free_surface)
     case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
 
     GC.gc()
-    
     EDIAG = compute_rpe_density(case)
 
     case[:RPE] = EDIAG.rpe

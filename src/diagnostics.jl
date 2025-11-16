@@ -33,8 +33,22 @@ function compute_rpe_density(case::Dict)
 
     for t in 1:length(case[:b])
         @info "time $t of $(length(case[:b]))"
-        push!(rpe, sum(compute_rpe_density(case[:b][t] /  case[:VCCC][t], case[:VCCC][t]).εe * case[:VCCC][t]) / sum(case[:VCCC][t]))
-        push!(ape, sum(compute_rpe_density(case[:b][t] /  case[:VCCC][t], case[:VCCC][t]).αe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+        push!(rpe, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).εe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+        push!(ape, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).αe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+    end
+
+    return (; rpe, ape)
+end
+
+function compute_rpe_density_two(case::Dict)
+
+    rpe = []
+    ape = []
+
+    for t in 1:length(case[:b])
+        @info "time $t of $(length(case[:b]))"
+        push!(rpe, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).εe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+        push!(ape, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).αe * case[:VCCC][t]) / sum(case[:VCCC][t]))
     end
 
     return (; rpe, ape)

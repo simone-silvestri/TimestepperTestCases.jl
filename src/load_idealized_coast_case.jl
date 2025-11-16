@@ -133,6 +133,11 @@ function load_idealized_coast(folder, closure, suffix, timestepper)
 
     GC.gc()
 
+    EDIAG = compute_rpe_density(case)
+
+    case[:RPE] = EDIAG.rpe
+    case[:APE] = EDIAG.ape
+
     return case
 end
 
