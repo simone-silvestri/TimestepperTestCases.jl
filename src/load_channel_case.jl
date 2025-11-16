@@ -1,5 +1,23 @@
+import Oceananigans.BoundaryConditions: fill_halo_event!
+
+const NoBCs = Union{Nothing, Missing, Tuple{Vararg{Nothing}}}
+
+@inline fill_halo_event!(c, ::Nothing, bcs, loc, grid, args...; kwargs...) = nothing
+@inline fill_halo_event!(c, kernel!, ::NoBCs, loc, grid, args...; kwargs...) = nothing
+
+u2a(case, i) = (case[:u][i])^2 * case[:VFCC][i]
+v2a(case, i) = (case[:v][i])^2 * case[:VCFC][i]
+w2a(case, i) = (case[:w][i])^2 * case[:VCCF][i]
+
+um2a(case, i) = (mean(case[:u][i], dims=1))^2 * mean(case[:VFCC][i], dims=1)
+vm2a(case, i) = (mean(case[:v][i], dims=1))^2 * mean(case[:VCFC][i], dims=1)
+wm2a(case, i) = (mean(case[:w][i], dims=1))^2 * mean(case[:VCCF][i], dims=1)
+
+Sm(case, i)   = mean(case[:S][i] / case[:VCCC][i], dims=1)
+
 function load_channel(folder, case_number)
     path = folder * "snapshots_$(case_number).jld2"
+    @show path
     case = Dict()
 
     case[:u] = FieldTimeSeries(path, "u"; backend=OnDisk())
@@ -19,40 +37,28 @@ function load_channel(folder, case_number)
 
     Nt = length(case[:u])
 
-    params = Oceananigans.Utils.KernelParameters(0:Nx+1, 1:1, 0:Nz+1)
+    params = Oceananigans.Utils.KernelParameters(0:Nx+1, 0:Ny+1, 0:Nz+1)
     _compute_volumes_kernel! = Oceananigans.Utils.configure_kernel(CPU(), grid, params, _compute_volumes!)[1]
 
     for t in 1:Nt
+        @info "Computing volumes $t of $Nt" 
         _compute_volumes_kernel!(VCCC[t], VFCC[t], VCFC[t], VCCF[t], grid, case[:η][t])
     end
     
     case[:VCCC] = VCCC
     case[:VFCC] = VFCC
+    case[:VCFC] = VCFC
     case[:VCCF] = VCCF
     GC.gc()
 
-    case[:Abx] = FieldTimeSeries(path, "Abx")
-    case[:Abz] = FieldTimeSeries(path, "Abz")
-
-    case[:abx] = [sum(case[:Abx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
-    case[:abz] = [sum(case[:Abz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
-    case[:abt] = case[:abx] .+ case[:abz]
-
-    case[:Gbx] = FieldTimeSeries(path, "Gbx")
-    case[:Gbz] = FieldTimeSeries(path, "Gbz")
-    GC.gc()
-
-    case[:gbx] = [sum(case[:Gbx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
-    case[:gbz] = [sum(case[:Gbz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
-    case[:gbt] = case[:gbx] .+ case[:gbz] 
-    GC.gc()
-
-    case[:KE]  = [sum(u2(case, i))  + sum(w2(case, i))  for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
-    case[:MKE] = [sum(um2(case, i)) + sum(wm2(case, i)) for i in 1:Nt] ./ [sum(mean(case[:VCCC][i], dims=1)) for i in 1:Nt]
+    @info "Computing Kinetic Energy"
+    case[:KE]  = [sum(u2a(case, i))  + sum(v2a(case, i))  + sum(w2a(case, i))  for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
+    case[:MKE] = [sum(um2a(case, i)) + sum(vm2a(case, i)) + sum(wm2a(case, i)) for i in 1:Nt] ./ [sum(mean(case[:VCCC][i], dims=1)) for i in 1:Nt]
     case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
-
     GC.gc()
-    EDIAG = compute_rpe_density(case)
+
+    @info "Computing Potential Energy"
+    EDIAG = compute_rpe_density_two(case)
 
     case[:RPE] = EDIAG.rpe
     case[:APE] = EDIAG.ape
