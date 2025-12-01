@@ -8,7 +8,8 @@ function load_internal_tide(folder, timestepper, free_surface)
     case[:b] = FieldTimeSeries(path, "b"; backend=OnDisk())
     case[:η] = FieldTimeSeries(path, "η"; backend=OnDisk())
 
-    grid = case[:u].grid
+    grid  = case[:u].grid
+    times = case[:u].times
     Nx, Ny, Nz = size(grid)
 
     VCCC = FieldTimeSeries{Center, Center, Center}(grid, times)
@@ -23,7 +24,7 @@ function load_internal_tide(folder, timestepper, free_surface)
     _compute_volumes_kernel! = Oceananigans.Utils.configure_kernel(CPU(), grid, params, _compute_volumes!)[1]
 
     for t in 1:Nt
-        _compute_volumes_kernel!(VCCC[t], VFCC[t], VCFC[t], VCCF[t], grid, η[t])
+        _compute_volumes_kernel!(VCCC[t], VFCC[t], VCFC[t], VCCF[t], grid, case[:η][t])
     end
     
     case[:VCCC] = VCCC

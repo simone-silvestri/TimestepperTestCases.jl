@@ -1,10 +1,4 @@
 using Oceananigans.Operators
-import Oceananigans.BoundaryConditions: fill_halo_event!
-
-const NoBCs = Union{Nothing, Missing, Tuple{Vararg{Nothing}}}
-
-@inline fill_halo_event!(c, ::Nothing, bcs, loc, grid, args...; kwargs...) = nothing
-@inline fill_halo_event!(c, kernel!, ::NoBCs, loc, grid, args...; kwargs...) = nothing
 
 u2a(case, i) = (case[:u][i])^2 * case[:VFCC][i]
 v2a(case, i) = (case[:v][i])^2 * case[:VCFC][i]
@@ -13,8 +7,6 @@ w2a(case, i) = (case[:w][i])^2 * case[:VCCF][i]
 um2a(case, i) = (mean(case[:u][i], dims=1))^2 * mean(case[:VFCC][i], dims=1)
 vm2a(case, i) = (mean(case[:v][i], dims=1))^2 * mean(case[:VCFC][i], dims=1)
 wm2a(case, i) = (mean(case[:w][i], dims=1))^2 * mean(case[:VCCF][i], dims=1)
-
-Sm(case, i)   = mean(case[:S][i] / case[:VCCC][i], dims=1)
 
 function load_channel(folder, case_number; arch = CPU())
     path = folder * "snapshots_$(case_number).jld2"

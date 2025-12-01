@@ -14,8 +14,8 @@ using Random
     return ifelse(force, τx, zero(grid))
 end
 
-idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 1minutes
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 2.5minutes
+idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 5minutes
+idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 10minutes
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
@@ -33,19 +33,18 @@ function idealized_coast(timestepper::Symbol;
                          lowres = false,
                          free_surface = nothing)
 
-    Lx = 96kilometers
-    Ly = 96kilometers
+    Lx = 192kilometers
+    Ly = 192kilometers
     Lz = 103meters
 
     if lowres
-        Nx = Ny = 48
+        Nx = Ny = 96
     else
         Nx = Ny = 250
     end
         
-    Nz = 60
-
-    z_faces = reverse(- [(k / Nz)^(1.25) for k in 0:Nz] .* Lz)
+    Nz = 40
+    z_faces = (-Lz, 0)
     
     grid = RectilinearGrid(arch; 
                            size = (Nx, Ny, Nz),

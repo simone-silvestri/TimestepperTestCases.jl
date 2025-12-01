@@ -2,7 +2,7 @@ using Oceananigans
 using Oceananigans.Units
 using Oceananigans.Grids
 
-function internal_tide_parameters() 
+@inline function internal_tide_parameters() 
     Nx    = 256
     Nz    = 128
     H     = 2kilometers
@@ -24,6 +24,7 @@ end
 
 internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =  5minutes
 internal_tide_timestep(::Val{:SplitRungeKutta3})     = 10minutes
+internal_tide_timestep(::Val{:SplitRungeKutta4})     = 10minutes
 
 @kernel function _compute_dissipation!(Δtc², c⁻, c, Δt)
     i, j, k = @index(Global, NTuple)
@@ -59,7 +60,7 @@ function internal_tide_grid()
     H, L      = param.H, param.L
 
     underlying_grid = RectilinearGrid(size = (Nx, Nz), halo = (6, 6),
-                                    x = (-L, L), z = MutableVerticalDiscretization((-H, 0)),
+                                    x = (-L, L), z = (-H, 0), # MutableVerticalDiscretization((-H, 0)),
                                     topology = (Periodic, Flat, Bounded))
 
     hill(x)   =   h₀ * exp(-x^2 / 2width^2)
@@ -69,6 +70,19 @@ function internal_tide_grid()
    
     return grid
 end
+
+using Oceananigans.Advection: AbstractAdvectionScheme, _advective_tracer_flux_z
+using Oceananigans.Operators
+import Oceananigans.Advection: _advective_tracer_flux_x, 
+                               _advective_tracer_flux_y, 
+                               _advective_tracer_flux_z
+
+struct LinearizedAdvection <:AbstractAdvectionScheme{1, Float64} end
+
+@inline _advective_tracer_flux_x(i, j, k, ibg::ImmersedBoundaryGrid, ::LinearizedAdvection, args...) = zero(ibg)
+@inline _advective_tracer_flux_y(i, j, k, ibg::ImmersedBoundaryGrid, ::LinearizedAdvection, args...) = zero(ibg)
+@inline _advective_tracer_flux_z(i, j, k, ibg::ImmersedBoundaryGrid, ::LinearizedAdvection, args...) = 
+    _advective_tracer_flux_z(i, j, k, ibg, Centered(), args...) # W, ConstantField(1e-4)
 
 function internal_tide(timestepper::Symbol; 
                        free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60),
@@ -85,16 +99,15 @@ function internal_tide(timestepper::Symbol;
     b⁻    = CenterField(grid)
     Δtb²  = CenterField(grid)
 
-    model = HydrostaticFreeSurfaceModel(; grid, coriolis,
+    model = HydrostaticFreeSurfaceModel(; grid, coriolis = nothing,
                                           buoyancy = BuoyancyTracer(),
                                           tracers = (:b, :c),
-                                          momentum_advection = WENO(),
-                                          tracer_advection,
+                                          momentum_advection = nothing, # WENO(),
+                                          tracer_advection = Centered(), # LinearizedAdvection(),
                                           free_surface,
                                           timestepper,
                                           forcing = (; u = u_forcing),
                                           auxiliary_fields=(; Δtc², c⁻, Δtb², b⁻))
-
 
     bᵢ(x, z) = param.Nᵢ² * z
     cᵢ(x, z) = exp( - (z + 1kilometers)^2 / (2 * (25meters)^2))
@@ -104,12 +117,12 @@ function internal_tide(timestepper::Symbol;
     stop_time = 40days
     simulation = Simulation(model; Δt, stop_time)
 
-    ϵb = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:b, grid)
-    ϵc = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:c, grid)
+    # ϵb = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:b, grid)
+    # ϵc = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:c, grid)
 
     # Adding the variance dissipation
-    add_callback!(simulation, ϵb, IterationInterval(1))
-    add_callback!(simulation, ϵc, IterationInterval(1))
+    # add_callback!(simulation, ϵb, IterationInterval(1))
+    # add_callback!(simulation, ϵc, IterationInterval(1))
     add_callback!(simulation, compute_tracer_dissipation!, IterationInterval(1))
 
     wall_clock = Ref(time_ns())
@@ -132,7 +145,7 @@ function internal_tide(timestepper::Symbol;
     g = (; Gbx, Gbz, Gcx, Gcz)
 
     if free_surface isa SplitExplicitFreeSurface
-        fsname = "split_free_surface"
+        fsname = "split_free_surface_DFB"
     else
         fsname = "implicit_free_surface"
     end
@@ -144,8 +157,8 @@ function internal_tide(timestepper::Symbol;
     filename = "internal_tide_$(string(timestepper))_$(fsname)"
     save_fields_interval = 1hours
     
-    f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
-              Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
+    # f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
+            #   Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
 
     VFC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
     VCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)
@@ -164,11 +177,11 @@ function internal_tide(timestepper::Symbol;
                 Gbx = Gbx * VFC,
                 Gbz = Gbz * VCF,
                 Gcx = Gcx * VFC,
-                Gcz = Gcz * VCF,
-                Abx = f.Abx,
-                Abz = f.Abz,
-                Acx = f.Acx,
-                Acz = f.Acz)
+                Gcz = Gcz * VCF)
+                # Abx = f.Abx,
+                # Abz = f.Abz,
+                # Acx = f.Acx,
+                # Acz = f.Acz)
 
     simulation.output_writers[:fields] = JLD2Writer(model, outputs; 
                                                     filename,
