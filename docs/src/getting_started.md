@@ -90,7 +90,7 @@ TimestepperTestCases.jl requires:
 
 ## Next Steps
 
-- Learn about the [experiments](@ref) in detail
-- Understand the [diagnostics](@ref) used to quantify numerical mixing
-- Explore the [notebooks](@ref) for reproducing figures
+- Learn about the [experiments](experiments/internal_tide.md) in detail
+- Understand the [diagnostics](diagnostics.md) used to quantify numerical mixing
+- Explore the [notebooks](notebooks.md) for reproducing figures
 

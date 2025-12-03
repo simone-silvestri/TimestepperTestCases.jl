@@ -33,12 +33,12 @@ This package implements test cases designed to highlight differences in performa
 
 ## Quick Links
 
-- [Getting Started](@ref) - Installation and basic usage
-- [Experiments](@ref) - Detailed descriptions of the three test cases
-- [Diagnostics](@ref) - Understanding variance budgets and numerical mixing
-- [Stability Analysis](@ref) - Linear stability analysis tools
-- [Notebooks](@ref) - Reproducing figures and analysis
-- [API Reference](@ref) - Complete function documentation
+- [Getting Started](getting_started.md) - Installation and basic usage
+- [Experiments](experiments/internal_tide.md) - Detailed descriptions of the three test cases
+- [Diagnostics](diagnostics.md) - Understanding variance budgets and numerical mixing
+- [Stability Analysis](stability.md) - Linear stability analysis tools
+- [Notebooks](notebooks.md) - Reproducing figures and analysis
+- [API Reference](api_reference.md) - Complete function documentation
 
 ## Citation
 

@@ -20,7 +20,7 @@ pages = [
 ]
 
 makedocs(;
-    modules=[TimestepperTestCases],
+    modules=[TimestepperTestCases, TimestepperTestCases.BuoyancyVarianceDissipationComputations],
     authors="Simone Silvestri <silvestri.simone0@gmail.com> and contributors",
     sitename="TimestepperTestCases.jl",
     format=Documenter.HTML(;
@@ -29,6 +29,8 @@ makedocs(;
         assets=String[],
     ),
     pages=pages,
+    checkdocs=:exports,
+    warnonly=[:missing_docs, :cross_references],
 )
 
 deploydocs(;

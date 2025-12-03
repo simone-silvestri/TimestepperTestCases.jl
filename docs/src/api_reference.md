@@ -3,6 +3,6 @@
 Complete API documentation for TimestepperTestCases.jl.
 
 ```@autodocs
-Modules = [TimestepperTestCases]
+Modules = [TimestepperTestCases, TimestepperTestCases.BuoyancyVarianceDissipationComputations]
 ```
 
