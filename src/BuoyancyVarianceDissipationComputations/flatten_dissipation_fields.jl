@@ -1,10 +1,19 @@
 """
-    flatten_dissipation_fields(t::VarianceDissipation)
+    flatten_dissipation_fields(t::BuoyancyVarianceDissipation)
 
-Flatten the dissipation fields of a `VarianceDissipation` object into a named tuple containing:
+Flatten the dissipation fields into a named tuple for output.
 
-- The dissipation associated with the advection scheme in fields named `A-tracername-dir`
-- The dissipation associated with the closures in fields names `D-tracername-dir`
+$(SIGNATURES)
+
+# Arguments
+- `t`: `BuoyancyVarianceDissipation` object
+
+# Returns
+- Named tuple containing `Abx`, `Aby`, `Abz` fields representing advective buoyancy dissipation
+  in the x, y, and z directions respectively
+
+This function extracts the dissipation fields from the internal C-grid vector structure
+into a flat named tuple suitable for use as simulation outputs.
 """
 function flatten_dissipation_fields(t::BuoyancyVarianceDissipation) 
     Abx = t.advective_production.x

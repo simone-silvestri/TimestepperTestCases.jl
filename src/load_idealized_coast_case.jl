@@ -64,6 +64,25 @@ function save_case(folder, closure, suffix, timestepper)
     save_variable("GTz", CCF, args...)
 end
 
+"""
+    load_idealized_coast(folder, closure, suffix, timestepper)
+
+Load and process idealized coast simulation output data.
+
+$(SIGNATURES)
+
+# Arguments
+- `folder`: Directory containing the simulation output files
+- `closure`: Closure name string (e.g., `"CATKE"`)
+- `suffix`: Filename suffix string (e.g., `"split_free_surface_"`)
+- `timestepper`: Timestepper name string (e.g., `"SplitRungeKutta3"`)
+
+# Returns
+- Dictionary containing velocity, tracer, dissipation, and energy diagnostics
+
+Similar to `load_internal_tide`, but includes additional fields for temperature and salinity
+dissipation diagnostics, as well as three-dimensional volume fields.
+"""
 function load_idealized_coast(folder, closure, suffix, timestepper)
     path = folder * "idealized_coast_" * suffix * timestepper * "_" * closure * ".jld2"
     case = Dict()

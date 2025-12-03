@@ -8,6 +8,24 @@ um2a(case, i) = (mean(case[:u][i], dims=1))^2 * mean(case[:VFCC][i], dims=1)
 vm2a(case, i) = (mean(case[:v][i], dims=1))^2 * mean(case[:VCFC][i], dims=1)
 wm2a(case, i) = (mean(case[:w][i], dims=1))^2 * mean(case[:VCCF][i], dims=1)
 
+"""
+    load_channel(folder, case_number; arch)
+
+Load and process channel simulation output data.
+
+$(SIGNATURES)
+
+# Arguments
+- `folder`: Directory containing the simulation output files
+- `case_number`: Case identifier string
+- `arch`: Architecture to load data on (default: `CPU()`)
+
+# Returns
+- Dictionary containing velocity, buoyancy, volume, and energy diagnostics
+
+This function loads channel simulation snapshots and computes kinetic energy, mean kinetic
+energy, and potential energy diagnostics for equilibrated channel flow analysis.
+"""
 function load_channel(folder, case_number; arch = CPU())
     path = folder * "snapshots_$(case_number).jld2"
     @show path
@@ -68,6 +86,23 @@ end
 
 @inline _Vφ²(i, j, k, grid, φ, V) = @inbounds φ[i, j, k]^2 * V[i, j, k]
 
+"""
+    KineticEnergy(case, i)
+
+Compute the volume-averaged kinetic energy at time index `i`.
+
+$(SIGNATURES)
+
+# Arguments
+- `case`: Case dictionary containing velocity and volume fields
+- `i`: Time index
+
+# Returns
+- Volume-averaged kinetic energy [m²/s²]: `(u² + v² + w²) / V`
+
+Kinetic energy is computed using volume-weighted velocity components at their respective
+grid locations (u at Face-Center-Center, v at Center-Face-Center, w at Center-Center-Face).
+"""
 function KineticEnergy(case, i)
     Vccc = case[:VCCC][i]
     Vfcc = case[:VFCC][i]
@@ -85,6 +120,23 @@ function KineticEnergy(case, i)
     return (sum(u2) + sum(v2) + sum(w2)) / sum(Vccc)
 end
 
+"""
+    MeanKineticEnergy(case, i)
+
+Compute the volume-averaged mean kinetic energy (zonally averaged) at time index `i`.
+
+$(SIGNATURES)
+
+# Arguments
+- `case`: Case dictionary containing velocity and volume fields
+- `i`: Time index
+
+# Returns
+- Volume-averaged mean kinetic energy [m²/s²]
+
+Mean kinetic energy is computed from zonally averaged velocity components, representing
+the energy in the mean flow rather than eddy kinetic energy.
+"""
 function MeanKineticEnergy(case, i)
     Vccc = mean(case[:VCCC][i], dims=1)
     Vfcc = mean(case[:VFCC][i], dims=1)

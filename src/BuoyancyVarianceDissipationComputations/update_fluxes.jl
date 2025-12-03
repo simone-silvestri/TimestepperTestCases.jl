@@ -4,7 +4,24 @@ using Oceananigans.Utils
 using Oceananigans.BoundaryConditions
 using Oceananigans.BuoyancyFormulations
 
-# Store advective and diffusive fluxes for dissipation computation
+"""
+    cache_fluxes!(dissipation, model)
+
+Cache advective fluxes and update velocity fields for dissipation computation.
+
+$(SIGNATURES)
+
+# Arguments
+- `dissipation`: `BuoyancyVarianceDissipation` object
+- `model`: The model containing velocities and tracers
+
+# Returns
+- `nothing` (modifies `dissipation` in place)
+
+This function updates the velocity fields (`Uⁿ`, `Uⁿ⁻¹`) and caches the advective buoyancy
+fluxes (`Fⁿ`, `Fⁿ⁻¹`) needed for computing dissipation at the next time step. The caching
+procedure depends on the timestepper type and stage.
+"""
 function cache_fluxes!(dissipation, model)
     grid = model.grid
     sz   = size(model.tracers[1].data)
@@ -24,6 +41,22 @@ function cache_fluxes!(dissipation, model)
     return nothing
 end
 
+"""
+    flux_parameters(grid)
+
+Compute kernel parameters for flux computation based on grid topology.
+
+$(SIGNATURES)
+
+# Arguments
+- `grid`: Grid object
+
+# Returns
+- `KernelParameters` object with appropriate index ranges for flux computation
+
+This function determines the correct index ranges for computing fluxes at face locations,
+accounting for flat (1D/2D) dimensions in the grid topology.
+"""
 function flux_parameters(grid)
     Nx, Ny, Nz = size(grid)
     TX, TY, TZ = topology(grid)
@@ -33,6 +66,24 @@ function flux_parameters(grid)
     return KernelParameters(Fx, Fy, Fz)
 end
 
+"""
+    finally_cache_fluxes!(dissipation, model)
+
+Cache advective buoyancy fluxes from temperature and salinity tracers.
+
+$(SIGNATURES)
+
+# Arguments
+- `dissipation`: `BuoyancyVarianceDissipation` object
+- `model`: The model containing tracers and advection scheme
+
+# Returns
+- `nothing` (modifies `dissipation.advective_fluxes` in place)
+
+This function computes the advective fluxes of buoyancy by combining temperature and
+salinity fluxes using the linear equation of state. The fluxes are computed at face
+locations and cached for use in dissipation computation.
+"""
 function finally_cache_fluxes!(dissipation, model)
 
     # Grab tracer properties

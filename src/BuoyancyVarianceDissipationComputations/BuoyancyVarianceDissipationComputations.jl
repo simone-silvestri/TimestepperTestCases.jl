@@ -40,6 +40,22 @@ struct BuoyancyVarianceDissipation{P, A, S}
     previous_state :: S
 end
 
+"""
+    c_grid_vector(grid)
+
+Create a named tuple of C-grid vector fields (x, y, z components at face locations).
+
+$(SIGNATURES)
+
+# Arguments
+- `grid`: Grid on which to create the fields
+
+# Returns
+- Named tuple with `x`, `y`, `z` fields at XFace, YFace, and ZFace locations respectively
+
+This helper function creates the vector fields needed to store advective fluxes and
+dissipation rates at their proper staggered grid locations.
+"""
 function c_grid_vector(grid)
     x = XFaceField(grid)
     y = YFaceField(grid)
@@ -48,35 +64,33 @@ function c_grid_vector(grid)
 end
 
 """
-    VarianceDissipation(tracer_name, grid;
-                        Uⁿ⁻¹ = VelocityFields(grid),
-                        Uⁿ   = VelocityFields(grid))
+    BuoyancyVarianceDissipation(grid; Uⁿ⁻¹, Uⁿ)
 
-Construct a `VarianceDissipation` object for a tracer called `tracer_name` that lives on `grid`.
-This function computes the variance dissipation diagnostics for the specified tracer in the model.
-These include the numerical dissipation implicit to the advection scheme and the explicit
-dissipation associated to closures.
+Construct a `BuoyancyVarianceDissipation` object for computing buoyancy variance dissipation diagnostics.
+
+$(SIGNATURES)
+
+# Arguments
+- `grid`: The grid on which the buoyancy field is defined
+
+# Keyword Arguments
+- `Uⁿ⁻¹`: The velocity field at the previous time step (default: `VelocityFields(grid)`)
+- `Uⁿ`: The velocity field at the current time step (default: `VelocityFields(grid)`)
+
+# Returns
+- `BuoyancyVarianceDissipation` object ready to be used as a simulation callback
+
+This function computes the variance dissipation diagnostics for buoyancy, which is computed
+from temperature and salinity tracers using the linear equation of state. The diagnostics
+include the numerical dissipation implicit to the advection scheme.
 
 This diagnostic is especially useful for models that use a dissipative advection scheme
-like [`WENO`](@ref) or [`UpwindBiased`](@ref).
-
-Arguments
-=========
-
-- `tracer_name`: The name of the tracer for which variance dissipation is computed. This should
-                 be a `Symbol`. When calling `ϵ::VarianceDissipation` on the model, this name is
-                 used to identify the tracer in the model's state.
-- `grid`: The grid on which the tracer is defined.
-
-Keyword Arguments
-=================
-
-- `Uⁿ⁻¹`: The velocity field at the previous time step. Default: `VelocityFields(grid)`.
-- `Uⁿ`: The velocity field at the current time step. Default: `VelocityFields(grid)`.
+like WENO or UpwindBiased, as it quantifies the spurious mixing introduced by numerical
+discretization.
 
 !!! compat "Time stepper compatibility"
-    At the moment, the variance dissipation diagnostic is supported only for a [`QuasiAdamsBashforth2TimeStepper`](@ref)
-    and a [`SplitRungeKuttaTimeStepper`](@ref).
+    The variance dissipation diagnostic is supported for `QuasiAdamsBashforth2TimeStepper`
+    and `SplitRungeKuttaTimeStepper`.
 """
 function BuoyancyVarianceDissipation(grid; 
                                      Uⁿ⁻¹ = VelocityFields(grid),
@@ -93,6 +107,25 @@ function BuoyancyVarianceDissipation(grid;
     return BuoyancyVarianceDissipation(P, advective_fluxes, previous_state)
 end
 
+"""
+    (ϵ::BuoyancyVarianceDissipation)(model)
+
+Compute buoyancy variance dissipation and update flux caches for the next time step.
+
+$(SIGNATURES)
+
+# Arguments
+- `model`: The `HydrostaticFreeSurfaceModel` containing temperature and salinity tracers
+
+# Returns
+- `nothing` (modifies `ϵ` in place)
+
+This function is called as a simulation callback to compute the advective dissipation
+of buoyancy variance at each time step. It first computes dissipation from previously
+cached fluxes, then updates the flux caches for the next time step.
+
+The model must have `:T` and `:S` tracers to compute buoyancy.
+"""
 function (ϵ::BuoyancyVarianceDissipation)(model)
 
     # Check if the model has a velocity field

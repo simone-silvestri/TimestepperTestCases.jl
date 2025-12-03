@@ -3,6 +3,22 @@ using Documenter
 
 DocMeta.setdocmeta!(TimestepperTestCases, :DocTestSetup, :(using TimestepperTestCases); recursive=true)
 
+experiment_pages = [
+    "Internal Tide" => "experiments/internal_tide.md",
+    "Idealized Coast" => "experiments/idealized_coast.md",
+    "Channel Flow" => "experiments/channel.md",
+]
+
+pages = [
+    "Home" => "index.md",
+    "Getting Started" => "getting_started.md",
+    "Experiments" => experiment_pages,
+    "Diagnostics" => "diagnostics.md",
+    "Stability Analysis" => "stability.md",
+    "Notebooks" => "notebooks.md",
+    "API Reference" => "api_reference.md",
+]
+
 makedocs(;
     modules=[TimestepperTestCases],
     authors="Simone Silvestri <silvestri.simone0@gmail.com> and contributors",
@@ -12,9 +28,7 @@ makedocs(;
         edit_link="main",
         assets=String[],
     ),
-    pages=[
-        "Home" => "index.md",
-    ],
+    pages=pages,
 )
 
 deploydocs(;

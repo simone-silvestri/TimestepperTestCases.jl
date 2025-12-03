@@ -26,6 +26,23 @@ AreaField(grid)   = Field(KernelFunctionOperation{Center, Center, Nothing}(Ocean
 DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = KernelFunctionOperation{Center, Center, Center}(_density_operation, b.grid, b, ρ₀, g)
 DensityField(b::Field; ρ₀ = 1000.0, g = 9.80655) = compute!(Field(DensityOperation(b; ρₒ, g)))
 
+"""
+    compute_rpe_density(case::Dict)
+
+Compute reference potential energy (RPE) and available potential energy (APE) time series from a case dictionary.
+
+$(SIGNATURES)
+
+# Arguments
+- `case`: Dictionary containing `:b` (buoyancy FieldTimeSeries) and `:VCCC` (volume FieldTimeSeries)
+
+# Returns
+- Named tuple with `rpe` and `ape` arrays containing volume-averaged RPE and APE at each time step
+
+RPE represents the minimum potential energy achievable by adiabatic re-sorting of the density field,
+while APE is the difference between actual and reference potential energy. These diagnostics are
+used to quantify irreversible mixing, as described in the paper.
+"""
 function compute_rpe_density(case::Dict)
 
     rpe = []
@@ -40,6 +57,22 @@ function compute_rpe_density(case::Dict)
     return (; rpe, ape)
 end
 
+"""
+    compute_rpe_density_two(case::Dict)
+
+Compute RPE and APE time series using buoyancy directly (without volume weighting).
+
+$(SIGNATURES)
+
+# Arguments
+- `case`: Dictionary containing `:b` (buoyancy FieldTimeSeries) and `:VCCC` (volume FieldTimeSeries)
+
+# Returns
+- Named tuple with `rpe` and `ape` arrays
+
+This variant computes RPE/APE using the buoyancy field directly, suitable for cases where
+buoyancy is already volume-weighted or when using different volume conventions.
+"""
 function compute_rpe_density_two(case::Dict)
 
     rpe = []
@@ -56,6 +89,24 @@ end
 
 compute_rpe_density(b::Oceananigans.AbstractOperations.AbstractOperation, vol) = compute_rpe_density(Field(b), vol)
 
+"""
+    compute_rpe_density(b::Field, vol)
+
+Compute RPE and APE density fields from buoyancy and volume fields.
+
+$(SIGNATURES)
+
+# Arguments
+- `b`: Buoyancy field
+- `vol`: Volume field
+
+# Returns
+- Named tuple with `ze` (re-sorted height), `εe` (RPE density), and `αe` (APE density) fields
+
+This function computes the re-sorted height `z★` by sorting buoyancy and computing the cumulative
+volume distribution. RPE density is `ρ * z★` and APE density is `ρ * (z - z★)`, where `ρ` is
+computed from buoyancy using the linear equation of state.
+"""
 function compute_rpe_density(b::Field, vol)
     bcpu = on_architecture(CPU(), b)
     volcpu = on_architecture(CPU(), vol)
@@ -71,6 +122,23 @@ function compute_rpe_density(b::Field, vol)
     return (; ze, εe, αe)
 end
 
+"""
+    calculate_z★_diagnostics(b::Field, vol)
+
+Calculate the re-sorted height field `z★` from buoyancy and volume fields.
+
+$(SIGNATURES)
+
+# Arguments
+- `b`: Buoyancy field
+- `vol`: Volume field
+
+# Returns
+- `z★` field representing the height each fluid parcel would occupy after adiabatic re-sorting
+
+The re-sorted height is computed by sorting the buoyancy field and computing cumulative volume
+distribution, providing a reference state for potential energy calculations.
+"""
 function calculate_z★_diagnostics(b::Field, vol)
 
     total_area = sum(AreaField(b.grid))

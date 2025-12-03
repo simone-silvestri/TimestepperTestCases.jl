@@ -2,6 +2,31 @@ using Oceananigans
 using Oceananigans.Units
 using Oceananigans.Grids
 
+"""
+    internal_tide_parameters()
+
+Return a named tuple containing the default parameters for the internal tide test case.
+
+$(SIGNATURES)
+
+# Returns
+- `Nx`: Number of grid points in the horizontal (x) direction
+- `Nz`: Number of grid points in the vertical (z) direction
+- `H`: Domain depth [m]
+- `L`: Domain half-length [m]
+- `h₀`: Seamount height [m]
+- `width`: Seamount width [m]
+- `T₂`: Tidal period [s]
+- `ω₂`: Tidal frequency [rad/s]
+- `ϵ`: Excursion parameter (dimensionless)
+- `U₂`: Characteristic tidal velocity [m/s]
+- `f`: Coriolis parameter [s⁻¹]
+- `A₂`: Tidal forcing amplitude [m/s²]
+- `Nᵢ²`: Initial stratification [s⁻²]
+
+These parameters define a 2-kilometer deep domain with a Gaussian seamount that interacts
+with an oscillatory tidal forcing, as described in the paper.
+"""
 @inline function internal_tide_parameters() 
     Nx    = 256
     Nz    = 128
@@ -20,8 +45,43 @@ using Oceananigans.Grids
     return (; Nx, Nz, H, L, h₀, width, T₂, ω₂, ϵ, U₂, f, A₂, Nᵢ²)
 end
 
+"""
+    tidal_forcing(x, z, t, p)
+
+Compute the tidal forcing amplitude at position `(x, z)` and time `t`.
+
+$(SIGNATURES)
+
+# Arguments
+- `x`: Horizontal position [m]
+- `z`: Vertical position [m]
+- `t`: Time [s]
+- `p`: Parameters named tuple containing `A₂` (forcing amplitude) and `ω₂` (tidal frequency)
+
+# Returns
+- Forcing amplitude [m/s²] as a function of time only: `A₂ * sin(ω₂ * t)`
+
+This function implements a simple oscillatory tidal forcing that varies sinusoidally in time
+with amplitude `A₂` and frequency `ω₂`.
+"""
 @inline tidal_forcing(x, z, t, p) = p.A₂ * sin(p.ω₂ * t)
 
+"""
+    internal_tide_timestep(::Val{timestepper})
+
+Return the recommended time step for the internal tide test case given a timestepper.
+
+$(SIGNATURES)
+
+# Arguments
+- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2`, `:SplitRungeKutta3`, or `:SplitRungeKutta4`)
+
+# Returns
+- Recommended time step [s] for the given timestepper
+
+The time steps are chosen to match computational cost between AB2 and RK schemes while
+maintaining stability, as described in the paper.
+"""
 internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =  5minutes
 internal_tide_timestep(::Val{:SplitRungeKutta3})     = 10minutes
 internal_tide_timestep(::Val{:SplitRungeKutta4})     = 10minutes
@@ -34,6 +94,26 @@ internal_tide_timestep(::Val{:SplitRungeKutta4})     = 10minutes
     end
 end
 
+"""
+    compute_tracer_dissipation!(sim)
+
+Compute the time rate of change of tracer variance (dissipation) for tracers `b` and `c`.
+
+$(SIGNATURES)
+
+# Arguments
+- `sim`: The `Simulation` object containing the model with tracers `b` and `c`
+
+# Returns
+- `nothing` (modifies `sim.model.auxiliary_fields` in place)
+
+This function computes the dissipation rate of tracer variance, defined as
+`Δtc² = (c² - c⁻²) / Δt` where `c⁻` is the tracer value from the previous time step.
+The results are stored in `sim.model.auxiliary_fields.Δtc²` and `sim.model.auxiliary_fields.Δtb²`.
+
+This diagnostic is used to quantify numerical mixing introduced by the time discretization,
+as described in the paper's appendix.
+"""
 function compute_tracer_dissipation!(sim)
     c    = sim.model.tracers.c
     c⁻   = sim.model.auxiliary_fields.c⁻
@@ -52,6 +132,20 @@ function compute_tracer_dissipation!(sim)
     return nothing
 end
 
+"""
+    internal_tide_grid()
+
+Construct the grid for the internal tide test case with a Gaussian seamount.
+
+$(SIGNATURES)
+
+# Returns
+- `ImmersedBoundaryGrid` with periodic horizontal boundaries and a Gaussian seamount bottom
+
+The grid spans from `-L` to `L` horizontally (periodic) and from `-H` to `0` vertically (bounded).
+A Gaussian seamount of height `h₀` and width `width` is imposed using an immersed boundary method.
+The grid parameters are taken from `internal_tide_parameters()`.
+"""
 function internal_tide_grid()
     param = internal_tide_parameters()
 
@@ -84,6 +178,31 @@ struct LinearizedAdvection <:AbstractAdvectionScheme{1, Float64} end
 @inline _advective_tracer_flux_z(i, j, k, ibg::ImmersedBoundaryGrid, ::LinearizedAdvection, args...) = 
     _advective_tracer_flux_z(i, j, k, ibg, Centered(), args...) # W, ConstantField(1e-4)
 
+"""
+    internal_tide(timestepper::Symbol; free_surface, tracer_advection)
+
+Set up and run the internal tide test case simulation.
+
+$(SIGNATURES)
+
+# Arguments
+- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2`, `:SplitRungeKutta3`, or `:SplitRungeKutta4`)
+
+# Keyword Arguments
+- `free_surface`: Free surface formulation (default: `SplitExplicitFreeSurface` with 60 substeps)
+- `tracer_advection`: Tracer advection scheme (default: 7th-order WENO)
+
+# Returns
+- `Simulation` object after running to completion
+
+This function sets up the internal tide test case described in the paper, which simulates
+tidal flow over a Gaussian seamount. The domain is initially stratified and forced by an
+oscillatory tidal forcing. The simulation runs for 40 days and outputs velocity, buoyancy,
+tracer fields, and dissipation diagnostics.
+
+The test case isolates the role of time discretization in numerical mixing, as spatial
+advection plays a secondary role in this mostly linear configuration.
+"""
 function internal_tide(timestepper::Symbol; 
                        free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60),
                        tracer_advection=TimestepperTestCases.tracer_advection)

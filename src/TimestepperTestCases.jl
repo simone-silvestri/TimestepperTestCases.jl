@@ -11,6 +11,23 @@ using Printf
 
 wall_clock = Ref(time_ns())
 
+"""
+    print_progress(sim)
+
+Print simulation progress information including completion percentage, iteration number,
+simulation time, wall clock time, maximum velocity components, and next time step.
+
+$(SIGNATURES)
+
+# Arguments
+- `sim`: The `Simulation` object to print progress for.
+
+# Returns
+- `nothing`
+
+This callback function is typically added to simulations using `add_callback!` to monitor
+progress during long-running simulations.
+"""
 function print_progress(sim)
     model = sim.model
     u, v, w = model.velocities

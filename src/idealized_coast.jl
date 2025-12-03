@@ -8,12 +8,47 @@ using Oceananigans.Operators
 using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEVerticalDiffusivity
 using Random
 
+"""
+    wind_stress(i, j, grid, clock, fields, p)
+
+Compute the wind stress forcing at grid point `(i, j)`.
+
+$(SIGNATURES)
+
+# Arguments
+- `i, j`: Grid indices
+- `grid`: Grid object
+- `clock`: Simulation clock
+- `fields`: Model fields
+- `p`: Parameters named tuple containing `τ₀` (stress amplitude) and `f` (frequency)
+
+# Returns
+- Wind stress [m²/s²] that activates after 4 days: `τ₀ * sin(f * t)` if `t > 4 days`, else `0`
+
+This function implements a time-dependent wind stress that begins after a 4-day spin-up period
+and oscillates with frequency `f` and amplitude `τ₀`.
+"""
 @inline function wind_stress(i, j, grid, clock, fields, p) 
     force = clock.time > 4days
     τx = p.τ₀ * sin(p.f * clock.time)
     return ifelse(force, τx, zero(grid))
 end
 
+"""
+    idealized_coast_timestep(::Val{timestepper})
+
+Return the recommended time step for the idealized coast test case given a timestepper.
+
+$(SIGNATURES)
+
+# Arguments
+- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2` or `:SplitRungeKutta3`)
+
+# Returns
+- Recommended time step [s] for the given timestepper
+
+Time steps are chosen to match computational cost between AB2 and RK schemes.
+"""
 idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 5minutes
 idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 10minutes
 
@@ -27,6 +62,33 @@ idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 10minutes
 @inline u_immersed_bottom_drag(i, j, k, grid, clock, fields, μ) = @inbounds - μ * fields.u[i, j, k] * spᶠᶜᶜ(i, j, k, grid, fields)
 @inline v_immersed_bottom_drag(i, j, k, grid, clock, fields, μ) = @inbounds - μ * fields.v[i, j, k] * spᶜᶠᶜ(i, j, k, grid, fields)
 
+"""
+    idealized_coast(timestepper::Symbol; arch, forced, lowres, free_surface)
+
+Set up and run the idealized coastal baroclinic adjustment test case simulation.
+
+$(SIGNATURES)
+
+# Arguments
+- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2` or `:SplitRungeKutta3`)
+
+# Keyword Arguments
+- `arch`: Architecture to run on (default: `CPU()`)
+- `forced`: Whether to apply wind forcing (default: `true`)
+- `lowres`: Whether to use low resolution (default: `false`)
+- `free_surface`: Free surface formulation (default: `SplitExplicitFreeSurface` with CFL=0.7)
+
+# Returns
+- `Simulation` object configured but not yet run
+
+This function sets up the idealized coastal baroclinic adjustment test case described in the paper.
+The configuration features a rectangular domain with a linearly sloping bathymetry and initial
+meridional salinity gradient that drives baroclinic instabilities. The test case demonstrates
+how numerical mixing can suppress submesoscale variability, as shown in the paper.
+
+The simulation runs for 40 days and outputs velocity, temperature, salinity, buoyancy,
+and variance dissipation diagnostics.
+"""
 function idealized_coast(timestepper::Symbol; 
                          arch = CPU(), 
                          forced = true,
