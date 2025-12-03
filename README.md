@@ -186,7 +186,7 @@ If you use this package in your research, please cite:
   journal={Journal of Advances in Modeling Earth Systems},
   year={2025}
 }
-```
+```s
 
 ## Related Packages
 
@@ -195,7 +195,3 @@ If you use this package in your research, please cite:
 ## License
 
 This package is licensed under the MIT License. See `LICENSE` for details.
-
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request on GitHub.
