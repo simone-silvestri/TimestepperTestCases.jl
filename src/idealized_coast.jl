@@ -258,8 +258,8 @@ function idealized_coast(timestepper::Symbol;
                        b = b * VCCC), fT, fS, fb, G)
 
     if !isnothing(cl1)
-        κu = model.diffusivity_fields[1].κu
-        κc = model.diffusivity_fields[1].κc
+        κu = model.closure_fields[1].κu
+        κc = model.closure_fields[1].κc
         outputs = merge(outputs, (; κu, κc))
     end
 
