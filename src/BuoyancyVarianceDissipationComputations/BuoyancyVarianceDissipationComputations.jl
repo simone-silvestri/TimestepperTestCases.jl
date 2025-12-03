@@ -2,6 +2,7 @@ module BuoyancyVarianceDissipationComputations
 
 export BuoyancyVarianceDissipation
 
+using DocStringExtensions
 using Oceananigans.Advection
 using Oceananigans.BoundaryConditions
 using Oceananigans.Grids: architecture, AbstractGrid
