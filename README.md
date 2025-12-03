@@ -186,7 +186,7 @@ If you use this package in your research, please cite:
   journal={Journal of Advances in Modeling Earth Systems},
   year={2025}
 }
-```s
+```
 
 ## Related Packages
 
