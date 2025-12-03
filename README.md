@@ -93,12 +93,6 @@ TimestepperTestCases.jl/
 │   └── make.jl                          # Documentation build script
 ├── test/                                  # Test suite
 │   └── runtests.jl
-├── internal_tide/                        # Internal tide output data
-├── idealized_coast/                      # Idealized coast output data
-├── idealized_coast_unforced/             # Unforced idealized coast data
-├── channel-simulation/                   # Channel simulation output data
-│   ├── high-diffusivity-results/
-│   └── only-catke-results/
 └── README.md                             # This file
 ```
 
