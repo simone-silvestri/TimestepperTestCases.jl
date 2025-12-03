@@ -2,6 +2,7 @@ module TimestepperTestCases
 
 export internal_tide, baroclinic_adjustment, overflow
 
+using DocStringExtensions
 using Oceananigans
 using Oceananigans.Grids
 using Oceananigans.Units
