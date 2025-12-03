@@ -283,7 +283,7 @@ function internal_tide(timestepper::Symbol;
                 Gbx = Gbx * VFC,
                 Gbz = Gbz * VCF,
                 Gcx = Gcx * VFC,
-                Gcz = Gcz * VCF
+                Gcz = Gcz * VCF,
                 Abx = f.Abx,
                 Abz = f.Abz,
                 Acx = f.Acx,
