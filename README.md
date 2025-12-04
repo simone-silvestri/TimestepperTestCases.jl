@@ -26,12 +26,6 @@ This package implements test cases designed to highlight differences in performa
 
 ```julia
 using Pkg
-Pkg.add("TimestepperTestCases")
-```
-
-Or from the GitHub repository:
-
-```julia
 Pkg.add(url="https://github.com/simone-silvestri/TimestepperTestCases.jl")
 ```
 
@@ -47,7 +41,7 @@ sim = internal_tide(:SplitRungeKutta3)
 sim = idealized_coast(:SplitRungeKutta3; forced=true)
 
 # Run channel simulation
-sim = run_channel_simulation(timestepper=:SplitRungeKutta3)
+sim = channel_simulation(timestepper=:SplitRungeKutta3)
 ```
 
 See the [documentation](https://simone-silvestri.github.io/TimestepperTestCases.jl/stable/) for detailed usage instructions.

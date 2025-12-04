@@ -54,10 +54,10 @@ sim = idealized_coast(:SplitRungeKutta3; forced=false)
 
 ```julia
 # Run channel simulation with default settings
-sim = run_channel_simulation(timestepper=:SplitRungeKutta3)
+sim = channel_simulation(timestepper=:SplitRungeKutta3)
 
 # Or customize closure and grid
-sim = run_channel_simulation(
+sim = channel_simulation(
     timestepper=:SplitRungeKutta3,
     closure=default_closure(),
     zstar=true

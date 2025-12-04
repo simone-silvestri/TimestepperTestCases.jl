@@ -1,6 +1,6 @@
 module TimestepperTestCases
 
-export internal_tide, baroclinic_adjustment, overflow
+export internal_tide, idealized_coast, channel_simulation
 
 using DocStringExtensions
 using Oceananigans

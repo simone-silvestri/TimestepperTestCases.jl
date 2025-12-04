@@ -239,7 +239,7 @@ function default_closure()
 end
 
 """
-    run_channel_simulation(; momentum_advection, tracer_advection, closure, zstar, restart_file, arch, bottom_height, timestepper, grid, initial_file, testcase)
+    channel_simulation(; momentum_advection, tracer_advection, closure, zstar, restart_file, arch, bottom_height, timestepper, grid, initial_file, testcase)
 
 Set up and run the idealized re-entrant channel flow simulation.
 
@@ -270,17 +270,17 @@ The simulation includes a spin-up phase followed by a long integration (40 years
 time-averaged outputs. This test case demonstrates how numerical mixing interacts with
 explicit physical mixing in an equilibrated configuration, as shown in the paper.
 """
-function run_channel_simulation(; momentum_advection = WENOVectorInvariant(), 
-                                    tracer_advection = TimestepperTestCases.tracer_advection, 
-                                             closure = default_closure(),
-                                               zstar = true,
-                                        restart_file = nothing,
-                                                arch = CPU(),
-                                       bottom_height = nothing,
-                                         timestepper = :SplitRungeKutta,
-                                                grid = default_grid(arch, zstar, bottom_height),
-                                        initial_file = "tIni_80y_90L.bin",
-                                            testcase = "0")
+function channel_simulation(; momentum_advection = WENOVectorInvariant(), 
+                                tracer_advection = TimestepperTestCases.tracer_advection, 
+                                         closure = default_closure(),
+                                           zstar = true,
+                                    restart_file = nothing,
+                                            arch = CPU(),
+                                   bottom_height = nothing,
+                                     timestepper = :SplitRungeKutta3,
+                                            grid = default_grid(arch, zstar, bottom_height),
+                                    initial_file = "tIni_80y_90L.bin",
+                                        testcase = "0")
 
     #####
     ##### Boundary conditions

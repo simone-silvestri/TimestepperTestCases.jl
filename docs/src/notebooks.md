@@ -87,8 +87,8 @@ internal_tide(:QuasiAdamsBashforth2)
 idealized_coast(:SplitRungeKutta3)
 idealized_coast(:QuasiAdamsBashforth2)
 
-run_channel_simulation(timestepper=:SplitRungeKutta3)
-run_channel_simulation(timestepper=:QuasiAdamsBashforth2)
+channel_simulation(timestepper=:SplitRungeKutta3)
+channel_simulation(timestepper=:QuasiAdamsBashforth2)
 ```
 
 Output files should be in the directories expected by the notebooks (typically `internal_tide/`, `idealized_coast/`, and `channel-simulation/`).

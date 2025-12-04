@@ -12,17 +12,17 @@ The domain is 1000 km × 2000 km × 3 km with periodic zonal boundaries and boun
 using TimestepperTestCases
 
 # Run with default settings
-sim = run_channel_simulation(timestepper=:SplitRungeKutta3)
+sim = channel_simulation(timestepper=:SplitRungeKutta3)
 
 # Customize closure
-sim = run_channel_simulation(
+sim = channel_simulation(
     timestepper=:SplitRungeKutta3,
     closure=default_closure(),
     zstar=true
 )
 
 # Use custom grid
-sim = run_channel_simulation(
+sim = channel_simulation(
     timestepper=:SplitRungeKutta3,
     grid=custom_grid
 )
@@ -43,10 +43,10 @@ Key parameters:
 using TimestepperTestCases
 
 # Standard run
-sim = run_channel_simulation(timestepper=:SplitRungeKutta3)
+sim = channel_simulation(timestepper=:SplitRungeKutta3)
 
 # Restart from checkpoint
-sim = run_channel_simulation(
+sim = channel_simulation(
     timestepper=:SplitRungeKutta3,
     restart_file="channel_checkpoint_0.jld2"
 )
