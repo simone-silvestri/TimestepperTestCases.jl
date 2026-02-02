@@ -240,7 +240,7 @@ function idealized_coast(timestepper::Symbol;
 
     G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
     u, v, w = model.velocities
-    η = model.free_surface.η
+    η = model.free_surface.displacement
     T, S = model.tracers
 
     outputs = merge((; u = u * VFCC,
