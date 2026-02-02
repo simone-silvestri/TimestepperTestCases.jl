@@ -165,16 +165,16 @@ function idealized_coast(timestepper::Symbol;
         tracers = (:T, :S)
     end
 
-    model = HydrostaticFreeSurfaceModel(; grid,
-                                          coriolis,
-                                          timestepper,
-                                          tracers,
-                                          buoyancy,
-                                          closure = cl1,
-                                          boundary_conditions = (; u=u_bcs, v=v_bcs),
-                                          free_surface,
-                                          momentum_advection = WENOVectorInvariant(),
-                                          tracer_advection)
+    model = HydrostaticFreeSurfaceModel(grid;
+                                        coriolis,
+                                        timestepper,
+                                        tracers,
+                                        buoyancy,
+                                        closure = cl1,
+                                        boundary_conditions = (; u=u_bcs, v=v_bcs),
+                                        free_surface,
+                                        momentum_advection = WENOVectorInvariant(),
+                                        tracer_advection)
 
     N² = 1e-4
     S² = 1e-8
