@@ -236,7 +236,7 @@ function idealized_coast(timestepper::Symbol;
     GSy = ∂y(S)^2 * VCFC
     GSz = ∂z(S)^2 * VCCF
 
-    b   = Oceananigans.BuoyancyFormulations.buoyancy(model.buoyancy, grid, (; T = T, S = S))
+    b   = Oceananigans.BuoyancyFormulations.buoyancy_operation(model.buoyancy, grid, (; T = T, S = S))
     Gbx = ∂x(b)^2 * VFCC
     Gby = ∂y(b)^2 * VCFC
     Gbz = ∂z(b)^2 * VCCF
