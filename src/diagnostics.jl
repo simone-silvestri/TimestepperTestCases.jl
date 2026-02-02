@@ -1,4 +1,3 @@
-using Oceananigans.AbstractOperations: grid_metric_operation
 using Oceananigans.Utils: launch!
 using Oceananigans.Grids: architecture, znode
 using Oceananigans.Architectures: device, on_architecture
