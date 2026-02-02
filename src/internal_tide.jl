@@ -154,13 +154,13 @@ function internal_tide_grid()
     H, L      = param.H, param.L
 
     underlying_grid = RectilinearGrid(size = (Nx, Nz), halo = (6, 6),
-                                    x = (-L, L), z = (-H, 0), # MutableVerticalDiscretization((-H, 0)),
+                                    x = (-L, L), z = MutableVerticalDiscretization((-H, 0)),
                                     topology = (Periodic, Flat, Bounded))
 
     hill(x)   =   h₀ * exp(-x^2 / 2width^2)
     bottom(x) = - H + hill(x)
 
-    grid = ImmersedBoundaryGrid(underlying_grid, GridFittedBottom(bottom); active_cells_map = true)
+    grid = ImmersedBoundaryGrid(underlying_grid, GridFittedBottom(bottom))
    
     return grid
 end
@@ -205,15 +205,16 @@ function internal_tide(timestepper::Symbol;
     b⁻    = CenterField(grid)
     Δtb²  = CenterField(grid)
 
-    model = HydrostaticFreeSurfaceModel(; grid, coriolis = nothing,
-                                          buoyancy = BuoyancyTracer(),
-                                          tracers = (:b, :c),
-                                          momentum_advection = WENO(),
-                                          tracer_advection = tracer_advection,
-                                          free_surface,
-                                          timestepper,
-                                          forcing = (; u = u_forcing),
-                                          auxiliary_fields=(; Δtc², c⁻, Δtb², b⁻))
+    model = HydrostaticFreeSurfaceModel(grid; 
+                                        coriolis,
+                                        buoyancy = BuoyancyTracer(),
+                                        tracers = (:b, :c),
+                                        momentum_advection = WENO(minimum_buffer_upwind_order=1),
+                                        tracer_advection = tracer_advection,
+                                        free_surface,
+                                        timestepper,
+                                        forcing = (; u = u_forcing),
+                                        auxiliary_fields=(; Δtc², c⁻, Δtb², b⁻))
 
     bᵢ(x, z) = param.Nᵢ² * z
     cᵢ(x, z) = exp( - (z + 1kilometers)^2 / (2 * (25meters)^2))
@@ -238,7 +239,7 @@ function internal_tide(timestepper::Symbol;
     u, v, w = model.velocities
     b  = model.tracers.b
     c  = model.tracers.c
-    η  = model.free_surface.η
+    η  = model.free_surface.displacement
     U  = Field(Average(u))
     u′ = u - U
     N² = ∂z(b)
@@ -251,7 +252,7 @@ function internal_tide(timestepper::Symbol;
     g = (; Gbx, Gbz, Gcx, Gcz)
 
     if free_surface isa SplitExplicitFreeSurface
-        fsname = "split_free_surface_DFB"
+        fsname = "split_free_surface"
     else
         fsname = "implicit_free_surface"
     end
@@ -293,7 +294,7 @@ function internal_tide(timestepper::Symbol;
                                                     filename,
                                                     schedule = TimeInterval(save_fields_interval),
                                                     overwrite_existing = true)
-
+    
     run!(simulation)
 
     return simulation
