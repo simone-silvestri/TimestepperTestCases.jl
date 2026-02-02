@@ -14,8 +14,8 @@ using Random
     return ifelse(force, τx, zero(grid))
 end
 
-idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 1minutes
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 2.5minutes
+idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 5minutes
+idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 10minutes
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
@@ -33,19 +33,19 @@ function idealized_coast(timestepper::Symbol;
                          lowres = false,
                          free_surface = nothing)
 
-    Lx = 96kilometers
-    Ly = 96kilometers
+    Lx = 192kilometers
+    Ly = 192kilometers
     Lz = 103meters
 
     if lowres
-        Nx = Ny = 48
+        Nx = Ny = 96
     else
         Nx = Ny = 250
     end
         
-    Nz = 60
+    Nz = 40
 
-    z_faces = reverse(- [(k / Nz)^(1.25) for k in 0:Nz] .* Lz)
+    z_faces = (-Lz, 0) 
     
     grid = RectilinearGrid(arch; 
                            size = (Nx, Ny, Nz),
@@ -68,10 +68,6 @@ function idealized_coast(timestepper::Symbol;
     equation_of_state = LinearEquationOfState(thermal_expansion=α, haline_contraction=β)
     buoyancy = SeawaterBuoyancy(; equation_of_state)
     Δt = idealized_coast_timestep(Val(timestepper))
-
-    if lowres
-        Δt = 2 * Δt
-    end
 
     if isnothing(free_surface)
         free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=Δt+2minutes)
@@ -97,11 +93,13 @@ function idealized_coast(timestepper::Symbol;
     end
     v_bcs = FieldBoundaryConditions(bottom=v_bottom, immersed=v_immersed)
 
-    cl1 = forced ? CATKEVerticalDiffusivity() : nothing
-    cl2 = VerticalScalarDiffusivity(ν=3e-5)
+    cl1 = forced ? ConvectiveAdjustmentVerticalDiffusivity(background_κz=1e-5, 
+                                                           convective_κz=0.1, 
+                                                           background_νz=1e-5, 
+                                                           convective_νz=0.1) : nothing
 
     if forced
-        tracers = (:T, :S, :e)
+        tracers = (:T, :S) 
     else
         tracers = (:T, :S)
     end
@@ -111,7 +109,7 @@ function idealized_coast(timestepper::Symbol;
                                           timestepper,
                                           tracers,
                                           buoyancy,
-                                          closure = (cl1, cl2),
+                                          closure = cl1,
                                           boundary_conditions = (; u=u_bcs, v=v_bcs),
                                           free_surface,
                                           momentum_advection = WENOVectorInvariant(),
@@ -142,12 +140,11 @@ function idealized_coast(timestepper::Symbol;
     ϵS = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:S, grid)
     fT = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵT)
     fS = Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵS)
-
-    ϵb = TimestepperTestCases.BuoyancyVarianceDissipationComputations.BuoyancyVarianceDissipation(grid)
-    fb = TimestepperTestCases.BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb)
-    
     add_callback!(simulation, ϵT, IterationInterval(1))
     add_callback!(simulation, ϵS, IterationInterval(1))
+    
+    ϵb = TimestepperTestCases.BuoyancyVarianceDissipationComputations.BuoyancyVarianceDissipation(grid)
+    fb = TimestepperTestCases.BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb)
     add_callback!(simulation, ϵb, IterationInterval(1))
 
     if free_surface isa SplitExplicitFreeSurface
@@ -180,10 +177,6 @@ function idealized_coast(timestepper::Symbol;
     Gby = ∂y(b)^2 * VCFC
     Gbz = ∂z(b)^2 * VCCF
 
-    # Abx = g * (α * fT.ATx / VFCC - β * fS.ASx / VFCC) * VFCC
-    # Aby = g * (α * fT.ATy / VCFC - β * fS.ASy / VCFC) * VCFC
-    # Abz = g * (α * fT.ATz / VCCF - β * fS.ASz / VCCF) * VCCF
-
     G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
     u, v, w = model.velocities
     η = model.free_surface.η
@@ -197,8 +190,8 @@ function idealized_coast(timestepper::Symbol;
                        b = b * VCCC), fT, fS, fb, G)
 
     if !isnothing(cl1)
-        κu = model.diffusivity_fields[1].κu
-        κc = model.diffusivity_fields[1].κc
+        κu = model.diffusivity_fields.κu
+        κc = model.diffusivity_fields.κc
         outputs = merge(outputs, (; κu, κc))
     end
 

@@ -1,11 +1,10 @@
-using Oceananigans.AbstractOperations: grid_metric_operation
 using Oceananigans.Utils: launch!
 using Oceananigans.Grids: architecture, znode
 using Oceananigans.Architectures: device, on_architecture
 using Oceananigans.Fields: default_indices
 using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
-using KernelAbstractions: @kernel, @index, @unroll
+using KernelAbstractions: @kernel, @index
 
 @kernel function _compute_volumes!(VCCC, VFCC, VCFC, VCCF, grid, η)
     i, j, k = @index(Global, NTuple)
@@ -18,7 +17,7 @@ using KernelAbstractions: @kernel, @index, @unroll
     end
 end
 
-MetricField(loc, grid, metric; indices = default_indices(3)) = compute!(Field(grid_metric_operation(loc, metric, grid); indices))
+MetricField(loc, grid, metric; indices = default_indices(3)) = compute!(Field(Oceananigans.AbstractOperations.grid_metric_operation(loc, metric, grid); indices))
 @inline _density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
 
 AreaField(grid, loc=(Center, Center, Center)) = MetricField(loc, grid, Oceananigans.Operators.Az)
