@@ -1,7 +1,8 @@
 module TimestepperTestCases
 
-export internal_tide, baroclinic_adjustment, overflow
+export internal_tide, idealized_coast, channel_simulation
 
+using DocStringExtensions
 using Oceananigans
 using Oceananigans.Grids
 using Oceananigans.Units
@@ -11,6 +12,23 @@ using Printf
 
 wall_clock = Ref(time_ns())
 
+"""
+    print_progress(sim)
+
+Print simulation progress information including completion percentage, iteration number,
+simulation time, wall clock time, maximum velocity components, and next time step.
+
+$(SIGNATURES)
+
+# Arguments
+- `sim`: The `Simulation` object to print progress for.
+
+# Returns
+- `nothing`
+
+This callback function is typically added to simulations using `add_callback!` to monitor
+progress during long-running simulations.
+"""
 function print_progress(sim)
     model = sim.model
     u, v, w = model.velocities
@@ -36,7 +54,7 @@ using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation
 # Simulations!
 include("internal_tide.jl")
 include("idealized_coast.jl")
-include("salinity_vortex.jl")
+include("channel_simulation.jl")
 
 using Oceananigans
 using Oceananigans.AbstractOperations: grid_metric_operation
@@ -59,5 +77,6 @@ using KernelAbstractions: @kernel, @index
 include("diagnostics.jl")
 include("load_idealized_coast_case.jl")
 include("load_internal_tide_case.jl")
+include("load_channel_case.jl")
 
 end

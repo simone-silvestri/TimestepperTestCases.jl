@@ -4,21 +4,29 @@ using Oceananigans.BuoyancyFormulations
 """
     compute_dissipation!(dissipation, model)
 
-Compute the numerical dissipation for tracer `tracer_name`, from the previously calculated advective and diffusive fluxes,
-the formulation is:
+Compute the numerical dissipation of buoyancy variance from previously calculated advective fluxes.
+
+$(SIGNATURES)
+
+# Arguments
+- `dissipation`: `BuoyancyVarianceDissipation` object containing cached fluxes
+- `model`: The model containing tracers and timestepper information
+
+# Returns
+- `nothing` (modifies `dissipation.advective_production` in place)
+
+The dissipation is computed using the formulation:
 
     A = 2 * δc★ * F - U δc²  # For advective dissipation
-    D = 2 * δc★ * F          # For diffusive dissipation
 
-Where ``F'' is the flux associated with the particular process,``U'' is the advecting velocity,
-while ``c★'' and ``c²'' are functions defined above.
-Note that ``F'' and ``U'' need to be numerically accurate for the budgets to close,
-i.e. for the AB2 scheme:
+where `F` is the flux associated with advection, `U` is the advecting velocity,
+`c★` and `c²` are functions of the buoyancy field.
 
-    F = 1.5 Fⁿ - 0.5 Fⁿ⁻¹
-    U = 1.5 Uⁿ - 0.5 Uⁿ⁻¹
+For multi-stage timesteppers, the fluxes and velocities must account for the substepping
+procedure. For AB2: `F = 1.5 Fⁿ - 0.5 Fⁿ⁻¹` and `U = 1.5 Uⁿ - 0.5 Uⁿ⁻¹`.
+For RK schemes, the fluxes from the appropriate substep are used.
 
-For a RK3 method (not implemented at the moment), the whole substepping procedure needs to be accounted for.
+This method is adapted from the exact variance budget methodology described in the paper's appendix.
 """
 function compute_dissipation!(dissipation, model)
 

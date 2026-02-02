@@ -1,19 +1,49 @@
+"""
+    load_internal_tide(folder, timestepper, free_surface)
+
+Load and process internal tide simulation output data.
+
+$(SIGNATURES)
+
+# Arguments
+- `folder`: Directory containing the simulation output files
+- `timestepper`: Timestepper name string (e.g., `"SplitRungeKutta3"`)
+- `free_surface`: Free surface type string (e.g., `"split_free_surface_DFB"`)
+
+# Returns
+- Dictionary containing:
+  - `:u`, `:w`, `:b`, `:η`: Velocity, buoyancy, and free surface FieldTimeSeries
+  - `:VCCC`, `:VFCC`, `:VCCF`: Volume FieldTimeSeries at different grid locations
+  - `:Abx`, `:Abz`: Advective buoyancy dissipation in x and z directions
+  - `:Gbx`, `:Gbz`: Buoyancy gradient squared in x and z directions
+  - `:abx`, `:abz`, `:abt`: Volume-averaged dissipation rates
+  - `:gbx`, `:gbz`, `:gbt`: Volume-averaged gradient squared
+  - `:κb`: Effective numerical diffusivity
+  - `:KE`, `:MKE`: Kinetic energy and mean kinetic energy time series
+  - `:η2`: Free surface variance time series
+  - `:RPE`, `:APE`: Reference and available potential energy time series
+
+This function loads simulation output, computes volume fields accounting for free surface
+variations, and calculates various diagnostics used for analyzing numerical mixing.
+"""
 function load_internal_tide(folder, timestepper, free_surface)
     path = folder * "internal_tide_" * timestepper * "_" * free_surface * ".jld2"
     case = Dict()
 
-    case[:u] = FieldTimeSeries(path, "u")
-    case[:w] = FieldTimeSeries(path, "w")
-    case[:b] = FieldTimeSeries(path, "b")
-    case[:η] = FieldTimeSeries(path, "η")
+    grid = internal_tide_grid()
+    case[:u] = FieldTimeSeries(path, "u"; backend=OnDisk())
+    case[:w] = FieldTimeSeries(path, "w"; backend=OnDisk())
+    case[:b] = FieldTimeSeries(path, "b"; backend=OnDisk())
+    case[:η] = FieldTimeSeries(path, "η"; backend=OnDisk())
 
-    grid = case[:u].grid
+    grid  = case[:u].grid
+    times = case[:u].times
     Nx, Ny, Nz = size(grid)
 
-    VCCC = FieldTimeSeries{Center, Center, Center}(grid, case[:u].times)
-    VFCC = FieldTimeSeries{Face,   Center, Center}(grid, case[:u].times)
-    VCFC = FieldTimeSeries{Center, Face,   Center}(grid, case[:u].times)
-    VCCF = FieldTimeSeries{Center, Center, Face  }(grid, case[:u].times)
+    VCCC = FieldTimeSeries{Center, Center, Center}(grid, times)
+    VFCC = FieldTimeSeries{Face,   Center, Center}(grid, times)
+    VCFC = FieldTimeSeries{Center, Face,   Center}(grid, times)
+    VCCF = FieldTimeSeries{Center, Center, Face  }(grid, times)
     GC.gc()
 
     Nt = length(case[:u])
@@ -22,7 +52,6 @@ function load_internal_tide(folder, timestepper, free_surface)
     _compute_volumes_kernel! = Oceananigans.Utils.configure_kernel(CPU(), grid, params, _compute_volumes!)[1]
 
     for t in 1:Nt
-        @info "Computing volumes for time step $t / $Nt"
         _compute_volumes_kernel!(VCCC[t], VFCC[t], VCFC[t], VCCF[t], grid, case[:η][t])
     end
     
@@ -33,49 +62,33 @@ function load_internal_tide(folder, timestepper, free_surface)
 
     case[:Abx] = FieldTimeSeries(path, "Abx")
     case[:Abz] = FieldTimeSeries(path, "Abz")
-    case[:Acx] = FieldTimeSeries(path, "Acx")
-    case[:Acz] = FieldTimeSeries(path, "Acz")
-
 
     case[:abx] = [sum(case[:Abx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
     case[:abz] = [sum(case[:Abz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
     case[:abt] = case[:abx] .+ case[:abz]
 
-    case[:acx] = [sum(case[:Acx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
-    case[:acz] = [sum(case[:Acz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
-    case[:act] = case[:acx] .+ case[:acz]
-
     case[:Gbx] = FieldTimeSeries(path, "Gbx")
     case[:Gbz] = FieldTimeSeries(path, "Gbz")
-    case[:Gcx] = FieldTimeSeries(path, "Gcx")
-    case[:Gcz] = FieldTimeSeries(path, "Gcz")
     GC.gc()
 
     case[:gbx] = [sum(case[:Gbx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
     case[:gbz] = [sum(case[:Gbz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
-    case[:gcx] = [sum(case[:Gcx][i]) for i in 1:Nt] ./ [sum(case[:VFCC][i]) for i in 1:Nt]
-    case[:gcz] = [sum(case[:Gcz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
-
     case[:gbt] = case[:gbx] .+ case[:gbz] 
-    case[:gct] = case[:gcx] .+ case[:gcz] 
     GC.gc()
 
-    κc = FieldTimeSeries{Center, Center, Center}(grid, case[:Acx].times)
-    κb = FieldTimeSeries{Center, Center, Center}(grid, case[:Acx].times)
+    κb = FieldTimeSeries{Center, Center, Center}(grid, case[:Abx].times)
 
     for t in 1:Nt
-        @info "Computing diffusivities for time step $t / $Nt"
-        set!(κc[t], @at((Center, Center, Center),  (case[:Acx][t] + case[:Acz][t]) / 2 / (case[:Gcx][t] + case[:Gcz][t])))
-        set!(κb[t], @at((Center, Center, Center),  (case[:Abx][t] + case[:Abz][t]) / 2 / (case[:Gbx][t] + case[:Gbz][t])))
+        set!(κb[t], Diffusivity(case, t, :b))
     end
 
-    case[:κc]  = κc
     case[:κb]  = κb
     case[:KE]  = [sum(u2(case, i))  + sum(w2(case, i))  for i in 1:Nt] ./ [sum(case[:VCCC][i]) for i in 1:Nt]
     case[:MKE] = [sum(um2(case, i)) + sum(wm2(case, i)) for i in 1:Nt] ./ [sum(mean(case[:VCCC][i], dims=1)) for i in 1:Nt]
     case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
 
     GC.gc()
+    
     EDIAG = compute_rpe_density(case)
 
     case[:RPE] = EDIAG.rpe
@@ -83,3 +96,38 @@ function load_internal_tide(folder, timestepper, free_surface)
 
     return case
 end
+
+@inline function _diffusivity(i, j, k, grid, Ax, Az, Gz)
+    ax = ℑxᶜᵃᵃ(i, j, k, grid, Ax)
+    az = ℑzᵃᵃᶜ(i, j, k, grid, Az)
+    gz = ℑzᵃᵃᶜ(i, j, k, grid, Gz)
+    return - 0.5 * (ax + az) / gz
+end
+
+"""
+    Diffusivity(case, t, var)
+
+Compute the effective numerical diffusivity from variance dissipation diagnostics.
+
+$(SIGNATURES)
+
+# Arguments
+- `case`: Case dictionary containing dissipation and gradient fields
+- `t`: Time index
+- `var`: Variable symbol (e.g., `:b` for buoyancy)
+
+# Returns
+- `KernelFunctionOperation` representing the numerical diffusivity field
+
+The diffusivity is computed as `κ = -0.5 * (Ax + Az) / Gz`, where `Ax` and `Az` are the
+advective dissipation rates and `Gz` is the vertical gradient squared. This provides a
+local measure of numerical mixing, as described in the paper.
+"""
+function Diffusivity(case, t, var) 
+    Ax = case[Symbol(:A, var, :x)][t]
+    Az = case[Symbol(:A, var, :z)][t]
+    Gz = case[Symbol(:G, var, :z)][t]
+    grid = case[:u].grid
+    return KernelFunctionOperation{Center, Center, Center}(_diffusivity, grid, Ax, Az, Gz)
+end
+

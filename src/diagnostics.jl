@@ -17,16 +17,31 @@ using KernelAbstractions: @kernel, @index
     end
 end
 
-MetricField(loc, grid, metric; indices = default_indices(3)) = compute!(Field(Oceananigans.AbstractOperations.grid_metric_operation(loc, metric, grid); indices))
+HeightField(grid) = Field(KernelFunctionOperation{Center, Center, Center}(Oceananigans.Grids.znode, grid, Center(), Center(), Center()))
+AreaField(grid)   = Field(KernelFunctionOperation{Center, Center, Nothing}(Oceananigans.Operators.Azᶜᶜᶜ, grid))
+
 @inline _density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
 
-AreaField(grid, loc=(Center, Center, Center)) = MetricField(loc, grid, Oceananigans.Operators.Az)
-
-DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = 
-    KernelFunctionOperation{Center, Center, Center}(_density_operation, b.grid, b, ρ₀, g)
-
+DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = KernelFunctionOperation{Center, Center, Center}(_density_operation, b.grid, b, ρ₀, g)
 DensityField(b::Field; ρ₀ = 1000.0, g = 9.80655) = compute!(Field(DensityOperation(b; ρₒ, g)))
 
+"""
+    compute_rpe_density(case::Dict)
+
+Compute reference potential energy (RPE) and available potential energy (APE) time series from a case dictionary.
+
+$(SIGNATURES)
+
+# Arguments
+- `case`: Dictionary containing `:b` (buoyancy FieldTimeSeries) and `:VCCC` (volume FieldTimeSeries)
+
+# Returns
+- Named tuple with `rpe` and `ape` arrays containing volume-averaged RPE and APE at each time step
+
+RPE represents the minimum potential energy achievable by adiabatic re-sorting of the density field,
+while APE is the difference between actual and reference potential energy. These diagnostics are
+used to quantify irreversible mixing, as described in the paper.
+"""
 function compute_rpe_density(case::Dict)
 
     rpe = []
@@ -34,8 +49,38 @@ function compute_rpe_density(case::Dict)
 
     for t in 1:length(case[:b])
         @info "time $t of $(length(case[:b]))"
-        push!(rpe, sum(compute_rpe_density(case[:b][t] /  case[:VCCC][t], case[:VCCC][t]).εe * case[:VCCC][t]) / sum(case[:VCCC][t]))
-        push!(ape, sum(compute_rpe_density(case[:b][t] /  case[:VCCC][t], case[:VCCC][t]).αe * case[:VCCC][t]) / sum(case[:VCCC][t]))
+        push!(rpe, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).εe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
+        push!(ape, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).αe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
+    end
+
+    return (; rpe, ape)
+end
+
+"""
+    compute_rpe_density_two(case::Dict)
+
+Compute RPE and APE time series using buoyancy directly (without volume weighting).
+
+$(SIGNATURES)
+
+# Arguments
+- `case`: Dictionary containing `:b` (buoyancy FieldTimeSeries) and `:VCCC` (volume FieldTimeSeries)
+
+# Returns
+- Named tuple with `rpe` and `ape` arrays
+
+This variant computes RPE/APE using the buoyancy field directly, suitable for cases where
+buoyancy is already volume-weighted or when using different volume conventions.
+"""
+function compute_rpe_density_two(case::Dict)
+
+    rpe = []
+    ape = []
+
+    for t in 1:length(case[:b])
+        @info "time $t of $(length(case[:b]))"
+        push!(rpe, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).εe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
+        push!(ape, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).αe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
     end
 
     return (; rpe, ape)
@@ -43,56 +88,56 @@ end
 
 compute_rpe_density(b::Oceananigans.AbstractOperations.AbstractOperation, vol) = compute_rpe_density(Field(b), vol)
 
+"""
+    compute_rpe_density(b::Field, vol)
+
+Compute RPE and APE density fields from buoyancy and volume fields.
+
+$(SIGNATURES)
+
+# Arguments
+- `b`: Buoyancy field
+- `vol`: Volume field
+
+# Returns
+- Named tuple with `ze` (re-sorted height), `εe` (RPE density), and `αe` (APE density) fields
+
+This function computes the re-sorted height `z★` by sorting buoyancy and computing the cumulative
+volume distribution. RPE density is `ρ * z★` and APE density is `ρ * (z - z★)`, where `ρ` is
+computed from buoyancy using the linear equation of state.
+"""
 function compute_rpe_density(b::Field, vol)
-    ze = calculate_z★_diagnostics(b, vol)
-    εe = CenterField(b.grid) 
-    αe = CenterField(b.grid) 
+    bcpu = on_architecture(CPU(), b)
+    volcpu = on_architecture(CPU(), vol)
+    ze = calculate_z★_diagnostics(bcpu, volcpu)
+    εe = CenterField(bcpu.grid) 
+    αe = CenterField(bcpu.grid) 
     zh = HeightField(ze.grid)
 
-    ρ = DensityOperation(b)
+    ρ = DensityOperation(bcpu)
     set!(εe, ze * ρ)
     set!(αe, (zh - ze) * ρ)
 
     return (; ze, εe, αe)
 end
 
-function HeightField(grid, loc=(Center(), Center(), Center()))  
+"""
+    calculate_z★_diagnostics(b::Field, vol)
 
-    zf = Field(loc, grid)
-    Lz = grid.Lz
+Calculate the re-sorted height field `z★` from buoyancy and volume fields.
 
-    for k in 1:size(zf, 3)
-        interior(zf, :, :, k) .= Lz + znode(k, grid, loc[3])
-    end
+$(SIGNATURES)
 
-    return zf
-end
+# Arguments
+- `b`: Buoyancy field
+- `vol`: Volume field
 
-function calculate_z★_diagnostics(b::FieldTimeSeries; path = nothing)
+# Returns
+- `z★` field representing the height each fluid parcel would occupy after adiabatic re-sorting
 
-    times = b.times
-
-    if path isa Nothing
-        path = b.path
-    end
-
-    vol = VolumeField(b.grid)
-    z★  = FieldTimeSeries{Center, Center, Center}(b.grid, b.times; backend = OnDisk(), path, name = "z★")
-
-    total_area = sum(AreaField(b.grid))
-    
-    z★t = CenterField(b.grid)
-
-    for iter in 1:length(times)
-        @info "time $iter of $(length(times))"
-
-        calculate_z★!(z★t, b[iter], vol, total_area)
-        set!(z★, z★t, iter)
-    end
-        
-    return z★
-end
-
+The re-sorted height is computed by sorting the buoyancy field and computing cumulative volume
+distribution, providing a reference state for potential energy calculations.
+"""
 function calculate_z★_diagnostics(b::Field, vol)
 
     total_area = sum(AreaField(b.grid))
@@ -124,13 +169,14 @@ function calculate_z★!(z★::Field, b::Field, vol, total_area)
     b_arr = Array(interior(b))[:]
     v_arr = Array(interior(vol))[:]
 
+    valid_indices = (b_arr .!= 0) .& (!).(isnan.(b_arr))
+    b_arr = b_arr[valid_indices]
+    v_arr = v_arr[valid_indices]
+
     perm           = sortperm(b_arr)
     sorted_b_field = b_arr[perm]
     sorted_v_field = v_arr[perm]
     integrated_v   = cumsum(sorted_v_field)    
-
-    sorted_b_field = on_architecture(arch, sorted_b_field)
-    integrated_v   = on_architecture(arch, integrated_v)
 
     launch!(arch, grid, :xyz, _calculate_z★, z★, b, sorted_b_field, integrated_v)
     
@@ -142,7 +188,7 @@ end
 @kernel function _calculate_z★(z★, b, b_sorted, integrated_v)
     i, j, k = @index(Global, NTuple)
     bl  = b[i, j, k]
-    i₁  = searchsortedfirst(b_sorted, bl)
+    i₁  = searchsortedlast(b_sorted, bl)
     z★[i, j, k] = integrated_v[i₁] 
 end
 
