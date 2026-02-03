@@ -1,5 +1,6 @@
 using Oceananigans.Models.VarianceDissipationComputations: assemble_advective_dissipation!
 using Oceananigans.BuoyancyFormulations
+using Oceananigans.Models
 
 """
     compute_dissipation!(dissipation, model)
@@ -36,7 +37,7 @@ function compute_dissipation!(dissipation, model)
     Uⁿ   = dissipation.previous_state.Uⁿ
     Uⁿ⁻¹ = dissipation.previous_state.Uⁿ⁻¹
 
-    cⁿ⁺¹ = BuoyancyFormulations.buoyancy(model.buoyancy, model.grid, model.tracers)
+    cⁿ⁺¹ = Models.buoyancy_operation(model)
     cⁿ   = dissipation.previous_state.cⁿ⁻¹
 
     substep = model.clock.stage
