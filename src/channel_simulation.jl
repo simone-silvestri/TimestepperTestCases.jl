@@ -341,17 +341,17 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
        closure = (closure, VerticalScalarDiffusivity(κ=1e-5,ν=1e-4))
     end
 
-    model = HydrostaticFreeSurfaceModel(; grid,
-                                          free_surface,
-                                          momentum_advection,
-                                          tracer_advection,
-                                          buoyancy = BuoyancyTracer(),
-                                          coriolis,
-                                          closure,
-                                          tracers,
-                                          timestepper,
-                                          forcing = (; b = buoyancy_restoring), 
-                                          boundary_conditions = (; b = b_bcs, u = u_bcs, v = v_bcs))
+    model = HydrostaticFreeSurfaceModel(grid;
+                                        free_surface,
+                                        momentum_advection,
+                                        tracer_advection,
+                                        buoyancy = BuoyancyTracer(),
+                                        coriolis,
+                                        closure,
+                                        tracers,
+                                        timestepper,
+                                        forcing = (; b = buoyancy_restoring), 
+                                        boundary_conditions = (; b = b_bcs, u = u_bcs, v = v_bcs))
 
     @info "Built $model."
 

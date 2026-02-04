@@ -3,6 +3,7 @@ using Oceananigans.Grids: topology, Flat
 using Oceananigans.Utils
 using Oceananigans.BoundaryConditions
 using Oceananigans.BuoyancyFormulations
+using Oceananigans.Models
 
 """
     cache_fluxes!(dissipation, model)
@@ -108,7 +109,7 @@ function finally_cache_fluxes!(dissipation, model)
     cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, timestepper, stage, advection, U, model.buoyancy, C)
 
 
-    cⁿ⁺¹ = BuoyancyFormulations.buoyancy(model.buoyancy, model.grid, model.tracers)
+    cⁿ⁺¹ = Models.buoyancy_operation(model.buoyancy, model.grid, model.tracers)
 
     if timestepper isa QuasiAdamsBashforth2TimeStepper
         set!(cⁿ⁻¹, cⁿ⁺¹)
