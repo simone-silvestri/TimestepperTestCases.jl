@@ -2,8 +2,6 @@ using TimestepperTestCases
 using Oceananigans
 using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
 
-SplitExplicitFreeSurfaces.variable_density_barotropic_mode[] = true
-
 # barotropic sub-step schemes
 fb  = SplitExplicitFreeSurfaces.ForwardBackwardScheme()
 rk3 = SplitExplicitFreeSurfaces.RungeKutta3Scheme()

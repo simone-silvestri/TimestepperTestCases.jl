@@ -19,3 +19,4 @@ sim = TimestepperTestCases.internal_tide(:SplitRungeKutta3, free_surface = fsI, 
 sim = TimestepperTestCases.internal_tide(:SplitRungeKutta3, free_surface = fs1, free_surface_name = "split_explicit_fs1")
 sim = TimestepperTestCases.internal_tide(:SplitRungeKutta3, free_surface = fs2, free_surface_name = "split_explicit_fs2")
 sim = TimestepperTestCases.internal_tide(:SplitRungeKutta3, free_surface = fs3, free_surface_name = "split_explicit_fs3")
+sim = TimestepperTestCases.internal_tide(:SplitRungeKutta3, free_surface = fs4, free_surface_name = "split_explicit_fs4")
