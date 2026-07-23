@@ -231,19 +231,19 @@ function idealized_coast(timestepper::Symbol;
 
     T, S = model.tracers
 
-    GTx = ∂x(T)^2 * VFCC
-    GTy = ∂y(T)^2 * VCFC
-    GTz = ∂z(T)^2 * VCCF
-    GSx = ∂x(S)^2 * VFCC
-    GSy = ∂y(S)^2 * VCFC
-    GSz = ∂z(S)^2 * VCCF
+    # GTx = ∂x(T)^2 * VFCC
+    # GTy = ∂y(T)^2 * VCFC
+    # GTz = ∂z(T)^2 * VCCF
+    # GSx = ∂x(S)^2 * VFCC
+    # GSy = ∂y(S)^2 * VCFC
+    # GSz = ∂z(S)^2 * VCCF
 
     b   = Oceananigans.Models.buoyancy_operation(model)
     Gbx = ∂x(b)^2 * VFCC
     Gby = ∂y(b)^2 * VCFC
     Gbz = ∂z(b)^2 * VCCF
 
-    G = (; GTx, GTy, GTz, GSx, GSy, GSz, Gbx, Gby, Gbz)
+    G = (; Gbx, Gby, Gbz) # GTx, GTy, GTz, GSx, GSy, GSz)
     u, v, w = model.velocities
     η = model.free_surface.displacement
     T, S = model.tracers
@@ -253,7 +253,7 @@ function idealized_coast(timestepper::Symbol;
                        w = w * VCCF,
                        T = T * VCCC,
                        S = S * VCCC,
-                       b = b * VCCC), fT, fS, fb, G)
+                       b = b * VCCC), fb, G) # , fT, fS
 
     if !isnothing(cl1)
         κu = model.closure_fields.κu
