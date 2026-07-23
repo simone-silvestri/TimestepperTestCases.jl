@@ -50,7 +50,7 @@ $(SIGNATURES)
 Time steps are chosen to match computational cost between AB2 and RK schemes.
 """
 idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 5minutes
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 10minutes
+idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 15minutes
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
