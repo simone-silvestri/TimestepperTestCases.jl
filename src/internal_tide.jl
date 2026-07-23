@@ -85,11 +85,12 @@ maintaining stability, as described in the paper.
 internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =  5minutes
 internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
 
-@kernel function _compute_dissipation!(Δtc², c⁻, c, Δt)
+@kernel function _compute_dissipation!(Δtσc², σc²⁻, c, grid, Δt)
     i, j, k = @index(Global, NTuple)
     @inbounds begin
-        Δtc²[i, j, k] = (c[i, j, k]^2 - c⁻[i, j, k]^2) / Δt
-        c⁻[i, j, k]   = c[i, j, k]
+        σc² = volume(i, j, k, grid, Center(), Center(), Center()) * c[i, j, k]^2
+        Δtσc²[i, j, k] = (σc² - σc²⁻[i, j, k]) / Δt
+        σc²⁻[i, j, k]  = σc²
     end
 end
 
@@ -114,19 +115,21 @@ This diagnostic is used to quantify numerical mixing introduced by the time disc
 as described in the paper's appendix.
 """
 function compute_tracer_dissipation!(sim)
+    grid = sim.model.grid
+
     c    = sim.model.tracers.c
-    c⁻   = sim.model.auxiliary_fields.c⁻
+    c⁻   = sim.model.auxiliary_fields.c⁻      # holds the previous thickness-weighted variance σc²⁻
     Δtc² = sim.model.auxiliary_fields.Δtc²
-    Oceananigans.Utils.launch!(CPU(), sim.model.grid, :xyz,
+    Oceananigans.Utils.launch!(CPU(), grid, :xyz,
                                _compute_dissipation!,
-                               Δtc², c⁻, c, sim.Δt)
+                               Δtc², c⁻, c, grid, sim.Δt)
 
     b    = sim.model.tracers.b
-    b⁻   = sim.model.auxiliary_fields.b⁻
+    b⁻   = sim.model.auxiliary_fields.b⁻      # holds the previous thickness-weighted variance σb²⁻
     Δtb² = sim.model.auxiliary_fields.Δtb²
-    Oceananigans.Utils.launch!(CPU(), sim.model.grid, :xyz,
+    Oceananigans.Utils.launch!(CPU(), grid, :xyz,
                                _compute_dissipation!,
-                               Δtb², b⁻, b, sim.Δt)
+                               Δtb², b⁻, b, grid, sim.Δt)
 
     return nothing
 end
@@ -277,8 +280,8 @@ function internal_tide(timestepper::Symbol;
                 b = b * VCC,
                 c = c * VCC,
                 η = η,
-                Δtc² = Δ².Δtc² * VCC,
-                Δtb² = Δ².Δtb² * VCC,
+                Δtc² = Δ².Δtc²,
+                Δtb² = Δ².Δtb²,
                 Gbx = Gbx * VFC,
                 Gbz = Gbz * VCF,
                 Gcx = Gcx * VFC,
