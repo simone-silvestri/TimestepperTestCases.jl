@@ -1,6 +1,7 @@
 using Oceananigans.Models.VarianceDissipationComputations: VarianceDissipation
 using Oceananigans.Operators
 using Oceananigans.TimeSteppers: SplitRungeKuttaTimeStepper
+using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEMixingLength, CATKEEquation
 
 const Lx = 1000kilometers # zonal domain length [m]
 const Ly = 2000kilometers # meridional domain length [m]
@@ -216,8 +217,8 @@ $(SIGNATURES)
 Time steps are chosen to match computational cost between different timesteppers.
 """
 simulation_Δt(::Val{:QuasiAdamsBashforth2}) = 5minutes
-simulation_Δt(::Val{:SplitRungeKutta3}) = 10minutes
-simulation_Δt(::Val{:SplitRungeKutta6}) = 20minutes
+simulation_Δt(::Val{:SplitRungeKutta3})     = 10minutes
+simulation_Δt(::Val{:SplitRungeKutta6})     = 20minutes
 
 """
     default_closure()
@@ -275,6 +276,7 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
                                          closure = default_closure(),
                                            zstar = true,
                                     restart_file = nothing,
+                                    free_surface = nothing,
                                             arch = CPU(),
                                    bottom_height = nothing,
                                      timestepper = :SplitRungeKutta3,
@@ -315,30 +317,40 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
     buoyancy_flux_bc = FluxBoundaryCondition(buoyancy_flux, discrete_form = true, parameters = parameters)
 
     # Drag is added as a forcing to allow both bottom drag _and_ a no-slip BC
-    u_bottom_bc = FluxBoundaryCondition(u_quadratic_bottom_drag; discrete_form = true, parameters)
-    v_bottom_bc = FluxBoundaryCondition(u_quadratic_bottom_drag; discrete_form = true, parameters)
+    u_bottom_bc = FluxBoundaryCondition(u_quadratic_bottom_drag; discrete_form = true, parameters = parameters.μ)
+    v_bottom_bc = FluxBoundaryCondition(u_quadratic_bottom_drag; discrete_form = true, parameters = parameters.μ)
 
-    u_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(u_immersed_bottom_drag; discrete_form = true, parameters))
-    v_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(v_immersed_bottom_drag; discrete_form = true, parameters))
-    
+    if grid isa ImmersedBoundaryGrid
+        u_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(u_immersed_bottom_drag; discrete_form = true, parameters))
+        v_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(v_immersed_bottom_drag; discrete_form = true, parameters))
+        
+        u_bcs = FieldBoundaryConditions(bottom = u_bottom_bc, immersed = u_ibcs, top = u_stress_bc)
+        v_bcs = FieldBoundaryConditions(bottom = v_bottom_bc, immersed = v_ibcs)
+    else
+        u_bcs = FieldBoundaryConditions(bottom = u_bottom_bc, top = u_stress_bc)
+        v_bcs = FieldBoundaryConditions(bottom = v_bottom_bc)
+    end
+        
     b_bcs = FieldBoundaryConditions(top = buoyancy_flux_bc)
-    u_bcs = FieldBoundaryConditions(bottom = u_bottom_bc, immersed = u_ibcs, top = u_stress_bc)
-    v_bcs = FieldBoundaryConditions(bottom = v_bottom_bc, immersed = v_ibcs)
 
     #####
     ##### Coriolis
     #####
     
     actual_Δt = simulation_Δt(Val(timestepper))
+    @info actual_Δt
+    @show actual_Δt
 
     coriolis = BetaPlane(f₀ = -1e-4, β = 1e-11)
-    free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=actual_Δt)
-    tracers = hasclosure(closure, CATKEVerticalDiffusivity) ? (:b, :e) : (:b, )
+
+    if isnothing(free_surface)
+        free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=actual_Δt + 5minutes)
+    end
     
     if closure isa Tuple
-       closure = (closure..., VerticalScalarDiffusivity(κ=1e-5, ν=1e-4))
+        closure = (closure..., VerticalScalarDiffusivity(ν=1e-4))
     else
-       closure = (closure, VerticalScalarDiffusivity(κ=1e-5,ν=1e-4))
+        closure = (closure, VerticalScalarDiffusivity(ν=1e-4))
     end
 
     model = HydrostaticFreeSurfaceModel(grid;
@@ -348,7 +360,7 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
                                         buoyancy = BuoyancyTracer(),
                                         coriolis,
                                         closure,
-                                        tracers,
+                                        tracers = :b,
                                         timestepper,
                                         forcing = (; b = buoyancy_restoring), 
                                         boundary_conditions = (; b = b_bcs, u = u_bcs, v = v_bcs))
@@ -362,8 +374,7 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
     Nx, Ny, Nz = size(grid)
 
     if  restart_file isa String # Initialize from spinned up solution
-        set!(model, restart_file)
-
+      nothing
     else # resting initial condition
       
       binit = if initial_file isa String
@@ -391,7 +402,7 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
     Δt₀ = 1minutes
 
     # 50 years of simulation
-    simulation = Simulation(model; Δt = Δt₀, stop_time = 100days)
+    simulation = Simulation(model; Δt = actual_Δt, stop_time = 100days)
 
     # add progress callback
     wall_clock = [time_ns()]
@@ -415,6 +426,8 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
 
     # Fuck the spin up!
     if !(restart_file isa String) # Spin up!    
+
+        simulation.Δt = Δt₀
         simulation.output_writers[:first_checkpointer] = Checkpointer(model,
                                                                       schedule = TimeInterval(100days),
                                                                       prefix = "restart" * string(testcase),
@@ -461,7 +474,7 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
 
     g = (; Gbx, Gby, Gbz)
 
-    snapshot_outputs = merge(model.velocities, model.tracers, f, g, (; η = model.free_surface.η), vol)
+    snapshot_outputs = merge(model.velocities, model.tracers, f, g, (; η = model.free_surface.displacement), vol)
     average_outputs  = merge(snapshot_outputs, f, g)
 
     #####
@@ -479,6 +492,17 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
                                                       schedule = AveragedTimeInterval(5 * 360days),
                                                       filename = "averages_" * string(testcase),
                                                       overwrite_existing)
+
+    if restart_file isa String
+        set!(simulation; checkpoint=restart_file)
+        
+        simulation.Δt = actual_Δt
+        simulation.stop_time = 14400days
+
+        # Reset time step and simulation time
+        model.clock.time = 0
+        model.clock.iteration = 0
+    end
 
     @info "Running the simulation..."
 
