@@ -19,3 +19,6 @@ sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper
 sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = fb,  averaging_kernel = trig74, testcase = "split_explicit_fs2")
 sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = mu2,    testcase = "split_explicit_fs3")
 sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = trig74, testcase = "split_explicit_fs4")
+
+# RK3-UP: featured RK3-SE config (rk3, trig74) but with 3rd-order upwind tracer advection (diffusive-spatial reference)
+sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = trig74, tracer_advection = UpwindBiased(order = 3), testcase = "up3")

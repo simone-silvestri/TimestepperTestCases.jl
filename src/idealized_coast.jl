@@ -96,7 +96,8 @@ function idealized_coast(timestepper::Symbol;
                          free_surface = nothing,
                          averaging_kernel = WideTrig74AveragingKernel(),
                          barotropic_timestepper = ForwardBackwardScheme(),
-                         free_surface_name = nothing)
+                         free_surface_name = nothing,
+                         tracer_advection = TimestepperTestCases.tracer_advection)
 
     Lx = 192kilometers
     Ly = 192kilometers
@@ -280,6 +281,8 @@ function idealized_coast(timestepper::Symbol;
                                                       overwrite_existing = true)
 
     @info "Running the simulation..."
+
+    run!(simulation)
 
     return simulation
 end

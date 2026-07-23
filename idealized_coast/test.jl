@@ -17,3 +17,6 @@ sim = idealized_coast(:SplitRungeKutta3, barotropic_timestepper = fb,  averaging
 sim = idealized_coast(:SplitRungeKutta3, barotropic_timestepper = fb,  averaging_kernel = trig74, free_surface_name = "split_explicit_fs2")
 sim = idealized_coast(:SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = mu2,    free_surface_name = "split_explicit_fs3")
 sim = idealized_coast(:SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = trig74, free_surface_name = "split_explicit_fs4")
+
+# RK3-UP: featured RK3-SE config (rk3, trig74) but with 3rd-order upwind tracer advection (diffusive-spatial reference)
+sim = idealized_coast(:SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = trig74, tracer_advection = UpwindBiased(order = 3), free_surface_name = "up3")
