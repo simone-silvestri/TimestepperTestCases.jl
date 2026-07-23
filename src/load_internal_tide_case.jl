@@ -67,6 +67,10 @@ function load_internal_tide(folder, timestepper, free_surface)
     case[:abz] = [sum(case[:Abz][i]) for i in 1:Nt] ./ [sum(case[:VCCF][i]) for i in 1:Nt]
     case[:abt] = case[:abx] .+ case[:abz]
 
+    case[:Δtb²] = FieldTimeSeries(path, "Δtb²")
+    case[:∫Pb]  = [sum(case[:Abx][i]) + sum(case[:Abz][i]) for i in 1:Nt]
+    case[:∫Δb²] = [sum(case[:Δtb²][i]) for i in 1:Nt]
+
     case[:Gbx] = FieldTimeSeries(path, "Gbx")
     case[:Gbz] = FieldTimeSeries(path, "Gbz")
     GC.gc()
