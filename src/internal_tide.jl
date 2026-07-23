@@ -148,15 +148,17 @@ The grid spans from `-L` to `L` horizontally (periodic) and from `-H` to `0` ver
 A Gaussian seamount of height `h₀` and width `width` is imposed using an immersed boundary method.
 The grid parameters are taken from `internal_tide_parameters()`.
 """
-function internal_tide_grid()
+function internal_tide_grid(; mutable=true)
     param = internal_tide_parameters()
 
     Nx, Nz    = param.Nx, param.Nz
     h₀, width = param.h₀, param.width
     H, L      = param.H, param.L
 
+    z = mutable ? MutableVerticalDiscretization((-H, 0)) : (-H, 0)
+
     underlying_grid = RectilinearGrid(size = (Nx, Nz), halo = (6, 6),
-                                    x = (-L, L), z = MutableVerticalDiscretization((-H, 0)),
+                                    x = (-L, L), z = z,
                                     topology = (Periodic, Flat, Bounded))
 
     hill(x)   =   h₀ * exp(-x^2 / 2width^2)
@@ -195,12 +197,12 @@ tracer fields, and dissipation diagnostics.
 The test case isolates the role of time discretization in numerical mixing, as spatial
 advection plays a secondary role in this mostly linear configuration.
 """
-function internal_tide(timestepper::Symbol; 
-                       free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60, averaging_kernel=WideTrig74AveragingKernel()),
+function internal_tide(timestepper::Symbol;
+                       grid = internal_tide_grid(),
+                       free_surface=SplitExplicitFreeSurface(grid; substeps=60, averaging_kernel=WideTrig74AveragingKernel()),
                        free_surface_name=default_free_surface_name(free_surface),
                        tracer_advection=TimestepperTestCases.tracer_advection)
-    
-    grid  = internal_tide_grid()
+
     param = internal_tide_parameters()
 
     coriolis  = FPlane(f = param.f)

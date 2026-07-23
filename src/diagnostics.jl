@@ -173,6 +173,12 @@ function calculate_z★!(z★::Field, b::Field, vol, total_area)
     b_arr = b_arr[valid_indices]
     v_arr = v_arr[valid_indices]
 
+    if isempty(b_arr)
+        @warn "calculate_z★!: no valid (nonzero, non-NaN) buoyancy cells — returning NaN z★ (the run for this case is likely degenerate/blown up)."
+        fill!(z★, convert(eltype(z★), NaN))
+        return nothing
+    end
+
     perm           = sortperm(b_arr)
     sorted_b_field = b_arr[perm]
     sorted_v_field = v_arr[perm]
@@ -188,8 +194,8 @@ end
 @kernel function _calculate_z★(z★, b, b_sorted, integrated_v)
     i, j, k = @index(Global, NTuple)
     bl  = b[i, j, k]
-    i₁  = searchsortedlast(b_sorted, bl)
-    z★[i, j, k] = integrated_v[i₁] 
+    i₁  = clamp(searchsortedlast(b_sorted, bl), 1, length(integrated_v))
+    z★[i, j, k] = integrated_v[i₁]
 end
 
 function calculate_Γ²_diagnostics(z★::FieldTimeSeries, b::FieldTimeSeries; ρ₀ = 1000.0, g = 9.80655)

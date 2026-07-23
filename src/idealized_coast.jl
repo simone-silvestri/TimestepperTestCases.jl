@@ -217,7 +217,7 @@ function idealized_coast(timestepper::Symbol;
     end
 
     filename = "idealized_coast_$(fsname)_$(lowres ? "lowres" : "")"
-    save_fields_interval = 2hours
+    save_fields_interval = 12hours
 
     closure = cl1 isa CATKEVerticalDiffusivity ? "CATKE" : cl1 isa Nothing ? "unforced" : "RiBased"
    
