@@ -89,11 +89,14 @@ how numerical mixing can suppress submesoscale variability, as shown in the pape
 The simulation runs for 40 days and outputs velocity, temperature, salinity, buoyancy,
 and variance dissipation diagnostics.
 """
-function idealized_coast(timestepper::Symbol; 
-                         arch = CPU(), 
+function idealized_coast(timestepper::Symbol;
+                         arch = CPU(),
                          forced = true,
                          lowres = false,
-                         free_surface = nothing)
+                         free_surface = nothing,
+                         averaging_kernel = WideTrig74AveragingKernel(),
+                         barotropic_timestepper = ForwardBackwardScheme(),
+                         free_surface_name = nothing)
 
     Lx = 192kilometers
     Ly = 192kilometers
@@ -131,7 +134,7 @@ function idealized_coast(timestepper::Symbol;
     Δt = idealized_coast_timestep(Val(timestepper))
 
     if isnothing(free_surface)
-        free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=Δt+2minutes)
+        free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=Δt+2minutes, averaging_kernel, timestepper=barotropic_timestepper)
     end
 
     τ₀ = 0.1 / 1027
@@ -208,7 +211,9 @@ function idealized_coast(timestepper::Symbol;
     fb = TimestepperTestCases.BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb)
     add_callback!(simulation, ϵb, IterationInterval(1))
 
-    if free_surface isa SplitExplicitFreeSurface
+    if free_surface_name !== nothing
+        fsname = free_surface_name
+    elseif free_surface isa SplitExplicitFreeSurface
         fsname = "split_free_surface"
     else
         fsname = "implicit_free_surface"
