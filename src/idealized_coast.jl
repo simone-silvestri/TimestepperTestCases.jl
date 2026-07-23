@@ -91,7 +91,7 @@ and variance dissipation diagnostics.
 """
 function idealized_coast(timestepper::Symbol;
                          arch = CPU(),
-                         forced = true,
+                         forced = false,
                          lowres = false,
                          free_surface = nothing,
                          averaging_kernel = WideTrig74AveragingKernel(),
@@ -162,11 +162,7 @@ function idealized_coast(timestepper::Symbol;
                                                            background_νz=1e-5, 
                                                            convective_νz=0.1) : nothing
 
-    if forced
-        tracers = (:T, :S) 
-    else
-        tracers = (:T, :S)
-    end
+    tracers = (:T, :S) 
 
     model = HydrostaticFreeSurfaceModel(grid;
                                         coriolis,
