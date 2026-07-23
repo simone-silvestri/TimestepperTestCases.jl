@@ -83,8 +83,7 @@ The time steps are chosen to match computational cost between AB2 and RK schemes
 maintaining stability, as described in the paper.
 """
 internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =  5minutes
-internal_tide_timestep(::Val{:SplitRungeKutta3})     = 10minutes
-internal_tide_timestep(::Val{:SplitRungeKutta4})     = 10minutes
+internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
 
 @kernel function _compute_dissipation!(Δtc², c⁻, c, Δt)
     i, j, k = @index(Global, NTuple)
@@ -165,6 +164,9 @@ function internal_tide_grid()
     return grid
 end
 
+default_free_surface_name(::SplitExplicitFreeSurface) = "split_free_surface"
+default_free_surface_name(::ImplicitFreeSurface) = "implicit_free_surface"
+
 """
     internal_tide(timestepper::Symbol; free_surface, tracer_advection)
 
@@ -191,7 +193,8 @@ The test case isolates the role of time discretization in numerical mixing, as s
 advection plays a secondary role in this mostly linear configuration.
 """
 function internal_tide(timestepper::Symbol; 
-                       free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60),
+                       free_surface=SplitExplicitFreeSurface(internal_tide_grid(); substeps=60, averaging_kernel=WideTrig74AveragingKernel()),
+                       free_surface_name=default_free_surface_name(free_surface),
                        tracer_advection=TimestepperTestCases.tracer_advection)
     
     grid  = internal_tide_grid()
@@ -251,12 +254,7 @@ function internal_tide(timestepper::Symbol;
 
     g = (; Gbx, Gbz, Gcx, Gcz)
 
-    if free_surface isa SplitExplicitFreeSurface
-        fsname = "split_free_surface"
-    else
-        fsname = "implicit_free_surface"
-    end
-
+    fsname = free_surface_name
     if tracer_advection != TimestepperTestCases.tracer_advection
         fsname *= "_$(typeof(tracer_advection).name.name)"
     end
