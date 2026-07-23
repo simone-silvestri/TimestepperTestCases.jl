@@ -1,12 +1,16 @@
 module TimestepperTestCases
 
 export internal_tide, idealized_coast, channel_simulation
+export near_global, near_global_grid, near_global_variants, run_near_global_cost
 
 using DocStringExtensions
 using Oceananigans
 using Oceananigans.Grids
 using Oceananigans.Units
 using Oceananigans.Models
+using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces:
+    WideTrig74AveragingKernel, WideTrig2AveragingKernel,
+    ForwardBackwardScheme, RungeKutta3Scheme
 using KernelAbstractions: @kernel, @index
 using Printf
 
@@ -55,6 +59,9 @@ using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation
 include("internal_tide.jl")
 include("idealized_coast.jl")
 include("channel_simulation.jl")
+
+# Realistic near-global quarter-degree cost + buoyancy-dissipation case (needs NumericalEarth).
+include("near_global.jl")
 
 using Oceananigans
 using Oceananigans.AbstractOperations: grid_metric_operation

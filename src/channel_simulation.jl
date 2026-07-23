@@ -280,7 +280,10 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
                                      timestepper = :SplitRungeKutta3,
                                             grid = default_grid(arch, zstar, bottom_height),
                                     initial_file = "tIni_80y_90L.bin",
-                                        testcase = "0")
+                                        testcase = "0",
+                                    free_surface = nothing,
+                                averaging_kernel = WideTrig74AveragingKernel(),
+                          barotropic_timestepper = ForwardBackwardScheme())
 
     #####
     ##### Boundary conditions
@@ -332,7 +335,9 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
     actual_Δt = simulation_Δt(Val(timestepper))
 
     coriolis = BetaPlane(f₀ = -1e-4, β = 1e-11)
-    free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=actual_Δt)
+    if isnothing(free_surface)
+        free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=actual_Δt, averaging_kernel, timestepper=barotropic_timestepper)
+    end
     tracers = hasclosure(closure, CATKEVerticalDiffusivity) ? (:b, :e) : (:b, )
     
     if closure isa Tuple
@@ -461,7 +466,7 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
 
     g = (; Gbx, Gby, Gbz)
 
-    snapshot_outputs = merge(model.velocities, model.tracers, f, g, (; η = model.free_surface.η), vol)
+    snapshot_outputs = merge(model.velocities, model.tracers, f, g, (; η = model.free_surface.displacement), vol)
     average_outputs  = merge(snapshot_outputs, f, g)
 
     #####
