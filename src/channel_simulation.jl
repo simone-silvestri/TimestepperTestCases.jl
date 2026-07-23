@@ -283,7 +283,6 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
                                             grid = default_grid(arch, zstar, bottom_height),
                                     initial_file = "tIni_80y_90L.bin",
                                         testcase = "0",
-                                    free_surface = nothing,
                                 averaging_kernel = WideTrig74AveragingKernel(),
                           barotropic_timestepper = ForwardBackwardScheme())
 
