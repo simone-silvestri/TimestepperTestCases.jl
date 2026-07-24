@@ -114,10 +114,22 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     parent(ocean.model.tracers.T) .= max.(parent(ocean.model.tracers.T), -1.8)
 
     if dissipation
+        VFCC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
+        VCFC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Face,   Center), Oceananigans.Operators.volume, grid)
+        VCCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)
+        VCCC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Center), Oceananigans.Operators.volume, grid)
+
+        T, S = model.tracers
+
+        b   = Oceananigans.Models.buoyancy_operation(model)
+        Gbx = ∂x(b)^2 * VFCC
+        Gby = ∂y(b)^2 * VCFC
+        Gbz = ∂z(b)^2 * VCCF
+
         ϵb = BuoyancyVarianceDissipation(grid)
         add_callback!(ocean, ϵb, IterationInterval(1))
 
-        diss = BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb)
+        diss = merge(BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb), (; Gbx, Gby, Gbz))
         ocean.output_writers[:dissipation] = JLD2Writer(ocean.model, diss;
                                                         schedule = dissipation_output_interval,
                                                         filename = near_global_filename(label, timestepper, filter, free_surface) * "_dissipation",
@@ -136,7 +148,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     ocean.output_writers[:average] = JLD2Writer(ocean.model, surface;
                                                 schedule = dissipation_output_interval,
                                                 indices = (:, :, grid.Nz),
-                                                filename = near_global_filename(label, timestepper, filter, free_surface) * "_surface",
+                                                filename = near_global_filename(label, timestepper, filter, free_surface) * "_average",
                                                 with_halos = true,
                                                 overwrite_existing = true,
                                                 array_type = Array{Float32})
