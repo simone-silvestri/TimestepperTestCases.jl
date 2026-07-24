@@ -65,7 +65,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      init_date = DateTime(1992, 1, 1),
                      progress_interval = TimeInterval(5days),
                      surface_output_interval = TimeInterval(1days),
-                     dissipation_output_interval = TimeInterval(30days))
+                     dissipation_output_interval = AveragedTimeInterval(30days))
 
     if free_surface === nothing
         free_surface = SplitExplicitFreeSurface(grid; cfl,
@@ -76,7 +76,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     
     time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = 0.5)
     momentum_advection = WENOVectorInvariant(; time_discretization)
-    tracer_advection = WENO(order=7; minimum_buffer_upwind_order=3, time_discretization),
+    tracer_advection = WENO(order=7; minimum_buffer_upwind_order=3, time_discretization)
 
     ocean = ocean_simulation(grid; free_surface, timestepper, Δt, equation_of_state, momentum_advection, tracer_advection)
 
