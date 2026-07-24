@@ -20,46 +20,18 @@ using NumericalEarth.DataWrangling: metadata_path
 
 const ARTIFACTS_BASE_URL = "https://github.com/NumericalEarth/NumericalEarthArtifacts/releases/download/data-v1/"
 
-function emit_ci_warning(title, message)
-    if haskey(ENV, "GITHUB_ACTIONS")
-        println(stderr, "::warning title=$(title)::$(message)")
+function download_from_artifacts(filepath)
+    if ifile(filepath)
+        return
     end
-end
 
-function download_from_artifacts(filepath::AbstractString; max_retries=3)
     filename = basename(filepath)
     fallback_url = ARTIFACTS_BASE_URL * filename
     @info "Downloading $filename from NumericalEarthArtifacts fallback..."
-    for attempt in 1:max_retries
-        try
-            mktemp(dirname(filepath)) do tmppath, tmpio
-                close(tmpio)
-                Downloads.download(fallback_url, tmppath)
-                mv(tmppath, filepath; force=true)
-            end
-            return
-        catch e
-            attempt < max_retries || rethrow(e)
-            @warn "Artifact download attempt $attempt/$max_retries failed for $filename; retrying..." exception=(e, catch_backtrace())
-            sleep(2.0 * attempt)  # linear backoff: 2s, 4s, ...
-        end
-    end
-end
-
-function download_from_artifacts(filepaths::AbstractVector)
-    for filepath in unique(filepaths)
-        download_from_artifacts(filepath)
-    end
-end
-
-function download_dataset_with_fallback(download_fn, filepaths; dataset_name="dataset")
-    try
-        return download_fn()
-    catch e
-        @warn "Original download failed for $dataset_name, trying NumericalEarthArtifacts fallback..." exception=(e, catch_backtrace())
-        emit_ci_warning("Broken $dataset_name download", "Original source failed: $(sprint(showerror, e))")
-        download_from_artifacts(filepaths)
-        return download_fn()
+    mktemp(dirname(filepath)) do tmppath, tmpio
+        close(tmpio)
+        Downloads.download(fallback_url, tmppath)
+        mv(tmppath, filepath; force=true)
     end
 end
 
@@ -131,13 +103,8 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     Tmetadata = Metadatum(:temperature, dataset=ECCO2Daily(), date=init_date)
     Smetadata = Metadatum(:salinity,    dataset=ECCO2Daily(), date=init_date)
     
-    download_dataset_with_fallback(metadata_path(Tmetadata); dataset_name="ECCO2Daily") do
-        download(Tmetadata)
-    end
-
-    download_dataset_with_fallback(metadata_path(Smetadata); dataset_name="ECCO2Daily") do
-        download(Smetadata)
-    end
+    download_from_artifacts(metadata_path(Tmetadata))
+    download_from_artifacts(metadata_path(Smetadata))
 
     set!(ocean.model, T=Tmetadata, S=Smetadata)
 
