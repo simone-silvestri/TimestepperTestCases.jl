@@ -35,6 +35,9 @@ function download_from_artifacts(filepath)
     end
 end
 
+NumericalEarth.EarthSystemModels.reference_density(::LinearEquationOfState) = 1026
+NumericalEarth.EarthSystemModels.heat_capacity(::LinearEquationOfState) = 3992
+
 near_global_kernel(name::Symbol)   = near_global_kernel(Val(name))
 near_global_kernel(::Val{:SM05})   = averaging_shape_function
 near_global_kernel(::Val{:mu2})    = LowDissipationAveragingKernel()
@@ -98,7 +101,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     momentum_advection = WENOVectorInvariant(; time_discretization)
     tracer_advection = WENO(order=7; minimum_buffer_upwind_order=3, time_discretization)
 
-    ocean = ocean_simulation(grid; free_surface, timestepper, Δt, equation_of_state, momentum_advection, tracer_advection)
+    ocean = ocean_simulation(grid; free_surface, timestepper, Δt = cold_start_Δt, stop_time = cold_start_duration, equation_of_state, momentum_advection, tracer_advection)
 
     Tmetadata = Metadatum(:temperature, dataset=ECCO2Daily(), date=init_date)
     Smetadata = Metadatum(:salinity,    dataset=ECCO2Daily(), date=init_date)
@@ -136,31 +139,25 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                                                 overwrite_existing = true,
                                                 array_type = Array{Float32})
 
-    atmosphere = JRA55PrescribedAtmosphere(arch)
-    radiation  = JRA55PrescribedRadiation(arch)
-    land       = JRA55PrescribedLand(arch)
-    coupled_model = OceanOnlyModel(ocean; atmosphere, land, radiation)
+    add_callback!(ocean, near_global_progress, progress_interval)
 
-    simulation = Simulation(coupled_model; Δt = cold_start_Δt, stop_time = cold_start_duration)
-    add_callback!(simulation, near_global_progress, progress_interval)
+    cold_wall = @elapsed run!(ocean)
 
-    cold_wall = @elapsed run!(simulation)
-
-    simulation.Δt        = Δt
-    simulation.stop_time = stop_time
-    production_iter₀     = iteration(simulation)
-    production_wall      = @elapsed run!(simulation)
-    production_steps     = iteration(simulation) - production_iter₀
+    ocean.Δt        = Δt
+    ocean.stop_time = stop_time
+    production_iter₀     = iteration(ocean)
+    production_wall      = @elapsed run!(ocean)
+    production_steps     = iteration(ocean) - production_iter₀
 
     wall_time  = cold_wall + production_wall
-    iterations = iteration(simulation)
+    iterations = iteration(ocean)
     seconds_per_step = production_steps == 0 ? NaN : production_wall / production_steps
 
     label = something(label, near_global_label(timestepper, filter, free_surface))
     @info @sprintf("[near_global] %-14s wall: %s (%d steps, cold %s) -> %.4f s/step",
                    label, prettytime(wall_time), iterations, prettytime(cold_wall), seconds_per_step)
 
-    return (; simulation, ocean, label, wall_time, iterations, seconds_per_step)
+    return (; ocean, label, wall_time, iterations, seconds_per_step)
 end
 
 function near_global_progress(sim)
