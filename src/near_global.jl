@@ -161,7 +161,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
 end
 
 function near_global_progress(sim)
-    ocean = sim.model.ocean
+    ocean = sim
     u, v, w = ocean.model.velocities
     T = ocean.model.tracers.T
     step_time = 1e-9 * (time_ns() - TimestepperTestCases.wall_clock[])

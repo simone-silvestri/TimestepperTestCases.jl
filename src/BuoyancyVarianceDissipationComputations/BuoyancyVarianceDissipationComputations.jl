@@ -108,25 +108,8 @@ function BuoyancyVarianceDissipation(grid;
     return BuoyancyVarianceDissipation(P, advective_fluxes, previous_state)
 end
 
-"""
-    (ϵ::BuoyancyVarianceDissipation)(model)
-
-Compute buoyancy variance dissipation and update flux caches for the next time step.
-
-$(SIGNATURES)
-
-# Arguments
-- `model`: The `HydrostaticFreeSurfaceModel` containing temperature and salinity tracers
-
-# Returns
-- `nothing` (modifies `ϵ` in place)
-
-This function is called as a simulation callback to compute the advective dissipation
-of buoyancy variance at each time step. It first computes dissipation from previously
-cached fluxes, then updates the flux caches for the next time step.
-
-The model must have `:T` and `:S` tracers to compute buoyancy.
-"""
+# Callback: assemble the buoyancy-variance dissipation from the previously cached fluxes, then re-cache
+# the fluxes for the next step. Requires `:T` and `:S` tracers (buoyancy via the linear equation of state).
 function (ϵ::BuoyancyVarianceDissipation)(model)
 
     # Check if the model has a velocity field
