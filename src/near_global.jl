@@ -21,7 +21,7 @@ using NumericalEarth.DataWrangling: metadata_path
 const ARTIFACTS_BASE_URL = "https://github.com/NumericalEarth/NumericalEarthArtifacts/releases/download/data-v1/"
 
 function download_from_artifacts(filepath)
-    if ifile(filepath)
+    if isfile(filepath)
         return
     end
 
