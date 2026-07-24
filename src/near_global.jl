@@ -161,6 +161,14 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                                                 overwrite_existing = true,
                                                 array_type = Array{Float32})
 
+    ocean.output_writers[:average] = JLD2Writer(ocean.model, surface;
+                                                schedule = dissipation_output_interval,
+                                                indices = (:, :, grid.Nz),
+                                                filename = near_global_filename(label, timestepper, filter, free_surface) * "_surface",
+                                                with_halos = true,
+                                                overwrite_existing = true,
+                                                array_type = Array{Float32})
+
     atmosphere = JRA55PrescribedAtmosphere(arch)
     radiation  = JRA55PrescribedRadiation(arch)
     land       = JRA55PrescribedLand(arch)
