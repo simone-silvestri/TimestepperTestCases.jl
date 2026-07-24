@@ -15,17 +15,6 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
 
 using Oceananigans.BuoyancyFormulations: LinearEquationOfState
 
-"""
-    near_global_kernel(name::Symbol)
-
-Return the split-explicit averaging kernel corresponding to a filter `name`.
-
-Available kernels: `:SM05` (Shchepetkin--McWilliams shape function), `:mu2`
-(`LowDissipationAveragingKernel`, ``\\mu_2 = 0``), `:trig` (`SymmetricTrigAveragingKernel`,
-narrow window ``\\mu_2 = \\mu_3 = 0``), and the wide-window `:trig74` / `:trig2`
-(`WideTrig74AveragingKernel` / `WideTrig2AveragingKernel`), the paper's default and
-most stratification-robust filters.
-"""
 near_global_kernel(name::Symbol)   = near_global_kernel(Val(name))
 near_global_kernel(::Val{:SM05})   = averaging_shape_function
 near_global_kernel(::Val{:mu2})    = LowDissipationAveragingKernel()
@@ -33,28 +22,17 @@ near_global_kernel(::Val{:trig})   = SymmetricTrigAveragingKernel()
 near_global_kernel(::Val{:trig74}) = WideTrig74AveragingKernel()
 near_global_kernel(::Val{:trig2})  = WideTrig2AveragingKernel()
 
-"""
-    near_global_grid(arch; Nx, Ny, Nz, depth, latitude, longitude,
-                     minimum_depth, interpolation_passes, major_basins)
-
-Build the 1/4 degree near-global `ImmersedBoundaryGrid` with ETOPO bathymetry,
-following the NumericalEarth `near_global_ocean_simulation` example.
-
-$(SIGNATURES)
-"""
 function near_global_grid(arch = CPU();
                           Nx = 1440,
                           Ny = 600,
-                          Nz = 70,
-                          depth = 6000meters,
+                          Nz = 50,
+                          depth = 5000meters,
                           latitude  = (-75, 75),
                           longitude = (0, 360),
-                          minimum_depth = 10meters,
+                          minimum_depth = 15meters,
                           interpolation_passes = 5,
-                          major_basins = 3)
+                          major_basins = 1)
 
-    # `mutable=true` gives a z-star (moving, free-surface-following) vertical coordinate,
-    # consistent with the r/z-star formulation of the paper and the idealized cases.
     z = ExponentialDiscretization(Nz, -depth, 0, mutable=true)
 
     grid = LatitudeLongitudeGrid(arch;
@@ -67,42 +45,20 @@ function near_global_grid(arch = CPU();
     return ImmersedBoundaryGrid(grid, GridFittedBottom(bottom_height); active_cells_map=true)
 end
 
-"""
-    near_global(timestepper::Symbol = :SplitRungeKutta3; kwargs...)
+near_global_timestep(::Val{:QuasiAdamsBashforth2}) = 8.5minutes
+near_global_timestep(::Val{:SplitRungeKutta3}) = 25minutes
 
-Set up and run the near-global quarter-degree test case, measuring wall-clock cost and
-the numerical dissipation of the T and S variance.
-
-$(SIGNATURES)
-
-# Arguments
-- `timestepper`: `:SplitRungeKutta3` (RK-SE / RK-IM) or `:QuasiAdamsBashforth2` (AB2-SE).
-
-# Keyword Arguments
-- `arch`: architecture, defaults to `CPU()`; pass `GPU()` (with CUDA loaded) for a real run.
-- `free_surface`: pass an `ImplicitFreeSurface` for the RK-IM variant. When left as `nothing`,
-                  a `SplitExplicitFreeSurface(grid; cfl, averaging_kernel)` is built (RK-SE / AB2-SE).
-- `filter`: averaging-filter name for the split-explicit free surface (see `near_global_kernel`).
-- `barotropic_timestepper`: barotropic sub-step scheme, `RungeKutta3Scheme()` (default) or `ForwardBackwardScheme()`.
-- `cfl`: barotropic Courant number used to size the number of substeps (default `0.7`).
-- `Δt`: baroclinic time step (default `25minutes`).
-- `stop_time`: simulation length (default `365days`).
-- `dissipation`: attach the `BuoyancyVarianceDissipation` diagnostic (default `true`).
-- `equation_of_state`: defaults to a `LinearEquationOfState`, required by the buoyancy-dissipation diagnostic.
-- `grid`: a prebuilt grid, to avoid re-deriving the bathymetry across variants.
-
-# Returns
-- A named tuple `(; simulation, ocean, label, wall_time, iterations, seconds_per_step)`.
-"""
 function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      arch = CPU(),
                      grid = near_global_grid(arch),
                      free_surface = nothing,
                      filter::Symbol = :trig74,
-                     barotropic_timestepper = RungeKutta3Scheme(),
+                     barotropic_timestepper = ForwardBackwardScheme(),
                      cfl = 0.7,
-                     Δt = 25minutes,
-                     stop_time = 365days,
+                     Δt = near_global_timestep(Val(timestepper)),
+                     cold_start_Δt = Δt / 3,
+                     cold_start_duration = 60days,
+                     stop_time = 720days,
                      dissipation = true,
                      equation_of_state = LinearEquationOfState(),
                      label = nothing,
@@ -113,18 +69,19 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
 
     if free_surface === nothing
         free_surface = SplitExplicitFreeSurface(grid; cfl,
+                                                fixed_Δt = Δt + 2minutes
                                                 averaging_kernel = near_global_kernel(filter),
                                                 timestepper = barotropic_timestepper)
     end
+    
+    time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = 0.5)
+    momentum_advection = WENOVectorInvariant(; time_discretization)
+    tracer_advection = WENO(order=7; minimum_buffer_upwind_order=3, time_discretization),
 
-    ocean = ocean_simulation(grid; free_surface, timestepper, Δt, equation_of_state)
+    ocean = ocean_simulation(grid; free_surface, timestepper, Δt, equation_of_state, momentum_advection, tracer_advection)
 
-    set!(ocean.model, MetadataSet(:temperature, :salinity; dataset=ECCO4Monthly(), date=init_date))
+    set!(ocean.model, MetadataSet(:temperature, :salinity; dataset=ECCO2Daily(), date=init_date))
 
-    # Exact buoyancy variance-budget diagnostic (buoyancy is built from T and S through the
-    # linear equation of state). NOTE: attach to the ocean simulation (not the coupled one) so
-    # the callback receives `ocean.model`; verify the ocean callbacks fire under the coupled
-    # `run!` on the target machine.
     if dissipation
         ϵb = BuoyancyVarianceDissipation(grid)
         add_callback!(ocean, ϵb, IterationInterval(1))
@@ -132,7 +89,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
         diss = BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb)
         ocean.output_writers[:dissipation] = JLD2Writer(ocean.model, diss;
                                                         schedule = dissipation_output_interval,
-                                                        filename = _near_global_filename(label, timestepper, filter, free_surface) * "_dissipation",
+                                                        filename = near_global_filename(label, timestepper, filter, free_surface) * "_dissipation",
                                                         overwrite_existing = true)
     end
 
@@ -140,7 +97,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     ocean.output_writers[:surface] = JLD2Writer(ocean.model, surface;
                                                 schedule = surface_output_interval,
                                                 indices = (:, :, grid.Nz),
-                                                filename = _near_global_filename(label, timestepper, filter, free_surface) * "_surface",
+                                                filename = near_global_filename(label, timestepper, filter, free_surface) * "_surface",
                                                 with_halos = true,
                                                 overwrite_existing = true,
                                                 array_type = Array{Float32})
@@ -150,16 +107,24 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     land       = JRA55PrescribedLand(arch)
     coupled_model = OceanOnlyModel(ocean; atmosphere, land, radiation)
 
-    simulation = Simulation(coupled_model; Δt, stop_time)
+    simulation = Simulation(coupled_model; Δt = cold_start_Δt, stop_time = cold_start_duration)
     add_callback!(simulation, near_global_progress, progress_interval)
 
-    wall_time = @elapsed run!(simulation)
-    iterations = iteration(simulation)
-    seconds_per_step = iterations == 0 ? NaN : wall_time / iterations
+    cold_wall = @elapsed run!(simulation)
 
-    label = something(label, _near_global_label(timestepper, filter, free_surface))
-    @info @sprintf("[near_global] %-14s wall time: %s over %d steps -> %.4f s/step",
-                   label, prettytime(wall_time), iterations, seconds_per_step)
+    simulation.Δt        = Δt
+    simulation.stop_time = stop_time
+    production_iter₀     = iteration(simulation)
+    production_wall      = @elapsed run!(simulation)
+    production_steps     = iteration(simulation) - production_iter₀
+
+    wall_time  = cold_wall + production_wall
+    iterations = iteration(simulation)
+    seconds_per_step = production_steps == 0 ? NaN : production_wall / production_steps
+
+    label = something(label, near_global_label(timestepper, filter, free_surface))
+    @info @sprintf("[near_global] %-14s wall: %s (%d steps, cold %s) -> %.4f s/step",
+                   label, prettytime(wall_time), iterations, prettytime(cold_wall), seconds_per_step)
 
     return (; simulation, ocean, label, wall_time, iterations, seconds_per_step)
 end
@@ -177,48 +142,22 @@ function near_global_progress(sim)
     return nothing
 end
 
-_free_surface_tag(::SplitExplicitFreeSurface) = "SE"
-_free_surface_tag(::ImplicitFreeSurface) = "IM"
+near_global_label(timestepper, filter, fs::SplitExplicitFreeSurface) = timestepper === :QuasiAdamsBashforth2 ? "AB2-SE-$(filter)" : "RK-SE-$(filter)"
+near_global_label(timestepper, filter, fs::ImplicitFreeSurface) = timestepper === :QuasiAdamsBashforth2 ? "AB2-IM" : "RK-IM"
 
-_near_global_label(timestepper, filter, fs::SplitExplicitFreeSurface) =
-    timestepper === :QuasiAdamsBashforth2 ? "AB2-SE-$(filter)" : "RK-SE-$(filter)"
-_near_global_label(timestepper, filter, fs::ImplicitFreeSurface) =
-    timestepper === :QuasiAdamsBashforth2 ? "AB2-IM" : "RK-IM"
+near_global_filename(label, timestepper, filter, fs) = "near_global_" * something(label, near_global_label(timestepper, filter, fs))
 
-_near_global_filename(label, timestepper, filter, fs) =
-    "near_global_" * something(label, _near_global_label(timestepper, filter, fs))
-
-"""
-    near_global_variants()
-
-Return the list of `(; label, timestepper, filter, barotropic, implicit)` describing the
-cost/dissipation comparison: AB2-SE (forward--backward barotropic), RK-SE with each averaging
-filter (RK3 barotropic sub-step), and RK-IM.
-
-$(SIGNATURES)
-"""
 function near_global_variants()
     RK3 = RungeKutta3Scheme()
     FB  = ForwardBackwardScheme()
-    return [(; label = "AB2-SE",     timestepper = :QuasiAdamsBashforth2, filter = :SM05,   barotropic = FB,  implicit = false),
-            (; label = "RK-SE-SM05", timestepper = :SplitRungeKutta3,     filter = :SM05,   barotropic = RK3, implicit = false),
-            (; label = "RK-SE-mu2",  timestepper = :SplitRungeKutta3,     filter = :mu2,    barotropic = RK3, implicit = false),
-            (; label = "RK-SE-trig74", timestepper = :SplitRungeKutta3,   filter = :trig74, barotropic = RK3, implicit = false),
-            (; label = "RK-SE-trig2",  timestepper = :SplitRungeKutta3,   filter = :trig2,  barotropic = RK3, implicit = false),
-            (; label = "RK-IM",      timestepper = :SplitRungeKutta3,     filter = :SM05,   barotropic = RK3, implicit = true)]
+    return [(; label = "AB2-SE",       timestepper = :QuasiAdamsBashforth2, filter = :SM05,   barotropic = FB,  implicit = false),
+            (; label = "RK-SE-SM05",   timestepper = :SplitRungeKutta3,     filter = :SM05,   barotropic = RK3, implicit = false),
+            (; label = "RK-SE-mu2",    timestepper = :SplitRungeKutta3,     filter = :mu2,    barotropic = RK3, implicit = false),
+            (; label = "RK-SE-trig74", timestepper = :SplitRungeKutta3,     filter = :trig74, barotropic = RK3, implicit = false),
+            (; label = "RK-SE-trig2",  timestepper = :SplitRungeKutta3,     filter = :trig2,  barotropic = RK3, implicit = false),
+            (; label = "RK-IM",        timestepper = :SplitRungeKutta3,     filter = :SM05,   barotropic = RK3, implicit = true)]
 end
 
-"""
-    run_near_global_cost(; arch, Δt, Δt_ab2, stop_time, variants)
-
-Run every variant of `near_global_variants` on a shared bathymetry grid and return a vector
-of the per-variant cost results. Each variant also writes its T/S variance-dissipation output.
-
-$(SIGNATURES)
-
-The AB2 variant uses `Δt_ab2` (defaults to `Δt / 2`, reflecting its smaller stability range);
-all Runge--Kutta variants use `Δt`.
-"""
 function run_near_global_cost(; arch = CPU(),
                                 Δt = 25minutes,
                                 Δt_ab2 = Δt / 2,
