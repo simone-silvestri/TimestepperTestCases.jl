@@ -15,6 +15,54 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
 
 using Oceananigans.BuoyancyFormulations: LinearEquationOfState
 
+using Downloads: Downloads
+using NumericalEarth.DataWrangling: metadata_path
+
+const ARTIFACTS_BASE_URL = "https://github.com/NumericalEarth/NumericalEarthArtifacts/releases/download/data-v1/"
+
+function emit_ci_warning(title, message)
+    if haskey(ENV, "GITHUB_ACTIONS")
+        println(stderr, "::warning title=$(title)::$(message)")
+    end
+end
+
+function download_from_artifacts(filepath::AbstractString; max_retries=3)
+    filename = basename(filepath)
+    fallback_url = ARTIFACTS_BASE_URL * filename
+    @info "Downloading $filename from NumericalEarthArtifacts fallback..."
+    for attempt in 1:max_retries
+        try
+            mktemp(dirname(filepath)) do tmppath, tmpio
+                close(tmpio)
+                Downloads.download(fallback_url, tmppath)
+                mv(tmppath, filepath; force=true)
+            end
+            return
+        catch e
+            attempt < max_retries || rethrow(e)
+            @warn "Artifact download attempt $attempt/$max_retries failed for $filename; retrying..." exception=(e, catch_backtrace())
+            sleep(2.0 * attempt)  # linear backoff: 2s, 4s, ...
+        end
+    end
+end
+
+function download_from_artifacts(filepaths::AbstractVector)
+    for filepath in unique(filepaths)
+        download_from_artifacts(filepath)
+    end
+end
+
+function download_dataset_with_fallback(download_fn, filepaths; dataset_name="dataset")
+    try
+        return download_fn()
+    catch e
+        @warn "Original download failed for $dataset_name, trying NumericalEarthArtifacts fallback..." exception=(e, catch_backtrace())
+        emit_ci_warning("Broken $dataset_name download", "Original source failed: $(sprint(showerror, e))")
+        download_from_artifacts(filepaths)
+        return download_fn()
+    end
+end
+
 near_global_kernel(name::Symbol)   = near_global_kernel(Val(name))
 near_global_kernel(::Val{:SM05})   = averaging_shape_function
 near_global_kernel(::Val{:mu2})    = LowDissipationAveragingKernel()
@@ -80,7 +128,18 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
 
     ocean = ocean_simulation(grid; free_surface, timestepper, Δt, equation_of_state, momentum_advection, tracer_advection)
 
-    set!(ocean.model, MetadataSet(:temperature, :salinity; dataset=ECCO2Daily(), date=init_date))
+    Tmetadata = Metadatum(:temperature, dataset=ECCO2Daily(), date=init_date)
+    Smetadata = Metadatum(:salinity,    dataset=ECCO2Daily(), date=init_date)
+    
+    download_dataset_with_fallback(metadata_path(Tmetadata); dataset_name="ECCO2Daily") do
+        download(Tmetadata)
+    end
+
+    download_dataset_with_fallback(metadata_path(Smetadata); dataset_name="ECCO2Daily") do
+        download(Smetadata)
+    end
+
+    set!(ocean.model, T=Tmetadata, S=Smetadata)
 
     if dissipation
         ϵb = BuoyancyVarianceDissipation(grid)
