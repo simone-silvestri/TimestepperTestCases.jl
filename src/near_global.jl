@@ -69,7 +69,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
 
     if free_surface === nothing
         free_surface = SplitExplicitFreeSurface(grid; cfl,
-                                                fixed_Δt = Δt + 2minutes
+                                                fixed_Δt = Δt + 2minutes,
                                                 averaging_kernel = near_global_kernel(filter),
                                                 timestepper = barotropic_timestepper)
     end
