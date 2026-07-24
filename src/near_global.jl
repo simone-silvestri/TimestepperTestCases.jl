@@ -111,6 +111,8 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
 
     set!(ocean.model, T=Tmetadata, S=Smetadata)
 
+    parent(ocean.model.tracers.T) .= max.(parent(ocean.model.tracers.T), -1.8)
+
     if dissipation
         ϵb = BuoyancyVarianceDissipation(grid)
         add_callback!(ocean, ϵb, IterationInterval(1))
