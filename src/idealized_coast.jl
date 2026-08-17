@@ -49,8 +49,38 @@ $(SIGNATURES)
 
 Time steps are chosen to match computational cost between AB2 and RK schemes.
 """
-idealized_coast_timestep(::Val{:QuasiAdamsBashforth2}) = 5minutes
-idealized_coast_timestep(::Val{:SplitRungeKutta3})     = 15minutes
+idealized_coast_timestep(::Val{scheme}; lowres = false) where scheme =
+    baroclinic_timestep(scheme; idealized_coast_stability_parameters(; lowres)...)
+
+"""
+    idealized_coast_stability_parameters(; lowres = false)
+
+Stratification, depth and grid spacing that set the first baroclinic Courant number of this case. The shelf is
+only 103 m deep, so `c₁` is a fraction of a metre per second and the baroclinic limit is loose; the barotropic
+sub-cycle, not the outer scheme, is what the substep count has to keep in hand.
+"""
+function idealized_coast_stability_parameters(; lowres = false)
+    Lx = 192kilometers
+    Lz = 103meters
+    Nx = lowres ? 96 : 250
+    # The shelf is shallow, so c₁ is a fraction of a metre per second and the wave limit is loose; the eddying
+    # flow, not the first baroclinic wave, is what sets the time step here. `U` is the horizontal speed the
+    # adjustment reaches, and at 1.5 m/s the advective limit is about 4.6 times tighter than the wave one.
+    return (N² = 1e-4, H = Lz, Δx = Lx / Nx, U = 1.5)
+end
+
+"""
+    idealized_coast_substeps(barotropic_scheme, scheme; lowres, averaging_kernel)
+
+Barotropic substep count for this case, fixed so that the substep Courant number sits at 70% of the limit of
+`barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1.8` for forward-backward.
+"""
+function idealized_coast_substeps(barotropic_scheme, scheme = :SplitRungeKutta3;
+                                  lowres = false, averaging_kernel = OptimizedAsymmetricAveragingKernel())
+    p  = idealized_coast_stability_parameters(; lowres)
+    Δt = idealized_coast_timestep(Val(scheme); lowres)
+    return barotropic_substeps(barotropic_scheme; p.H, p.Δx, Δt, averaging_kernel)
+end
 
 @inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
 @inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
@@ -89,6 +119,7 @@ how numerical mixing can suppress submesoscale variability, as shown in the pape
 The simulation runs for 40 days and outputs velocity, temperature, salinity, buoyancy,
 and variance dissipation diagnostics.
 """
+
 function idealized_coast(timestepper::Symbol;
                          arch = CPU(),
                          forced = false,
@@ -96,6 +127,7 @@ function idealized_coast(timestepper::Symbol;
                          free_surface = nothing,
                          averaging_kernel = OptimizedAsymmetricAveragingKernel(),
                          barotropic_timestepper = ForwardBackwardScheme(),
+                         slow_forcing = FrozenSlowForcing(),
                          free_surface_name = nothing,
                          tracer_advection = TimestepperTestCases.tracer_advection)
 
@@ -109,7 +141,7 @@ function idealized_coast(timestepper::Symbol;
         Nx = Ny = 250
     end
         
-    Nz = 40
+    Nz = 60   # 103 m over 60 levels is the 1.7 m vertical resolution the manuscript quotes
     z_faces = (-Lz, 0)
     
     grid = RectilinearGrid(arch; 
@@ -132,10 +164,14 @@ function idealized_coast(timestepper::Symbol;
 
     equation_of_state = LinearEquationOfState(thermal_expansion=α, haline_contraction=β)
     buoyancy = SeawaterBuoyancy(; equation_of_state)
-    Δt = idealized_coast_timestep(Val(timestepper))
+    Δt = idealized_coast_timestep(Val(timestepper); lowres)
 
     if isnothing(free_surface)
-        free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=Δt+2minutes, averaging_kernel, timestepper=barotropic_timestepper)
+        # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
+        # target, so that the barotropic Courant number is a stated property of the run.
+        substeps = idealized_coast_substeps(barotropic_timestepper, timestepper; lowres, averaging_kernel)
+        free_surface = SplitExplicitFreeSurface(grid; substeps, averaging_kernel,
+                                                timestepper=barotropic_timestepper, slow_forcing)
     end
 
     τ₀ = 0.1 / 1027
@@ -287,3 +323,17 @@ function idealized_coast(timestepper::Symbol;
     return simulation
 end
 
+"""
+    idealized_coast(d::Discretization; arch = CPU(), lowres = false, kw...)
+
+Run the coastal adjustment case with the discretization `d` of Table 1.
+"""
+function idealized_coast(d::Discretization; arch = CPU(), lowres = false, kw...)
+    return idealized_coast(d.timestepper; arch, lowres,
+                           barotropic_timestepper = d.barotropic_timestepper,
+                           averaging_kernel = d.averaging_kernel,
+                           slow_forcing = d.slow_forcing,
+                           free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
+                           tracer_advection = d.tracer_advection,
+                           free_surface_name = d.label, kw...)
+end

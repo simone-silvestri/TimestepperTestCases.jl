@@ -1,7 +1,7 @@
 module TimestepperTestCases
 
 export internal_tide, internal_seiche, idealized_coast, channel_simulation
-export near_global, near_global_grid, near_global_variants, run_near_global_cost
+export near_global, near_global_grid, run_near_global_cost
 
 using DocStringExtensions
 using Oceananigans
@@ -10,10 +10,16 @@ using Oceananigans.Units
 using Oceananigans.Models
 using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces:
     WideTrig74AveragingKernel, WideTrig2AveragingKernel, OptimizedAsymmetricAveragingKernel,
-    ForwardBackwardScheme, RungeKutta3Scheme,
-    FrozenSlowForcing, StageQuadraticSlowForcing
+    LowDissipationAveragingKernel,
+    ForwardBackwardScheme, RungeKutta3Scheme, averaging_shape_function,
+    FrozenSlowForcing, StageQuadraticSlowForcing, ProgressiveSlowForcing
+using Oceananigans.TimeSteppers: ModifiedRungeKutta4TimeStepper
 using KernelAbstractions: @kernel, @index
 using Printf
+
+export stability_limit, baroclinic_timestep, barotropic_substeps, barotropic_courant
+export Discretization, discretizations, discretization, timestep_and_free_surface, timestep_ratio, plot_style
+export ModifiedRungeKutta4TimeStepper, ProgressiveSlowForcing
 
 wall_clock = Ref(time_ns())
 
@@ -52,6 +58,9 @@ end
 # For all test cases
 const tracer_buffer_scheme = WENO(order=5, buffer_scheme=Centered())
 const tracer_advection     = WENO(order=7, buffer_scheme=tracer_buffer_scheme)
+
+include("scheme_stability.jl")
+include("discretizations.jl")
 
 include("BuoyancyVarianceDissipationComputations/BuoyancyVarianceDissipationComputations.jl")
 using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation

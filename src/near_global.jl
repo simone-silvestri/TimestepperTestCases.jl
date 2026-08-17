@@ -70,15 +70,27 @@ function near_global_grid(arch = CPU();
     return ImmersedBoundaryGrid(grid, GridFittedBottom(bottom_height); active_cells_map=true)
 end
 
-near_global_timestep(::Val{:QuasiAdamsBashforth2}) = 8.5minutes
-near_global_timestep(::Val{:SplitRungeKutta3}) = 25minutes
+# The near-global time steps are empirical rather than derived. The theoretical criterion used by the idealized
+# cases, Δt = 0.7 θ★/(c₁ k), is not well posed here: both the first baroclinic speed and the grid spacing vary
+# over the domain (Δx shrinks as cos φ, from ≈ 27.8 km at the equator to ≈ 7.2 km at 75°), so the binding
+# combination c₁ k is a maximum over the globe and needs the actual stratification field to evaluate. The
+# three-stage value below is measured; the other schemes are scaled from it by the ratio of the imaginary-axis
+# limits, which is the part of the criterion that does transfer.
+near_global_timestep(::Val{:SplitRungeKutta3}) = 20minutes
+
+# Every other scheme is derived from that single reference by the ratio of the imaginary-axis limits
+# θ★(scheme)/θ★(WRK3), exactly as in the idealized cases: AB2 gives up a factor 0.29 and MRK4 earns 1.591.
+near_global_timestep(::Val{scheme}) where scheme =
+    baroclinic_timestep(scheme, near_global_timestep(Val(:SplitRungeKutta3)))
 
 function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      arch = CPU(),
                      grid = near_global_grid(arch),
                      free_surface = nothing,
                      filter::Symbol = :optasym,
+                     averaging_kernel = near_global_kernel(filter),
                      barotropic_timestepper = ForwardBackwardScheme(),
+                     slow_forcing = FrozenSlowForcing(),
                      cfl = 0.7,
                      Δt = near_global_timestep(Val(timestepper)),
                      cold_start_Δt = Δt / 3,
@@ -95,8 +107,9 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     if free_surface === nothing
         free_surface = SplitExplicitFreeSurface(grid; cfl,
                                                 fixed_Δt = Δt + 2minutes,
-                                                averaging_kernel = near_global_kernel(filter),
-                                                timestepper = barotropic_timestepper)
+                                                averaging_kernel,
+                                                timestepper = barotropic_timestepper,
+                                                slow_forcing)
     end
     
     time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = 0.5)
@@ -194,30 +207,15 @@ near_global_label(timestepper, filter, fs::ImplicitFreeSurface) = timestepper ==
 
 near_global_filename(label, timestepper, filter, fs) = "near_global_" * something(label, near_global_label(timestepper, filter, fs))
 
-function near_global_variants()
-    RK3 = RungeKutta3Scheme()
-    FB  = ForwardBackwardScheme()
-    return [(; label = "AB2-SE",       timestepper = :QuasiAdamsBashforth2, filter = :SM05,   barotropic = FB,  implicit = false),
-            (; label = "RK-SE-SM05",   timestepper = :SplitRungeKutta3,     filter = :SM05,   barotropic = RK3, implicit = false),
-            (; label = "RK-SE-mu2",    timestepper = :SplitRungeKutta3,     filter = :mu2,    barotropic = RK3, implicit = false),
-            (; label = "RK-SE-optasym", timestepper = :SplitRungeKutta3,    filter = :optasym, barotropic = RK3, implicit = false),
-            (; label = "RK-IM",        timestepper = :SplitRungeKutta3,     filter = :SM05,   barotropic = RK3, implicit = true)]
-end
-
 function run_near_global_cost(; arch = CPU(),
-                                Δt = 25minutes,
-                                Δt_ab2 = Δt / 2,
+                                timestep = scheme -> near_global_timestep(Val(scheme)),
                                 stop_time = 365days,
-                                variants = near_global_variants())
+                                variants = discretizations())
 
     grid = near_global_grid(arch)
     results = []
-    for v in variants
-        free_surface = v.implicit ? ImplicitFreeSurface() : nothing
-        Δt_v = v.timestepper === :QuasiAdamsBashforth2 ? Δt_ab2 : Δt
-        result = near_global(v.timestepper; arch, grid, free_surface,
-                             filter = v.filter, barotropic_timestepper = v.barotropic,
-                             Δt = Δt_v, stop_time, label = v.label)
+    for d in variants
+        result = near_global(d; arch, grid, Δt = timestep(d.timestepper), stop_time)
         push!(results, result)
     end
 
@@ -228,4 +226,20 @@ function run_near_global_cost(; arch = CPU(),
     end
 
     return results
+end
+
+"""
+    near_global(d::Discretization; arch = CPU(), kw...)
+
+Run the near-global case with the discretization `d` of Table 1. Unlike the idealized cases the time step is
+not derived from a theoretical limit here -- see `near_global_timestep` -- but the ratios between the schemes
+are the same.
+"""
+function near_global(d::Discretization; arch = CPU(), grid = near_global_grid(arch), kw...)
+    return near_global(d.timestepper; arch, grid,
+                       free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
+                       averaging_kernel = d.averaging_kernel,
+                       barotropic_timestepper = d.barotropic_timestepper,
+                       slow_forcing = d.slow_forcing,
+                       label = d.label, kw...)
 end

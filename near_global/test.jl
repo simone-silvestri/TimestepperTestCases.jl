@@ -1,24 +1,22 @@
 using TimestepperTestCases
 using Oceananigans
-using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
 using Oceananigans.Units
 using CUDA
 
-grid = TimestepperTestCases.near_global_grid(GPU())
+# The cases of Table 1 at 1/4°, defined once in `discretizations()` and shared by every test case.
+#
+#   WRK3-SE, WRK3-SE-SM05, WRK3-IM, SRK3-SE, AB2-SE, WRK3-UP, MRK4-SE
+#
+# The time steps here are empirical, not derived: on a global domain both c₁ and Δx vary, so the binding c₁ k
+# is a maximum over the globe rather than a single number. The three-stage value is measured and the others
+# are scaled from it by the ratio of the imaginary-axis limits, so the ratios match the idealized cases.
 
-# free surfaces
-rk3 = SplitExplicitFreeSurfaces.RungeKutta3Scheme()
+arch = GPU()
+grid = TimestepperTestCases.near_global_grid(arch)
 
-fs1 = SplitExplicitFreeSurface(grid, substeps = 80, averaging_kernel = SplitExplicitFreeSurfaces.LowDissipationAveragingKernel())
-fs2 = SplitExplicitFreeSurface(grid, substeps = 80, averaging_kernel = SplitExplicitFreeSurfaces.OptimizedAsymmetricAveragingKernel())
-fs3 = SplitExplicitFreeSurface(grid, substeps = 80, timestepper = rk3, averaging_kernel = SplitExplicitFreeSurfaces.LowDissipationAveragingKernel())
-fs4 = SplitExplicitFreeSurface(grid, substeps = 80, timestepper = rk3, averaging_kernel = SplitExplicitFreeSurfaces.OptimizedAsymmetricAveragingKernel())
+for d in discretizations()
+    sim = TimestepperTestCases.near_global(d; arch, grid)
+end
 
-sim = TimestepperTestCases.near_global(:SplitRungeKutta3,     arch = GPU(), free_surface = fs1, label = "RK3_split_explicit_fs1")
-sim = TimestepperTestCases.near_global(:QuasiAdamsBashforth2, arch = GPU(), free_surface = fs1, label = "AB2_split_explicit_fs1")
-# sim = TimestepperTestCases.near_global(:SplitRungeKutta3,   arch = GPU(),   free_surface = fs2, free_surface_name = "split_explicit_fs2")
-# sim = TimestepperTestCases.near_global(:SplitRungeKutta3,   arch = GPU(),   free_surface = fs3, free_surface_name = "split_explicit_fs3")
-sim = TimestepperTestCases.near_global(:SplitRungeKutta3,     arch = GPU(), free_surface = fs4, label = "RK3_split_explicit_fs4")
-
-# RK3-UP: featured RK3-SE config (fs4) but with 3rd-order upwind tracer advection (diffusive-spatial reference)
-# sim = TimestepperTestCases.internal_tide(:SplitRungeKutta3, free_surface = fs4, free_surface_name = "up3", tracer_advection = UpwindBiased(order = 3))
+# Cost comparison across the same discretizations, each at its own time step (Section 5.4.1).
+# results = run_near_global_cost(; arch, stop_time = 365days)

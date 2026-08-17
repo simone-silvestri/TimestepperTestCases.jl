@@ -4,21 +4,14 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
 
 SplitExplicitFreeSurfaces.variable_density_barotropic_mode[] = true
 
-# barotropic sub-step schemes
-fb  = SplitExplicitFreeSurfaces.ForwardBackwardScheme()
-rk3 = SplitExplicitFreeSurfaces.RungeKutta3Scheme()
+# The cases of Table 1, plus the SM05 reference and the four-stage composition of section 4, defined once in
+# `discretizations()` and shared by every test case.
+#
+#   WRK3-SE, WRK3-SE-SM05, WRK3-IM, SRK3-SE, AB2-SE, WRK3-UP, MRK4-SE
+#
+# The channel's stratification is surface-intensified, so its c₁ comes from the WKB integral -- see
+# `channel_stability_parameters`.
 
-# averaging filters
-mu2    = SplitExplicitFreeSurfaces.LowDissipationAveragingKernel()   # μ₂ = 0
-optasym = SplitExplicitFreeSurfaces.OptimizedAsymmetricAveragingKernel()  # μ₂ = μ₃ = 0, no substep condition
-
-# same cases as internal_tide/test.jl (channel names its outputs through `testcase`):
-sim = channel_simulation(timestepper = :QuasiAdamsBashforth2, testcase = "ab2")
-sim = channel_simulation(timestepper = :SplitRungeKutta3, free_surface = ImplicitFreeSurface(), testcase = "implicit")
-sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = fb,  averaging_kernel = mu2,    testcase = "split_explicit_fs1")
-sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = fb,  averaging_kernel = optasym, testcase = "split_explicit_fs2")
-sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = mu2,    testcase = "split_explicit_fs3")
-sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = optasym, testcase = "split_explicit_fs4")
-
-# RK3-UP: featured RK3-SE config (rk3, optasym) but with 3rd-order upwind tracer advection (diffusive-spatial reference)
-sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = optasym, tracer_advection = UpwindBiased(order = 3), testcase = "up3")
+for d in discretizations()
+    sim = channel_simulation(d)
+end

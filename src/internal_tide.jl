@@ -82,9 +82,33 @@ $(SIGNATURES)
 The time steps are chosen to match computational cost between AB2 and RK schemes while
 maintaining stability, as described in the paper.
 """
-internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =  5minutes
-internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
-internal_tide_timestep(::Val{:SSPRungeKutta3})       = 15minutes
+internal_tide_timestep(::Val{scheme}) where scheme =
+    baroclinic_timestep(scheme; internal_tide_stability_parameters()...)
+
+"""
+    internal_tide_stability_parameters()
+
+Stratification, depth and grid spacing that set the first baroclinic Courant number of this case, and with it
+the time step of every scheme through [`baroclinic_timestep`](@ref).
+"""
+function internal_tide_stability_parameters()
+    p = internal_tide_parameters()
+    return (N² = p.Nᵢ², H = p.H, Δx = 2p.L / p.Nx, safety = 1)
+end
+
+"""
+    internal_tide_substeps(barotropic_scheme, scheme; averaging_kernel)
+
+Barotropic substep count for this case, fixed so that the substep Courant number `c₀ k Δτ` sits at 70% of the
+limit of `barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1.8` for forward-backward. The
+count therefore depends on the substep integrator as well as on the baroclinic time step.
+"""
+function internal_tide_substeps(barotropic_scheme, scheme = :SplitRungeKutta3;
+                                averaging_kernel = OptimizedAsymmetricAveragingKernel())
+    p  = internal_tide_stability_parameters()
+    Δt = internal_tide_timestep(Val(scheme))
+    return barotropic_substeps(barotropic_scheme; p.H, p.Δx, Δt, averaging_kernel)
+end
 
 @kernel function _compute_dissipation!(Δtσc², σc²⁻, c, grid, Δt)
     i, j, k = @index(Global, NTuple)
@@ -198,9 +222,16 @@ tracer fields, and dissipation diagnostics.
 The test case isolates the role of time discretization in numerical mixing, as spatial
 advection plays a secondary role in this mostly linear configuration.
 """
+
 function internal_tide(timestepper::Symbol;
                        grid = internal_tide_grid(),
-                       free_surface=SplitExplicitFreeSurface(grid; substeps=60, averaging_kernel=OptimizedAsymmetricAveragingKernel()),
+                       barotropic_timestepper=ForwardBackwardScheme(),
+                       averaging_kernel=OptimizedAsymmetricAveragingKernel(),
+                       free_surface=SplitExplicitFreeSurface(grid; averaging_kernel,
+                                                             timestepper=barotropic_timestepper,
+                                                             substeps=internal_tide_substeps(barotropic_timestepper,
+                                                                                             timestepper;
+                                                                                             averaging_kernel)),
                        free_surface_name=default_free_surface_name(free_surface),
                        tracer_advection=TimestepperTestCases.tracer_advection)
 
@@ -260,8 +291,12 @@ function internal_tide(timestepper::Symbol;
 
     g = (; Gbx, Gbz, Gcx, Gcz)
 
+    # The advection scheme is appended only when the caller accepted the default name, which is what keeps a
+    # non-default-advection run from overwriting the default one. An explicitly supplied name already
+    # distinguishes the run, so appending to it would only make the filename disagree with the case label.
     fsname = free_surface_name
-    if tracer_advection != TimestepperTestCases.tracer_advection
+    if free_surface_name == default_free_surface_name(free_surface) &&
+       tracer_advection != TimestepperTestCases.tracer_advection
         fsname *= "_$(typeof(tracer_advection).name.name)"
     end
 
@@ -302,4 +337,15 @@ function internal_tide(timestepper::Symbol;
     run!(simulation)
 
     return simulation
+end
+
+"""
+    internal_tide(d::Discretization; grid = internal_tide_grid())
+
+Run the internal tide case with the discretization `d` of Table 1. The time step and the barotropic substep
+count are derived from `d` and from `internal_tide_stability_parameters()`.
+"""
+function internal_tide(d::Discretization; grid = internal_tide_grid())
+    _, free_surface = timestep_and_free_surface(d, grid, internal_tide_stability_parameters())
+    return internal_tide(d.timestepper; grid, free_surface, free_surface_name = d.label, tracer_advection = d.tracer_advection)
 end

@@ -56,3 +56,25 @@ for μ₀ in (5.0, 5.7, 6.0)
                                          free_surface = fs(fb, quad),
                                          free_surface_name = "fb_quad")
 end
+
+# ── MRK4: the four-stage composition of section 4 ────────────────────────────────────────────────────
+#
+# The seiche is the only case here that sweeps μ₀ directly, so it is where the section-4 claims can be
+# measured rather than assumed: that the progressive reconstruction closes the weak baroclinic band the
+# four-stage scheme carries below μ₀ ≈ 7, and that the frozen four-stage scheme is unstable over
+# 4.9 < μ₀ < 8.9. The sweep is run at fixed μ₀ across schemes, so the comparison is at equal barotropic
+# phase per step rather than at equal time step.
+mrk4 = ModifiedRungeKutta4TimeStepper()
+prog = ProgressiveSlowForcing(mrk4)
+
+# The band the progressive reconstruction has to close.
+μ₀_band = (0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0)
+
+for μ₀ in μ₀_band
+    TimestepperTestCases.internal_seiche(:ModifiedRungeKutta4; μ₀, stop_iteration = 2000,
+                                         free_surface = fs(rk3, prog),
+                                         free_surface_name = "mrk4_progressive")
+    TimestepperTestCases.internal_seiche(:SplitRungeKutta3; μ₀, stop_iteration = 2000,
+                                         free_surface = fs(rk3, quad),
+                                         free_surface_name = "rk3_quad")
+end
