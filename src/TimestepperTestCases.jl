@@ -1,6 +1,6 @@
 module TimestepperTestCases
 
-export internal_tide, idealized_coast, channel_simulation
+export internal_tide, internal_seiche, idealized_coast, channel_simulation
 export near_global, near_global_grid, near_global_variants, run_near_global_cost
 
 using DocStringExtensions
@@ -9,8 +9,9 @@ using Oceananigans.Grids
 using Oceananigans.Units
 using Oceananigans.Models
 using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces:
-    WideTrig74AveragingKernel, WideTrig2AveragingKernel,
-    ForwardBackwardScheme, RungeKutta3Scheme
+    WideTrig74AveragingKernel, WideTrig2AveragingKernel, OptimizedAsymmetricAveragingKernel,
+    ForwardBackwardScheme, RungeKutta3Scheme,
+    FrozenSlowForcing, StageQuadraticSlowForcing
 using KernelAbstractions: @kernel, @index
 using Printf
 
@@ -57,6 +58,7 @@ using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation
 
 # Simulations!
 include("internal_tide.jl")
+include("internal_seiche.jl")
 include("idealized_coast.jl")
 include("channel_simulation.jl")
 
@@ -84,6 +86,7 @@ using KernelAbstractions: @kernel, @index
 include("diagnostics.jl")
 include("load_idealized_coast_case.jl")
 include("load_internal_tide_case.jl")
+include("load_internal_seiche_case.jl")
 include("load_channel_case.jl")
 
 end
