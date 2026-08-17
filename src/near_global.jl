@@ -10,6 +10,7 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
     SymmetricTrigAveragingKernel,
     WideTrig74AveragingKernel,
     WideTrig2AveragingKernel,
+    OptimizedAsymmetricAveragingKernel,
     ForwardBackwardScheme,
     RungeKutta3Scheme
 
@@ -38,12 +39,13 @@ end
 NumericalEarth.EarthSystemModels.reference_density(::LinearEquationOfState) = 1026
 NumericalEarth.EarthSystemModels.heat_capacity(::LinearEquationOfState) = 3992
 
-near_global_kernel(name::Symbol)   = near_global_kernel(Val(name))
-near_global_kernel(::Val{:SM05})   = averaging_shape_function
-near_global_kernel(::Val{:mu2})    = LowDissipationAveragingKernel()
-near_global_kernel(::Val{:trig})   = SymmetricTrigAveragingKernel()
-near_global_kernel(::Val{:trig74}) = WideTrig74AveragingKernel()
-near_global_kernel(::Val{:trig2})  = WideTrig2AveragingKernel()
+near_global_kernel(name::Symbol)    = near_global_kernel(Val(name))
+near_global_kernel(::Val{:SM05})    = averaging_shape_function
+near_global_kernel(::Val{:mu2})     = LowDissipationAveragingKernel()
+near_global_kernel(::Val{:trig})    = SymmetricTrigAveragingKernel()
+near_global_kernel(::Val{:trig74})  = WideTrig74AveragingKernel()
+near_global_kernel(::Val{:trig2})   = WideTrig2AveragingKernel()
+near_global_kernel(::Val{:optasym}) = OptimizedAsymmetricAveragingKernel()
 
 function near_global_grid(arch = CPU();
                           Nx = 1440,
@@ -75,7 +77,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      arch = CPU(),
                      grid = near_global_grid(arch),
                      free_surface = nothing,
-                     filter::Symbol = :trig74,
+                     filter::Symbol = :optasym,
                      barotropic_timestepper = ForwardBackwardScheme(),
                      cfl = 0.7,
                      Δt = near_global_timestep(Val(timestepper)),
@@ -198,8 +200,7 @@ function near_global_variants()
     return [(; label = "AB2-SE",       timestepper = :QuasiAdamsBashforth2, filter = :SM05,   barotropic = FB,  implicit = false),
             (; label = "RK-SE-SM05",   timestepper = :SplitRungeKutta3,     filter = :SM05,   barotropic = RK3, implicit = false),
             (; label = "RK-SE-mu2",    timestepper = :SplitRungeKutta3,     filter = :mu2,    barotropic = RK3, implicit = false),
-            (; label = "RK-SE-trig74", timestepper = :SplitRungeKutta3,     filter = :trig74, barotropic = RK3, implicit = false),
-            (; label = "RK-SE-trig2",  timestepper = :SplitRungeKutta3,     filter = :trig2,  barotropic = RK3, implicit = false),
+            (; label = "RK-SE-optasym", timestepper = :SplitRungeKutta3,    filter = :optasym, barotropic = RK3, implicit = false),
             (; label = "RK-IM",        timestepper = :SplitRungeKutta3,     filter = :SM05,   barotropic = RK3, implicit = true)]
 end
 

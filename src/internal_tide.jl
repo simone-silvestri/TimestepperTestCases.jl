@@ -84,6 +84,7 @@ maintaining stability, as described in the paper.
 """
 internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =  5minutes
 internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
+internal_tide_timestep(::Val{:SSPRungeKutta3})       = 15minutes
 
 @kernel function _compute_dissipation!(Δtσc², σc²⁻, c, grid, Δt)
     i, j, k = @index(Global, NTuple)
@@ -199,7 +200,7 @@ advection plays a secondary role in this mostly linear configuration.
 """
 function internal_tide(timestepper::Symbol;
                        grid = internal_tide_grid(),
-                       free_surface=SplitExplicitFreeSurface(grid; substeps=60, averaging_kernel=WideTrig74AveragingKernel()),
+                       free_surface=SplitExplicitFreeSurface(grid; substeps=60, averaging_kernel=OptimizedAsymmetricAveragingKernel()),
                        free_surface_name=default_free_surface_name(free_surface),
                        tracer_advection=TimestepperTestCases.tracer_advection)
 

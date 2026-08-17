@@ -10,15 +10,15 @@ rk3 = SplitExplicitFreeSurfaces.RungeKutta3Scheme()
 
 # averaging filters
 mu2    = SplitExplicitFreeSurfaces.LowDissipationAveragingKernel()   # μ₂ = 0
-trig74 = SplitExplicitFreeSurfaces.WideTrig74AveragingKernel()       # μ₂ = μ₃ = 0 (wide window)
+optasym = SplitExplicitFreeSurfaces.OptimizedAsymmetricAveragingKernel()  # μ₂ = μ₃ = 0, no substep condition
 
 # same cases as internal_tide/test.jl (channel names its outputs through `testcase`):
 sim = channel_simulation(timestepper = :QuasiAdamsBashforth2, testcase = "ab2")
 sim = channel_simulation(timestepper = :SplitRungeKutta3, free_surface = ImplicitFreeSurface(), testcase = "implicit")
 sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = fb,  averaging_kernel = mu2,    testcase = "split_explicit_fs1")
-sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = fb,  averaging_kernel = trig74, testcase = "split_explicit_fs2")
+sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = fb,  averaging_kernel = optasym, testcase = "split_explicit_fs2")
 sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = mu2,    testcase = "split_explicit_fs3")
-sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = trig74, testcase = "split_explicit_fs4")
+sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = optasym, testcase = "split_explicit_fs4")
 
-# RK3-UP: featured RK3-SE config (rk3, trig74) but with 3rd-order upwind tracer advection (diffusive-spatial reference)
-sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = trig74, tracer_advection = UpwindBiased(order = 3), testcase = "up3")
+# RK3-UP: featured RK3-SE config (rk3, optasym) but with 3rd-order upwind tracer advection (diffusive-spatial reference)
+sim = channel_simulation(timestepper = :SplitRungeKutta3, barotropic_timestepper = rk3, averaging_kernel = optasym, tracer_advection = UpwindBiased(order = 3), testcase = "up3")

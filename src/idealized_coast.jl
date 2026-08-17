@@ -94,7 +94,7 @@ function idealized_coast(timestepper::Symbol;
                          forced = false,
                          lowres = false,
                          free_surface = nothing,
-                         averaging_kernel = WideTrig74AveragingKernel(),
+                         averaging_kernel = OptimizedAsymmetricAveragingKernel(),
                          barotropic_timestepper = ForwardBackwardScheme(),
                          free_surface_name = nothing,
                          tracer_advection = TimestepperTestCases.tracer_advection)

@@ -9,15 +9,15 @@ rk3 = SplitExplicitFreeSurfaces.RungeKutta3Scheme()
 
 # averaging filters
 mu2    = SplitExplicitFreeSurfaces.LowDissipationAveragingKernel()   # μ₂ = 0
-trig74 = SplitExplicitFreeSurfaces.WideTrig74AveragingKernel()       # μ₂ = μ₃ = 0 (wide window)
+optasym = SplitExplicitFreeSurfaces.OptimizedAsymmetricAveragingKernel()  # μ₂ = μ₃ = 0, no substep condition
 
 # same cases as internal_tide/test.jl:
 sim = idealized_coast(:QuasiAdamsBashforth2, arch = GPU(), barotropic_timestepper = fb, averaging_kernel = mu2)
 sim = idealized_coast(:SplitRungeKutta3,     arch = GPU(), free_surface = ImplicitFreeSurface(), free_surface_name = "implicit")
 sim = idealized_coast(:SplitRungeKutta3,     arch = GPU(), barotropic_timestepper = fb,  averaging_kernel = mu2,    free_surface_name = "split_explicit_fs1")
-sim = idealized_coast(:SplitRungeKutta3,     arch = GPU(), barotropic_timestepper = fb,  averaging_kernel = trig74, free_surface_name = "split_explicit_fs2")
+sim = idealized_coast(:SplitRungeKutta3,     arch = GPU(), barotropic_timestepper = fb,  averaging_kernel = optasym, free_surface_name = "split_explicit_fs2")
 sim = idealized_coast(:SplitRungeKutta3,     arch = GPU(), barotropic_timestepper = rk3, averaging_kernel = mu2,    free_surface_name = "split_explicit_fs3")
-sim = idealized_coast(:SplitRungeKutta3,     arch = GPU(), barotropic_timestepper = rk3, averaging_kernel = trig74, free_surface_name = "split_explicit_fs4")
+sim = idealized_coast(:SplitRungeKutta3,     arch = GPU(), barotropic_timestepper = rk3, averaging_kernel = optasym, free_surface_name = "split_explicit_fs4")
 
-# RK3-UP: featured RK3-SE config (rk3, trig74) but with 3rd-order upwind tracer advection (diffusive-spatial reference)
-sim = idealized_coast(:SplitRungeKutta3, arch = GPU(), barotropic_timestepper = rk3, averaging_kernel = trig74, tracer_advection = UpwindBiased(order = 3), free_surface_name = "up3")
+# RK3-UP: featured RK3-SE config (rk3, optasym) but with 3rd-order upwind tracer advection (diffusive-spatial reference)
+sim = idealized_coast(:SplitRungeKutta3, arch = GPU(), barotropic_timestepper = rk3, averaging_kernel = optasym, tracer_advection = UpwindBiased(order = 3), free_surface_name = "up3")
