@@ -5,14 +5,16 @@ export BuoyancyVarianceDissipation
 using DocStringExtensions
 using Oceananigans.Advection
 using Oceananigans.BoundaryConditions
-using Oceananigans.Grids: architecture, AbstractGrid
+using Oceananigans.Grids: architecture, AbstractGrid, Face, Center
 using Oceananigans.Utils
 using Oceananigans.Fields
 using Oceananigans.Fields: Field, VelocityFields
 using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
 using Oceananigans.TimeSteppers: QuasiAdamsBashforth2TimeStepper,
-                                 SplitRungeKuttaTimeStepper
+                                 SplitRungeKuttaTimeStepper,
+                                 SSPRungeKuttaTimeStepper,
+                                 MultiStageTimeStepper
 
 using Oceananigans.TurbulenceClosures: viscosity,
                                        diffusivity,
@@ -101,8 +103,20 @@ function BuoyancyVarianceDissipation(grid;
     Fⁿ   = c_grid_vector(grid)
     Fⁿ⁻¹ = c_grid_vector(grid)
     cⁿ⁻¹ = CenterField(grid)
-    
-    previous_state   = (; cⁿ⁻¹, Uⁿ⁻¹, Uⁿ)
+
+    # σ frozen at the flux-cache substep, so that the Runge-Kutta assembly divides by the same σ the flux was
+    # weighted with rather than by the live grid σ one substep later.
+    σ_cache = (x = Field{Face,   Center, Nothing}(grid),
+               y = Field{Center, Face,   Nothing}(grid),
+               z = Field{Center, Center, Nothing}(grid))
+
+    # The strong-stability-preserving path accumulates raw fluxes across the stages and leaves this cache at
+    # unity, so it must start there rather than at zero.
+    for σ in σ_cache
+        fill!(parent(σ), 1)
+    end
+
+    previous_state   = (; cⁿ⁻¹, Uⁿ⁻¹, Uⁿ, σ_cache)
     advective_fluxes = (; Fⁿ, Fⁿ⁻¹)
 
     return BuoyancyVarianceDissipation(P, advective_fluxes, previous_state)

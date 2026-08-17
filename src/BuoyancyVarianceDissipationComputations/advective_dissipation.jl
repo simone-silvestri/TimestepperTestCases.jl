@@ -51,3 +51,24 @@ end
     β = buoyancy.equation_of_state.haline_contraction
     return g * (α * FT - β * FS)
 end
+
+# Strong-stability-preserving accumulation of the buoyancy flux. Contrarily to the kernels above, the fluxes
+# are summed RAW, without the grid scaling σⁿ: the Shu-Osher path leaves the σ cache at unity, so applying σ
+# here as well would scale the budget twice on a moving grid.
+@kernel function _accumulate_ssp_advective_fluxes!(F★, grid::AbstractGrid, advection, U, buoyancy, C, β, keep)
+    i, j, k = @index(Global, NTuple)
+
+    FTx = _advective_tracer_flux_x(i, j, k, grid, advection, U.u, C.T)
+    FTy = _advective_tracer_flux_y(i, j, k, grid, advection, U.v, C.T)
+    FTz = _advective_tracer_flux_z(i, j, k, grid, advection, U.w, C.T)
+
+    FSx = _advective_tracer_flux_x(i, j, k, grid, advection, U.u, C.S)
+    FSy = _advective_tracer_flux_y(i, j, k, grid, advection, U.v, C.S)
+    FSz = _advective_tracer_flux_z(i, j, k, grid, advection, U.w, C.S)
+
+    @inbounds begin
+        F★.x[i, j, k] = keep * F★.x[i, j, k] + β * buoyancy_flux(FTx, FSx, buoyancy)
+        F★.y[i, j, k] = keep * F★.y[i, j, k] + β * buoyancy_flux(FTy, FSy, buoyancy)
+        F★.z[i, j, k] = keep * F★.z[i, j, k] + β * buoyancy_flux(FTz, FSz, buoyancy)
+    end
+end

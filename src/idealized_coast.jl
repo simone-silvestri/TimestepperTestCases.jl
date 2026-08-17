@@ -129,7 +129,9 @@ function idealized_coast(timestepper::Symbol;
                          barotropic_timestepper = ForwardBackwardScheme(),
                          slow_forcing = FrozenSlowForcing(),
                          free_surface_name = nothing,
-                         tracer_advection = TimestepperTestCases.tracer_advection)
+                         tracer_advection = TimestepperTestCases.tracer_advection,
+                         stop_time = 40days,
+                         stop_iteration = Inf)
 
     Lx = 192kilometers
     Ly = 192kilometers
@@ -228,7 +230,7 @@ function idealized_coast(timestepper::Symbol;
     uᵢ(x, y, z) = y > 60kilometers ? 0.0 : - 1 / f * M²(y) * (z - bottom_height(x, y))
 
     set!(model, T=Tᵢ, S=Sᵢ)
-    simulation = Simulation(model; Δt, stop_time=40days)
+    simulation = Simulation(model; Δt, stop_time, stop_iteration)
 
     add_callback!(simulation, print_progress,  IterationInterval(100))
 

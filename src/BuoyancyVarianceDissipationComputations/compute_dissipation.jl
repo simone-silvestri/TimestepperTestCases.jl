@@ -36,6 +36,7 @@ function compute_dissipation!(dissipation, model)
     # General velocities
     Uⁿ   = dissipation.previous_state.Uⁿ
     Uⁿ⁻¹ = dissipation.previous_state.Uⁿ⁻¹
+    σc   = dissipation.previous_state.σ_cache
 
     cⁿ⁺¹ = Models.buoyancy_operation(model)
     cⁿ   = dissipation.previous_state.cⁿ⁻¹
@@ -52,7 +53,7 @@ function compute_dissipation!(dissipation, model)
     Fⁿ⁻¹ = dissipation.advective_fluxes.Fⁿ⁻¹
 
     !(scheme isa Nothing) &&
-        assemble_advective_dissipation!(P, grid, model.timestepper, substep, Fⁿ, Fⁿ⁻¹, Uⁿ, Uⁿ⁻¹, cⁿ⁺¹, cⁿ)
+        assemble_advective_dissipation!(P, grid, model.timestepper, substep, Fⁿ, Fⁿ⁻¹, Uⁿ, Uⁿ⁻¹, σc, cⁿ⁺¹, cⁿ)
 
     return nothing
 end

@@ -4,6 +4,10 @@ using Oceananigans.Utils
 using Oceananigans.BoundaryConditions
 using Oceananigans.BuoyancyFormulations
 using Oceananigans.Models
+using Oceananigans.Models: HydrostaticFreeSurfaceModel
+using Oceananigans.Models.VarianceDissipationComputations: store_cache_σ!,
+                                                           ssp_accumulation_weights,
+                                                           _accumulate_ssp_transport!
 
 """
     cache_fluxes!(dissipation, model)
@@ -32,11 +36,14 @@ function cache_fluxes!(dissipation, model)
 
     Uⁿ   = dissipation.previous_state.Uⁿ
     Uⁿ⁻¹ = dissipation.previous_state.Uⁿ⁻¹
-    U    = model.velocities
+    # The tracers are advected by the filtered barotropic transport, not by the raw velocity, so the variance
+    # budget has to be built from the same transport or it does not close.
+    U    = model isa HydrostaticFreeSurfaceModel ? model.transport_velocities : model.velocities
     timestepper = model.timestepper
     stage = model.clock.stage
 
     update_transport!(Uⁿ, Uⁿ⁻¹, grid, params, timestepper, stage, U)
+    store_cache_σ!(dissipation.previous_state.σ_cache, grid, params, timestepper, stage)
     finally_cache_fluxes!(dissipation, model)
 
     return nothing
@@ -93,7 +100,8 @@ function finally_cache_fluxes!(dissipation, model)
 
     grid = model.grid
     arch = architecture(grid)
-    U = model.velocities
+    # Same transport as `cache_fluxes!`: the tracers are advected by the filtered barotropic transport.
+    U = model isa HydrostaticFreeSurfaceModel ? model.transport_velocities : model.velocities
     params = flux_parameters(grid)
     stage  = model.clock.stage
     timestepper = model.timestepper
@@ -114,7 +122,7 @@ function finally_cache_fluxes!(dissipation, model)
     if timestepper isa QuasiAdamsBashforth2TimeStepper
         set!(cⁿ⁻¹, cⁿ⁺¹)
         fill_halo_regions!(cⁿ⁻¹)
-    elseif (timestepper isa RungeKuttaScheme) && (stage == length(timestepper.β))
+    elseif (timestepper isa MultiStageTimeStepper) && (stage == timestepper.Nstages)
         set!(cⁿ⁻¹, cⁿ⁺¹)
         fill_halo_regions!(cⁿ⁻¹)
     end
@@ -131,8 +139,22 @@ function cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ts::SplitRungeKu
     end
 end
 
+# Accumulated into the second slot, which is what `assemble_advective_dissipation!` reads for this scheme.
+function cache_advective_fluxes!(Fⁿ, F̄, grid, params, ts::SSPRungeKuttaTimeStepper, stage, advection, U, b, C)
+    β, keep = ssp_accumulation_weights(ts, stage, eltype(grid))
+    launch!(architecture(grid), grid, params, _accumulate_ssp_advective_fluxes!, F̄, grid, advection, U, b, C, β, keep)
+end
+
 update_transport!(Uⁿ, Uⁿ⁻¹, grid, params, ::QuasiAdamsBashforth2TimeStepper, stage, U) =
     launch!(architecture(grid), grid, params, _update_transport!, Uⁿ, Uⁿ⁻¹, grid, U)
+
+# The Shu-Osher arrangement has no single stage at which the transport is the one that advected the tracers:
+# it accumulates the stage transports with the scheme's own quadrature weights. `keep` is zero on the stage
+# that seeds the sum and one afterwards, so the accumulator restarts each step without a separate reset.
+function update_transport!(Uⁿ, Ū, grid, params, ts::SSPRungeKuttaTimeStepper, stage, U)
+    β, keep = ssp_accumulation_weights(ts, stage, eltype(grid))
+    launch!(architecture(grid), grid, params, _accumulate_ssp_transport!, Ū, grid, U, β, keep)
+end
 
 function update_transport!(Uⁿ, Uⁿ⁻¹, grid, params, ts::SplitRungeKuttaTimeStepper, stage, U)
     if stage == length(ts.β)-1
