@@ -66,7 +66,7 @@ function idealized_coast_stability_parameters(; lowres = false)
     # The shelf is shallow, so c₁ is a fraction of a metre per second and the wave limit is loose; the eddying
     # flow, not the first baroclinic wave, is what sets the time step here. `U` is the horizontal speed the
     # adjustment reaches, and at 1.5 m/s the advective limit is about 4.6 times tighter than the wave one.
-    return (N² = 1e-4, H = Lz, Δx = Lx / Nx, U = 1.5)
+    return (N² = 1e-4, H = Lz, Δx = Lx / Nx, U = 1.5, safety = 1)
 end
 
 """
