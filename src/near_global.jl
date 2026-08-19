@@ -87,26 +87,28 @@ near_global_timestep(::Val{scheme}) where scheme =
 """
     near_global_stability_parameters(grid)
 
-Depth and grid spacing that set the barotropic Courant number of this case, read off the grid rather than
-stated as numbers: unlike the idealized cases the configuration is not described by a handful of constants,
-and the spacing varies over the domain.
+Depth and horizontal spacings that set the barotropic Courant number of this case, read off the grid rather
+than stated as numbers: the spacing varies over the domain, so there is no single value to quote.
 
-`Δx` is the tightest horizontal spacing anywhere on the globe -- the zonal one at the poleward edge, ≈ 7.2 km
-at 75°, against ≈ 27.8 km for the meridional spacing and for the zonal one at the equator -- and `H` the
-deepest column, so `c₀ k` is evaluated where it binds.
+`Δx` is the zonal spacing at the poleward edge, ≈ 7.2 km at 75° against ≈ 27.8 km at the equator, `Δy` the
+meridional one, and `H` the deepest column, so `c₀ k` is evaluated where it binds.
 """
 function near_global_stability_parameters(grid)
-    Δx = min(minimum_xspacing(grid), minimum_yspacing(grid))
-    return (; H = grid.Lz, Δx)
+    return (; H = grid.Lz, Δx = minimum_xspacing(grid), Δy = minimum_yspacing(grid))
 end
 
 """
-    near_global_substeps(barotropic_scheme, grid, scheme; averaging_kernel)
+    near_global_substeps(barotropic_scheme, grid, scheme; averaging_kernel, Δt)
 
 Barotropic substep count for this case, fixed so that the substep Courant number `c₀ k Δτ` sits at 70% of the
 limit of `barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward -- as in
-every other case. The baroclinic step is empirical here, but the substep count that goes with it is still
-derived, so the barotropic Courant number remains a stated property of the run.
+every other case. The baroclinic step is empirical here, but the substep count that goes with it is derived, so
+the barotropic Courant number stays a stated property of the run.
+
+Contrarily to the idealized cases, `k` is the staggered wavenumber `2√(Δx⁻² + Δy⁻²)` of
+[`staggered_wavenumber`](@ref) and not the spectral `π/Δx`. The grid is anisotropic where it is tightest,
+`Δy/Δx ≈ 3.9` at 75°, so the two conventions no longer agree to the 11% they agree to on an isotropic grid:
+here the spectral one overstates the Courant number of the two-point barotropic operator by 1.52.
 
 The grid is a positional argument because the configuration is described by the grid itself, `near_global_grid`
 carrying resolution and depth as keyword arguments.
@@ -115,7 +117,8 @@ function near_global_substeps(barotropic_scheme, grid, scheme = :SplitRungeKutta
                               averaging_kernel = OptimizedAsymmetricAveragingKernel(),
                               Δt = near_global_timestep(Val(scheme)))
     p = near_global_stability_parameters(grid)
-    return barotropic_substeps(barotropic_scheme; p.H, p.Δx, Δt, averaging_kernel)
+    return barotropic_substeps(barotropic_scheme; p.H, p.Δx, Δt, averaging_kernel,
+                               wavenumber = staggered_wavenumber(p.Δx, p.Δy))
 end
 
 function near_global(timestepper::Symbol = :SplitRungeKutta3;

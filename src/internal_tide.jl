@@ -100,7 +100,7 @@ end
     internal_tide_substeps(barotropic_scheme, scheme; averaging_kernel)
 
 Barotropic substep count for this case, fixed so that the substep Courant number `c₀ k Δτ` sits at 70% of the
-limit of `barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1.8` for forward-backward. The
+limit of `barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward. The
 count therefore depends on the substep integrator as well as on the baroclinic time step.
 """
 function internal_tide_substeps(barotropic_scheme, scheme = :SplitRungeKutta3;
@@ -233,7 +233,8 @@ function internal_tide(timestepper::Symbol;
                                                                                              timestepper;
                                                                                              averaging_kernel)),
                        free_surface_name=default_free_surface_name(free_surface),
-                       tracer_advection=TimestepperTestCases.tracer_advection)
+                       tracer_advection=TimestepperTestCases.tracer_advection,
+                       Δt=internal_tide_timestep(Val(timestepper)))
 
     param = internal_tide_parameters()
 
@@ -260,7 +261,7 @@ function internal_tide(timestepper::Symbol;
     cᵢ(x, z) = exp( - (z + 1kilometers)^2 / (2 * (25meters)^2))
     set!(model, u=param.U₂, b=bᵢ)
 
-    Δt = internal_tide_timestep(Val(timestepper)) 
+    # `Δt` arrives as a keyword argument, defaulting to the criterion of `internal_tide_timestep`.
     stop_time = 40days
     simulation = Simulation(model; Δt, stop_time)
 
@@ -340,12 +341,32 @@ function internal_tide(timestepper::Symbol;
 end
 
 """
-    internal_tide(d::Discretization; grid = internal_tide_grid())
+    internal_tide(d::Discretization; grid, timestep_factor = 1, label = d.label, kw...)
 
-Run the internal tide case with the discretization `d` of Table 1. The time step and the barotropic substep
-count are derived from `d` and from `internal_tide_stability_parameters()`.
+Run the internal tide case with the discretization `d`.
+
+`timestep_factor` scales the time step away from the criterion of [`baroclinic_timestep`](@ref), and the
+barotropic substep count is recomputed from the scaled step so that the sub-step Courant number is unchanged.
+It exists for the temporal-resolution test of section 5.1: the compositions differ in how hard they damp the
+barotropic mode, and that difference is confined to scales below the temporal Nyquist of the baroclinic step,
+so refining the step should bring them together if the difference is a resolution effect.
 """
-function internal_tide(d::Discretization; grid = internal_tide_grid())
-    _, free_surface = timestep_and_free_surface(d, grid, internal_tide_stability_parameters())
-    return internal_tide(d.timestepper; grid, free_surface, free_surface_name = d.label, tracer_advection = d.tracer_advection)
+function internal_tide(d::Discretization; grid = internal_tide_grid(),
+                       timestep_factor = 1, label = d.label, kw...)
+
+    parameters = internal_tide_stability_parameters()
+    Δt, free_surface = timestep_and_free_surface(d, grid, parameters)
+
+    if timestep_factor != 1
+        Δt = Δt * timestep_factor
+        substeps = barotropic_substeps(d.barotropic_timestepper; parameters.H, parameters.Δx, Δt,
+                                       d.averaging_kernel)
+        free_surface = SplitExplicitFreeSurface(grid; substeps,
+                                                averaging_kernel = d.averaging_kernel,
+                                                timestepper = d.barotropic_timestepper,
+                                                slow_forcing = d.slow_forcing)
+    end
+
+    return internal_tide(d.timestepper; grid, free_surface, free_surface_name = label,
+                         tracer_advection = d.tracer_advection, Δt, kw...)
 end

@@ -242,7 +242,7 @@ end
     channel_substeps(barotropic_scheme, scheme; averaging_kernel)
 
 Barotropic substep count for this case, fixed so that the substep Courant number sits at 70% of the limit of
-`barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1.8` for forward-backward.
+`barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward.
 """
 function channel_substeps(barotropic_scheme, scheme = :SplitRungeKutta3;
                           averaging_kernel = OptimizedAsymmetricAveragingKernel())
