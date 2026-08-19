@@ -1,5 +1,6 @@
 using Oceananigans
 using Oceananigans.Units
+using Oceananigans.Grids: minimum_xspacing, minimum_yspacing
 using NumericalEarth
 using Dates: DateTime
 using Printf
@@ -83,6 +84,40 @@ near_global_timestep(::Val{:SplitRungeKutta3}) = 20minutes
 near_global_timestep(::Val{scheme}) where scheme =
     baroclinic_timestep(scheme, near_global_timestep(Val(:SplitRungeKutta3)))
 
+"""
+    near_global_stability_parameters(grid)
+
+Depth and grid spacing that set the barotropic Courant number of this case, read off the grid rather than
+stated as numbers: unlike the idealized cases the configuration is not described by a handful of constants,
+and the spacing varies over the domain.
+
+`Δx` is the tightest horizontal spacing anywhere on the globe -- the zonal one at the poleward edge, ≈ 7.2 km
+at 75°, against ≈ 27.8 km for the meridional spacing and for the zonal one at the equator -- and `H` the
+deepest column, so `c₀ k` is evaluated where it binds.
+"""
+function near_global_stability_parameters(grid)
+    Δx = min(minimum_xspacing(grid), minimum_yspacing(grid))
+    return (; H = grid.Lz, Δx)
+end
+
+"""
+    near_global_substeps(barotropic_scheme, grid, scheme; averaging_kernel)
+
+Barotropic substep count for this case, fixed so that the substep Courant number `c₀ k Δτ` sits at 70% of the
+limit of `barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward -- as in
+every other case. The baroclinic step is empirical here, but the substep count that goes with it is still
+derived, so the barotropic Courant number remains a stated property of the run.
+
+The grid is a positional argument because the configuration is described by the grid itself, `near_global_grid`
+carrying resolution and depth as keyword arguments.
+"""
+function near_global_substeps(barotropic_scheme, grid, scheme = :SplitRungeKutta3;
+                              averaging_kernel = OptimizedAsymmetricAveragingKernel(),
+                              Δt = near_global_timestep(Val(scheme)))
+    p = near_global_stability_parameters(grid)
+    return barotropic_substeps(barotropic_scheme; p.H, p.Δx, Δt, averaging_kernel)
+end
+
 function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      arch = CPU(),
                      grid = near_global_grid(arch),
@@ -91,7 +126,6 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      averaging_kernel = near_global_kernel(filter),
                      barotropic_timestepper = ForwardBackwardScheme(),
                      slow_forcing = FrozenSlowForcing(),
-                     cfl = 0.7,
                      Δt = near_global_timestep(Val(timestepper)),
                      cold_start_Δt = Δt / 3,
                      cold_start_duration = 60days,
@@ -105,9 +139,10 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      dissipation_output_interval = AveragedTimeInterval(30days))
 
     if free_surface === nothing
-        free_surface = SplitExplicitFreeSurface(grid; cfl,
-                                                fixed_Δt = Δt + 2minutes,
-                                                averaging_kernel,
+        # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
+        # target, so that the barotropic Courant number is a stated property of the run.
+        substeps = near_global_substeps(barotropic_timestepper, grid; averaging_kernel, Δt)
+        free_surface = SplitExplicitFreeSurface(grid; substeps, averaging_kernel,
                                                 timestepper = barotropic_timestepper,
                                                 slow_forcing)
     end
