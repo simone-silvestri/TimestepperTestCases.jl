@@ -16,7 +16,6 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
     RungeKutta3Scheme
 
 using Oceananigans.BuoyancyFormulations: LinearEquationOfState
-using Oceananigans.BoundaryConditions: IMEXFluxBoundaryCondition
 using Oceananigans.TurbulenceClosures: VerticallyImplicitTimeDiscretization
 using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEVerticalDiffusivity, CATKEMixingLength, CATKEEquation
 
@@ -147,38 +146,6 @@ near_global_closure(FT = Oceananigans.defaults.FloatType) =
                              mixing_length = CATKEMixingLength(Cᵇ = 0.01),
                              turbulent_kinetic_energy_equation = CATKEEquation(Cᵂϵ = 1.0))
 
-# The quadratic drag −μ |u| u read as the affine flux J(u) = Fₑ + λ u of an `IMEXFluxBoundaryCondition`, with
-# Fₑ = 0 and λ = −μ |u|: the whole stress goes to the vertical tridiagonal solver rather than to the tendency,
-# so the drag no longer carries a Δz-dependent limit on Δt. That limit is what binds on the partial cells of
-# `near_global_grid`, whose height is free to fall to a fifth of the resting one.
-@inline zonal_drag_coefficient(i, j, grid, clock, Φ, μ)      = - μ * spᶠᶜᶜ(i, j, 1, grid, Φ)
-@inline meridional_drag_coefficient(i, j, grid, clock, Φ, μ) = - μ * spᶜᶠᶜ(i, j, 1, grid, Φ)
-
-@inline immersed_zonal_drag_coefficient(i, j, k, grid, clock, Φ, μ)      = - μ * spᶠᶜᶜ(i, j, k, grid, Φ)
-@inline immersed_meridional_drag_coefficient(i, j, k, grid, clock, Φ, μ) = - μ * spᶜᶠᶜ(i, j, k, grid, Φ)
-
-"""
-    near_global_drag_boundary_conditions(grid, bottom_drag_coefficient)
-
-Bottom and immersed boundary conditions for `u` and `v` that carry the quadratic drag implicitly, replacing
-the explicit ones that `ocean_simulation` builds. Only the two sides that carry drag are set, the surface
-fluxes staying the ones of the default boundary conditions.
-"""
-function near_global_drag_boundary_conditions(grid, bottom_drag_coefficient)
-    FT = eltype(grid)
-    μ  = convert(FT, bottom_drag_coefficient)
-    Fₑ = zero(FT)
-
-    zonal_bottom      = IMEXFluxBoundaryCondition(Fₑ, zonal_drag_coefficient;      discrete_form=true, parameters=μ)
-    meridional_bottom = IMEXFluxBoundaryCondition(Fₑ, meridional_drag_coefficient; discrete_form=true, parameters=μ)
-
-    zonal_immersed      = IMEXFluxBoundaryCondition(Fₑ, immersed_zonal_drag_coefficient;      discrete_form=true, parameters=μ)
-    meridional_immersed = IMEXFluxBoundaryCondition(Fₑ, immersed_meridional_drag_coefficient; discrete_form=true, parameters=μ)
-
-    return (u = FieldBoundaryConditions(bottom = zonal_bottom,      immersed = ImmersedBoundaryCondition(bottom=zonal_immersed)),
-            v = FieldBoundaryConditions(bottom = meridional_bottom, immersed = ImmersedBoundaryCondition(bottom=meridional_immersed)))
-end
-
 function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      arch = CPU(),
                      grid = near_global_grid(arch),
@@ -195,6 +162,8 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      dissipation = true,
                      closure = near_global_closure(),
                      bottom_drag_coefficient = 0.003,
+                     # uᵦ = 0.1 m s⁻¹ stands for the barotropic tide, which this configuration does not force
+                     bottom_drag_background_velocity = 0.1,
                      equation_of_state = LinearEquationOfState(),
                      label = nothing,
                      init_date = DateTime(1993, 1, 1),
@@ -215,10 +184,9 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     momentum_advection = WENOVectorInvariant(; time_discretization)
     tracer_advection = something(tracer_advection, WENO(order=7; minimum_buffer_upwind_order=3, time_discretization))
 
-    boundary_conditions = near_global_drag_boundary_conditions(grid, bottom_drag_coefficient)
-
     ocean = ocean_simulation(grid; free_surface, timestepper, Δt = cold_start_Δt, stop_time = cold_start_duration,
-                             closure, boundary_conditions, equation_of_state, momentum_advection, tracer_advection)
+                             closure, equation_of_state, momentum_advection, tracer_advection,
+                             bottom_drag_coefficient, bottom_drag_background_velocity)
 
     Tmetadata = Metadatum(:temperature, dataset=ECCO2Daily(), date=init_date)
     Smetadata = Metadatum(:salinity,    dataset=ECCO2Daily(), date=init_date)
