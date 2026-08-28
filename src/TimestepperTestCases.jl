@@ -9,7 +9,7 @@ using Oceananigans.Grids
 using Oceananigans.Units
 using Oceananigans.Models
 using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces:
-    WideTrig74AveragingKernel, WideTrig2AveragingKernel, OptimizedAsymmetricAveragingKernel,
+    WideTrigAveragingKernel, OptimizedAsymmetricAveragingKernel,
     LowDissipationAveragingKernel,
     ForwardBackwardScheme, RungeKutta3Scheme, averaging_shape_function,
     FrozenSlowForcing, StageQuadraticSlowForcing, ProgressiveSlowForcing

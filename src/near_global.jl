@@ -9,8 +9,7 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
     averaging_shape_function,
     LowDissipationAveragingKernel,
     SymmetricTrigAveragingKernel,
-    WideTrig74AveragingKernel,
-    WideTrig2AveragingKernel,
+    WideTrigAveragingKernel,
     OptimizedAsymmetricAveragingKernel,
     ForwardBackwardScheme,
     RungeKutta3Scheme
@@ -42,13 +41,12 @@ end
 NumericalEarth.EarthSystemModels.reference_density(::LinearEquationOfState) = 1026
 NumericalEarth.EarthSystemModels.heat_capacity(::LinearEquationOfState) = 3992
 
-near_global_kernel(name::Symbol)    = near_global_kernel(Val(name))
-near_global_kernel(::Val{:SM05})    = averaging_shape_function
-near_global_kernel(::Val{:mu2})     = LowDissipationAveragingKernel()
-near_global_kernel(::Val{:trig})    = SymmetricTrigAveragingKernel()
-near_global_kernel(::Val{:trig74})  = WideTrig74AveragingKernel()
-near_global_kernel(::Val{:trig2})   = WideTrig2AveragingKernel()
-near_global_kernel(::Val{:optasym}) = OptimizedAsymmetricAveragingKernel()
+near_global_kernel(name::Symbol)     = near_global_kernel(Val(name))
+near_global_kernel(::Val{:SM05})     = averaging_shape_function
+near_global_kernel(::Val{:mu2})      = LowDissipationAveragingKernel()
+near_global_kernel(::Val{:trig})     = SymmetricTrigAveragingKernel()
+near_global_kernel(::Val{:widetrig}) = WideTrigAveragingKernel()
+near_global_kernel(::Val{:optasym})  = OptimizedAsymmetricAveragingKernel()
 
 function near_global_grid(arch = CPU();
                           Nx = 1440,
