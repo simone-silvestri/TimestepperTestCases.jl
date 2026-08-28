@@ -1,7 +1,7 @@
 module TimestepperTestCases
 
 export internal_tide, internal_seiche, idealized_coast, channel_simulation
-export near_global, near_global_grid, run_near_global_cost
+export near_global, near_global_grid, near_global_discretizations, run_near_global_cost
 
 using DocStringExtensions
 using Oceananigans

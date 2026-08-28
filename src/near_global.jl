@@ -16,6 +16,9 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
     RungeKutta3Scheme
 
 using Oceananigans.BuoyancyFormulations: LinearEquationOfState
+using Oceananigans.BoundaryConditions: IMEXFluxBoundaryCondition
+using Oceananigans.TurbulenceClosures: VerticallyImplicitTimeDiscretization
+using Oceananigans.TurbulenceClosures.TKEBasedVerticalDiffusivities: CATKEVerticalDiffusivity, CATKEMixingLength, CATKEEquation
 
 using Downloads: Downloads
 using NumericalEarth.DataWrangling: metadata_path
@@ -121,6 +124,61 @@ function near_global_substeps(barotropic_scheme, grid, scheme = :SplitRungeKutta
                                wavenumber = staggered_wavenumber(p.Δx, p.Δy))
 end
 
+"""
+    near_global_discretizations()
+
+The cases of Table 1 run on the near-global configuration: [`discretizations`](@ref) without `WRK3-UP`.
+
+The near-global case fixes tracer advection at the vertically implicit WENO7 of [`near_global`](@ref), whereas
+`WRK3-UP` carries the explicitly discretized third-order upwind it shares with the idealized cases. Run here it
+would depart from `WRK3-SE` in the vertical time discretization as well as in the spatial reconstruction, so it
+no longer isolates the spatial contribution and is left to the idealized cases.
+"""
+near_global_discretizations() = filter(d -> d.label != "WRK3-UP", discretizations())
+
+"""
+    near_global_closure(FT = Oceananigans.defaults.FloatType)
+
+The CATKE closure of this case: the vertically implicit `CATKEVerticalDiffusivity` with the bottom distance
+coefficient of the shear mixing length set to `Cᵇ = 0.01`, against the 0.28 of `CATKEMixingLength`.
+"""
+near_global_closure(FT = Oceananigans.defaults.FloatType) =
+    CATKEVerticalDiffusivity(VerticallyImplicitTimeDiscretization(), FT;
+                             mixing_length = CATKEMixingLength(Cᵇ = 0.01),
+                             turbulent_kinetic_energy_equation = CATKEEquation(Cᵂϵ = 1.0))
+
+# The quadratic drag −μ |u| u read as the affine flux J(u) = Fₑ + λ u of an `IMEXFluxBoundaryCondition`, with
+# Fₑ = 0 and λ = −μ |u|: the whole stress goes to the vertical tridiagonal solver rather than to the tendency,
+# so the drag no longer carries a Δz-dependent limit on Δt. That limit is what binds on the partial cells of
+# `near_global_grid`, whose height is free to fall to a fifth of the resting one.
+@inline zonal_drag_coefficient(i, j, grid, clock, Φ, μ)      = - μ * spᶠᶜᶜ(i, j, 1, grid, Φ)
+@inline meridional_drag_coefficient(i, j, grid, clock, Φ, μ) = - μ * spᶜᶠᶜ(i, j, 1, grid, Φ)
+
+@inline immersed_zonal_drag_coefficient(i, j, k, grid, clock, Φ, μ)      = - μ * spᶠᶜᶜ(i, j, k, grid, Φ)
+@inline immersed_meridional_drag_coefficient(i, j, k, grid, clock, Φ, μ) = - μ * spᶜᶠᶜ(i, j, k, grid, Φ)
+
+"""
+    near_global_drag_boundary_conditions(grid, bottom_drag_coefficient)
+
+Bottom and immersed boundary conditions for `u` and `v` that carry the quadratic drag implicitly, replacing
+the explicit ones that `ocean_simulation` builds. Only the two sides that carry drag are set, the surface
+fluxes staying the ones of the default boundary conditions.
+"""
+function near_global_drag_boundary_conditions(grid, bottom_drag_coefficient)
+    FT = eltype(grid)
+    μ  = convert(FT, bottom_drag_coefficient)
+    Fₑ = zero(FT)
+
+    zonal_bottom      = IMEXFluxBoundaryCondition(Fₑ, zonal_drag_coefficient;      discrete_form=true, parameters=μ)
+    meridional_bottom = IMEXFluxBoundaryCondition(Fₑ, meridional_drag_coefficient; discrete_form=true, parameters=μ)
+
+    zonal_immersed      = IMEXFluxBoundaryCondition(Fₑ, immersed_zonal_drag_coefficient;      discrete_form=true, parameters=μ)
+    meridional_immersed = IMEXFluxBoundaryCondition(Fₑ, immersed_meridional_drag_coefficient; discrete_form=true, parameters=μ)
+
+    return (u = FieldBoundaryConditions(bottom = zonal_bottom,      immersed = ImmersedBoundaryCondition(bottom=zonal_immersed)),
+            v = FieldBoundaryConditions(bottom = meridional_bottom, immersed = ImmersedBoundaryCondition(bottom=meridional_immersed)))
+end
+
 function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      arch = CPU(),
                      grid = near_global_grid(arch),
@@ -129,11 +187,14 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      averaging_kernel = near_global_kernel(filter),
                      barotropic_timestepper = ForwardBackwardScheme(),
                      slow_forcing = FrozenSlowForcing(),
+                     tracer_advection = nothing,
                      Δt = near_global_timestep(Val(timestepper)),
                      cold_start_Δt = Δt / 3,
                      cold_start_duration = 60days,
                      stop_time = 720days,
                      dissipation = true,
+                     closure = near_global_closure(),
+                     bottom_drag_coefficient = 0.003,
                      equation_of_state = LinearEquationOfState(),
                      label = nothing,
                      init_date = DateTime(1993, 1, 1),
@@ -152,9 +213,12 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     
     time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = 0.5)
     momentum_advection = WENOVectorInvariant(; time_discretization)
-    tracer_advection = WENO(order=7; minimum_buffer_upwind_order=3, time_discretization)
+    tracer_advection = something(tracer_advection, WENO(order=7; minimum_buffer_upwind_order=3, time_discretization))
 
-    ocean = ocean_simulation(grid; free_surface, timestepper, Δt = cold_start_Δt, stop_time = cold_start_duration, equation_of_state, momentum_advection, tracer_advection)
+    boundary_conditions = near_global_drag_boundary_conditions(grid, bottom_drag_coefficient)
+
+    ocean = ocean_simulation(grid; free_surface, timestepper, Δt = cold_start_Δt, stop_time = cold_start_duration,
+                             closure, boundary_conditions, equation_of_state, momentum_advection, tracer_advection)
 
     Tmetadata = Metadatum(:temperature, dataset=ECCO2Daily(), date=init_date)
     Smetadata = Metadatum(:salinity,    dataset=ECCO2Daily(), date=init_date)
@@ -170,11 +234,8 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
         VFCC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
         VCFC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Face,   Center), Oceananigans.Operators.volume, grid)
         VCCF = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face),   Oceananigans.Operators.volume, grid)
-        VCCC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Center), Oceananigans.Operators.volume, grid)
 
-        T, S = model.tracers
-
-        b   = Oceananigans.Models.buoyancy_operation(model)
+        b   = Oceananigans.Models.buoyancy_operation(ocean.model)
         Gbx = ∂x(b)^2 * VFCC
         Gby = ∂y(b)^2 * VCFC
         Gbz = ∂z(b)^2 * VCCF
@@ -248,7 +309,7 @@ near_global_filename(label, timestepper, filter, fs) = "near_global_" * somethin
 function run_near_global_cost(; arch = CPU(),
                                 timestep = scheme -> near_global_timestep(Val(scheme)),
                                 stop_time = 365days,
-                                variants = discretizations())
+                                variants = near_global_discretizations())
 
     grid = near_global_grid(arch)
     results = []
@@ -274,10 +335,16 @@ not derived from a theoretical limit here -- see `near_global_timestep` -- but t
 are the same.
 """
 function near_global(d::Discretization; arch = CPU(), grid = near_global_grid(arch), kw...)
+    # `Discretization` carries the tracer advection of the idealized cases, which the near-global case overrides
+    # with its own vertically implicit WENO7; only a scheme that departs from that shared default is forwarded, so
+    # a discretization naming its own scheme reaches the model with it and every other one keeps the near-global.
+    tracer_advection = d.tracer_advection === TimestepperTestCases.tracer_advection ? nothing : d.tracer_advection
+
     return near_global(d.timestepper; arch, grid,
                        free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
                        averaging_kernel = d.averaging_kernel,
                        barotropic_timestepper = d.barotropic_timestepper,
                        slow_forcing = d.slow_forcing,
+                       tracer_advection,
                        label = d.label, kw...)
 end

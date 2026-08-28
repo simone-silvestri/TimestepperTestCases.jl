@@ -3,9 +3,10 @@ using Oceananigans
 using Oceananigans.Units
 using CUDA
 
-# The cases of Table 1 at 1/4°, defined once in `discretizations()` and shared by every test case.
+# The cases of Table 1 at 1/4°, less `WRK3-UP`, whose tracer advection this case fixes -- see
+# `near_global_discretizations`.
 #
-#   WRK3-SE, WRK3-SE-SM05, WRK3-IM, SRK3-SE, AB2-SE, WRK3-UP, MRK4-SE
+#   WRK3-SE, WRK3-SE-SM05, WRK3-IM, SRK3-SE, AB2-SE, MRK4-SE
 #
 # The time steps here are empirical, not derived: on a global domain both c₁ and Δx vary, so the binding c₁ k
 # is a maximum over the globe rather than a single number. The three-stage value is measured and the others
@@ -14,7 +15,7 @@ using CUDA
 arch = GPU()
 grid = TimestepperTestCases.near_global_grid(arch)
 
-for d in discretizations()
+for d in near_global_discretizations()
     sim = TimestepperTestCases.near_global(d; arch, grid)
 end
 
