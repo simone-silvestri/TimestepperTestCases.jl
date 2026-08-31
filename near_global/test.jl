@@ -13,9 +13,14 @@ using CUDA
 # are scaled from it by the ratio of the imaginary-axis limits, so the ratios match the idealized cases.
 
 arch = GPU()
-grid = TimestepperTestCases.near_global_grid(arch)
 
+# One grid per case. The vertical coordinate is a `MutableVerticalDiscretization`, so `ηⁿ`, the four `σ`
+# scalings and `∂t_σ` live on the grid itself and are written in place by whichever model holds it: sharing one
+# grid across the loop hands each case the surface state the previous one ended on, and a case that ends in a
+# NaN poisons every case after it at iteration zero. `regrid_bathymetry` caches the bottom height, so building
+# the grid again per case costs a file read.
 for d in near_global_discretizations()
+    grid = TimestepperTestCases.near_global_grid(arch)
     sim = TimestepperTestCases.near_global(d; arch, grid)
 end
 

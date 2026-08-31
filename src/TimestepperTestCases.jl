@@ -2,6 +2,10 @@ module TimestepperTestCases
 
 export internal_tide, internal_seiche, idealized_coast, channel_simulation
 export near_global, near_global_grid, near_global_discretizations, run_near_global_cost
+export load_near_global, load_near_global_cases, near_global_cost_table
+export near_global_diffusivity_profile, near_global_diffusivity_map, near_global_diffusivity_hovmoller
+export near_global_surface_speed, near_global_surface_kinetic_energy, near_global_eddy_kinetic_energy
+export near_global_zonal_spectrum
 
 using DocStringExtensions
 using Oceananigans
@@ -97,5 +101,6 @@ include("load_idealized_coast_case.jl")
 include("load_internal_tide_case.jl")
 include("load_internal_seiche_case.jl")
 include("load_channel_case.jl")
+include("load_near_global_case.jl")
 
 end
