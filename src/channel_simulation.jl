@@ -513,8 +513,11 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
 
     g = (; Gbx, Gby, Gbz)
 
+    u, v, w = model.velocities
+    second_moments = (; vb = v * b, wb = w * b, u² = u * u, v² = v * v)
+
     snapshot_outputs = merge(model.velocities, model.tracers, f, g, (; η = model.free_surface.displacement), vol)
-    average_outputs  = merge(snapshot_outputs, f, g)
+    average_outputs  = merge(snapshot_outputs, second_moments)
 
     #####
     ##### Build checkpointer and output writer
