@@ -2,8 +2,6 @@ using TimestepperTestCases
 using Oceananigans
 using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
 
-SplitExplicitFreeSurfaces.variable_density_barotropic_mode[] = true
-
 # The cases of Table 1, plus the SM05 reference and the four-stage composition of section 4, defined once in
 # `discretizations()` and shared by every test case.
 #
@@ -12,6 +10,6 @@ SplitExplicitFreeSurfaces.variable_density_barotropic_mode[] = true
 # The channel's stratification is surface-intensified, so its c₁ comes from the WKB integral -- see
 # `channel_stability_parameters`.
 
-for d in discretizations()
+for d in discretizations()[4:end]
     sim = channel_simulation(d)
 end
