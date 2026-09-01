@@ -59,6 +59,14 @@ function print_progress(sim)
     return nothing
 end
 
+# Upstream `prognostic_state(::AbstractTimeStepper)` reads `Gⁿ` and `G⁻`, fields the SSP stepper does not
+# carry; like `SplitRungeKuttaTimeStepper`, it holds no state between time steps, so checkpointing skips it.
+import Oceananigans: prognostic_state, restore_prognostic_state!
+using Oceananigans.TimeSteppers: SSPRungeKuttaTimeStepper
+
+prognostic_state(::SSPRungeKuttaTimeStepper) = nothing
+restore_prognostic_state!(restored::SSPRungeKuttaTimeStepper, ::Nothing) = restored
+
 # For all test cases
 const tracer_buffer_scheme = WENO(order=5, buffer_scheme=Centered())
 const tracer_advection     = WENO(order=7, buffer_scheme=tracer_buffer_scheme)

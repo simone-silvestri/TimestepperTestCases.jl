@@ -530,10 +530,20 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
                                                        filename = "snapshots_" * string(testcase),
                                                        overwrite_existing)
 
-    simulation.output_writers[:averages] = JLD2Writer(model, average_outputs; 
+    simulation.output_writers[:averages] = JLD2Writer(model, average_outputs;
                                                       schedule = AveragedTimeInterval(5 * 360days),
                                                       filename = "averages_" * string(testcase),
                                                       overwrite_existing)
+
+    # The reference potential energy has to be sorted from an instantaneous buoyancy field: RPE is not linear
+    # in `b`, so the reference state of an average is not the average of the reference states. It needs `b`
+    # and the cell volumes, and under z-star the volumes are the static ones scaled column-wise by
+    # σ = (H + η)/H, so the two-dimensional `η` stands in for the three-dimensional volume field. That keeps
+    # this file at the size of `b` alone -- 2.3 GB over the run against the 88 GB of `snapshot_outputs`.
+    simulation.output_writers[:mixing] = JLD2Writer(model, (; b, η = model.free_surface.displacement);
+                                                    schedule = TimeInterval(360days),
+                                                    filename = "mixing_" * string(testcase),
+                                                    overwrite_existing)
 
     if restart_file isa String
         set!(simulation; checkpoint=restart_file)
