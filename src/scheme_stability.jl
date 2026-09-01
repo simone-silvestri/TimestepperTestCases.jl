@@ -14,7 +14,9 @@ using Oceananigans.TimeSteppers: SplitRungeKuttaTimeStepper, SSPRungeKuttaTimeSt
 #####   This sets the number of substeps, given Δt.
 #####
 ##### `k` is the largest wavenumber the grid carries, π/Δx, since stability must hold for every resolved mode
-##### and the grid-scale one is the binding constraint.
+##### and the grid-scale one is the binding constraint. The barotropic sub-cycle is the one place where the
+##### distinction between that spectral wavenumber and the one a two-point difference actually delivers is
+##### worth making -- see [`staggered_wavenumber`](@ref).
 #####
 
 """
@@ -142,6 +144,24 @@ mode is the binding one, so this is the wavenumber that enters both Courant numb
 """
 @inline grid_wavenumber(Δx) = π / Δx
 
+"""
+    staggered_wavenumber(Δx, Δy)
+
+Largest wavenumber a *two-point staggered* difference delivers, `2√(Δx⁻² + Δy⁻²)`.
+
+The symbol of the difference between two points a distance `Δx` apart is `2i sin(kΔx/2)/Δx`, which reaches
+`2/Δx` at the grid-scale mode rather than the spectral `π/Δx` of [`grid_wavenumber`](@ref): a two-point
+operator does not see the grid-scale mode at its own wavenumber. The barotropic sub-cycle advances `η` and
+`(U, V)` with exactly such operators, so `2√(Δx⁻² + Δy⁻²)` is the spectral radius of the semi-discrete
+barotropic problem divided by `c₀`, the square root over the two directions being the worst case over the
+direction of propagation.
+
+The two conventions agree to 11% on an isotropic grid, `2√2` against `π`, which is why the idealized cases are
+indifferent to the choice; where the grid is strongly anisotropic they are not, and the spectral one is then
+the more conservative of the two.
+"""
+@inline staggered_wavenumber(Δx, Δy) = 2 * sqrt(1 / Δx^2 + 1 / Δy^2)
+
 #####
 ##### The two selections
 #####
@@ -213,24 +233,29 @@ baroclinic_timestep(scheme, reference_Δt; reference_scheme = :SplitRungeKutta3)
     reference_Δt * stability_limit(scheme) / stability_limit(reference_scheme)
 
 """
-    barotropic_substeps(barotropic_scheme; H, Δx, Δt, averaging_kernel, safety = 0.7, granularity = 8)
+    barotropic_substeps(barotropic_scheme; H, Δx, Δt, averaging_kernel, safety = 0.7, granularity = 8,
+                        wavenumber = grid_wavenumber(Δx))
 
 Smallest number of barotropic substeps for which the substep Courant number `c₀ k Δτ` stays at or below
 `safety` times the limit of the substep integrator, rounded up to a multiple of `granularity`.
+
+`k` is `grid_wavenumber(Δx)` unless `wavenumber` is given, in which case `Δx` is not used. The near-global case
+supplies [`staggered_wavenumber`](@ref) there, its grid being anisotropic enough for the two to disagree.
 
 The substep size is not `Δt / substeps`: the averaging kernel spans a window wider than the baroclinic step,
 and `weights_from_substeps` returns the fractional step size that goes with the requested count, so the
 Courant number is evaluated on the step the sub-cycle actually takes. Rounding up to a multiple of 8 keeps
 the count compatible with the kernels that require `substeps % 8 == 0`.
 
-The limits are the neutral ones of the substep integrators: `√3` for the three-stage Runge-Kutta substep and
-`1.8` for forward-backward, the latter already reduced from its nominal `2` by the averaging filter.
+The limits are those of the substep integrators: `√3` for the three-stage Runge-Kutta substep and `1` for
+forward-backward, the latter halved from its neutral `2` -- see [`substep_limit`](@ref).
 """
 function barotropic_substeps(barotropic_scheme; H, Δx, Δt, averaging_kernel,
-                             safety = 0.7, granularity = 8, maximum_substeps = 4096)
+                             safety = 0.7, granularity = 8, maximum_substeps = 4096,
+                             wavenumber = grid_wavenumber(Δx))
 
     c₀ = barotropic_speed(H)
-    k  = grid_wavenumber(Δx)
+    k  = wavenumber
     limit = safety * substep_limit(barotropic_scheme)
 
     substeps = granularity
@@ -265,11 +290,12 @@ analysis determines, and the conservative value is the honest one.
 @inline substep_limit(::RungeKutta3Scheme) = sqrt(3)
 
 """
-    barotropic_courant(barotropic_scheme; H, Δx, Δt, substeps, averaging_kernel)
+    barotropic_courant(; H, Δx, Δt, substeps, averaging_kernel, wavenumber = grid_wavenumber(Δx))
 
-Substep Courant number `c₀ k Δτ` that `substeps` actually delivers, for reporting alongside its limit.
+Substep Courant number `c₀ k Δτ` that `substeps` actually delivers, for reporting alongside its limit. `k`
+follows the same convention as in [`barotropic_substeps`](@ref).
 """
-function barotropic_courant(; H, Δx, Δt, substeps, averaging_kernel)
+function barotropic_courant(; H, Δx, Δt, substeps, averaging_kernel, wavenumber = grid_wavenumber(Δx))
     fractional_Δt, _, _ = weights_from_substeps(Float64, substeps, averaging_kernel)
-    return barotropic_speed(H) * grid_wavenumber(Δx) * fractional_Δt * Δt
+    return barotropic_speed(H) * wavenumber * fractional_Δt * Δt
 end

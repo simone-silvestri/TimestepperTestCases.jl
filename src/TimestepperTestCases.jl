@@ -1,7 +1,11 @@
 module TimestepperTestCases
 
 export internal_tide, internal_seiche, idealized_coast, channel_simulation
-export near_global, near_global_grid, run_near_global_cost
+export near_global, near_global_grid, near_global_discretizations, run_near_global_cost
+export load_near_global, load_near_global_cases, near_global_cost_table
+export near_global_diffusivity_profile, near_global_diffusivity_map, near_global_diffusivity_hovmoller
+export near_global_surface_speed, near_global_surface_kinetic_energy, near_global_eddy_kinetic_energy
+export near_global_zonal_spectrum
 
 using DocStringExtensions
 using Oceananigans
@@ -9,7 +13,7 @@ using Oceananigans.Grids
 using Oceananigans.Units
 using Oceananigans.Models
 using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces:
-    WideTrig74AveragingKernel, WideTrig2AveragingKernel, OptimizedAsymmetricAveragingKernel,
+    WideTrigAveragingKernel, OptimizedAsymmetricAveragingKernel,
     LowDissipationAveragingKernel,
     ForwardBackwardScheme, RungeKutta3Scheme, averaging_shape_function,
     FrozenSlowForcing, StageQuadraticSlowForcing, ProgressiveSlowForcing
@@ -55,6 +59,14 @@ function print_progress(sim)
     return nothing
 end
 
+# Upstream `prognostic_state(::AbstractTimeStepper)` reads `Gⁿ` and `G⁻`, fields the SSP stepper does not
+# carry; like `SplitRungeKuttaTimeStepper`, it holds no state between time steps, so checkpointing skips it.
+import Oceananigans: prognostic_state, restore_prognostic_state!
+using Oceananigans.TimeSteppers: SSPRungeKuttaTimeStepper
+
+prognostic_state(::SSPRungeKuttaTimeStepper) = nothing
+restore_prognostic_state!(restored::SSPRungeKuttaTimeStepper, ::Nothing) = restored
+
 # For all test cases
 const tracer_buffer_scheme = WENO(order=5, buffer_scheme=Centered())
 const tracer_advection     = WENO(order=7, buffer_scheme=tracer_buffer_scheme)
@@ -97,5 +109,6 @@ include("load_idealized_coast_case.jl")
 include("load_internal_tide_case.jl")
 include("load_internal_seiche_case.jl")
 include("load_channel_case.jl")
+include("load_near_global_case.jl")
 
 end

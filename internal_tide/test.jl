@@ -14,3 +14,20 @@ grid = TimestepperTestCases.internal_tide_grid()
 for d in discretizations()
     sim = TimestepperTestCases.internal_tide(d; grid)
 end
+
+timesteppers = Dict("WRK3-SE" => "SplitRungeKutta3",
+                    "SRK3-SE" => "SSPRungeKutta3",
+                    "MRK4-SE" => "ModifiedRungeKutta4")
+
+for factor in (1//4, 1//8), label in ("WRK3-SE", "SRK3-SE", "MRK4-SE")
+    tag  = label * "-dt" * string(denominator(factor))
+    file = "internal_tide/internal_tide_" * timesteppers[label] * "_" * tag * ".jld2"
+
+    if isfile(file)
+        @info "skipping $tag, output already present"
+        continue
+    end
+
+    sim = TimestepperTestCases.internal_tide(discretization(label);
+                                             timestep_factor = factor, label = tag)
+end
