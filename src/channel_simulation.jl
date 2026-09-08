@@ -271,15 +271,34 @@ function default_closure()
 end
 
 """
-    channel_simulation(; momentum_advection, tracer_advection, closure, zstar, restart_file, arch, bottom_height, timestepper, grid, initial_file, testcase)
+    channel_simulation(; momentum_advection, tracer_advection, boundary_scheme, closure, zstar, restart_file, arch, bottom_height, timestepper, grid, initial_file, testcase)
 
 Set up and run the idealized re-entrant channel flow simulation.
 
 $(SIGNATURES)
 
 # Keyword Arguments
-- `momentum_advection`: Momentum advection scheme (default: `WENOVectorInvariant()`)
-- `tracer_advection`: Tracer advection scheme (default: 7th-order WENO)
+- `momentum_advection`: Vector-invariant momentum advection scheme (`nothing`, the default, builds it from
+  `momentum_boundary_scheme`, reproducing `WENOVectorInvariant()`)
+- `tracer_advection`: Tracer advection scheme (`nothing`, the default, builds it from `tracer_boundary_scheme`)
+- `boundary_scheme`: the reconstruction the WENO buffer chain terminates in, used in the one cell whose stencil
+  no longer fits -- the domain buffer and, where the channel carries a bottom, any cell adjacent to an inactive
+  node. Options:
+   * `:cwenoz` -- the third-order central-WENO reconstruction of Semplice, Travaglia and Puppo (2022), whose
+     stencil extends only inwards.
+   * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
+   * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
+     Oceananigans defaults.
+  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`, which are well posed
+  for different reasons -- see the header of `boundary_schemes.jl`.
+- `tracer_boundary_scheme`, `momentum_boundary_scheme`: the same choice made separately for the tracer and the
+  momentum reconstructions, `boundary_scheme` setting both where it is given. Setting one of them alone
+  isolates which of the two the boundary treatment acts through.
+- `horizontal_tracer_reference_gradient`, `vertical_tracer_reference_gradient`,
+  `vertical_momentum_reference_gradient`: the CWENOZ oscillation scale `ϵ = (∇ref Δ)²` below which the
+  reconstruction reads the data as smooth and keeps third order. The default `0` estimates it from the stencil
+  instead -- see [`tracer_boundary_reconstruction`](@ref). The horizontal momentum terms reconstruct a
+  vorticity, a divergence flux and a squared velocity, so they take no reference gradient.
 - `closure`: Turbulence closure (default: `CATKEVerticalDiffusivity`)
 - `zstar`: Whether to use z-star vertical coordinates (default: `true`)
 - `restart_file`: Optional restart file path (default: `nothing`)
@@ -288,7 +307,9 @@ $(SIGNATURES)
 - `timestepper`: Timestepper symbol (default: `:SplitRungeKutta`)
 - `grid`: Grid to use (default: `default_grid(...)`)
 - `initial_file`: Optional initial condition file (default: `"tIni_80y_90L.bin"`)
-- `testcase`: Test case identifier string (default: `"0"`)
+- `testcase`: Test case identifier string (default: `"0"`), which names every output file of the run. A
+  boundary scheme that departs from the default is appended to it, so that its output does not overwrite the
+  default run it is meant to be compared against.
 
 # Returns
 - `Simulation` object after running to completion
@@ -303,8 +324,14 @@ time-averaged outputs. This test case demonstrates how numerical mixing interact
 explicit physical mixing in an equilibrated configuration, as shown in the paper.
 """
 
-function channel_simulation(; momentum_advection = WENOVectorInvariant(), 
-                                tracer_advection = TimestepperTestCases.tracer_advection, 
+function channel_simulation(; momentum_advection = nothing,
+                                tracer_advection = nothing,
+                                 boundary_scheme = nothing,
+                          tracer_boundary_scheme = something(boundary_scheme, default_tracer_boundary_scheme),
+                        momentum_boundary_scheme = something(boundary_scheme, default_momentum_boundary_scheme),
+            horizontal_tracer_reference_gradient = 0,
+              vertical_tracer_reference_gradient = 0,
+            vertical_momentum_reference_gradient = 0,
                                          closure = default_closure(),
                                            zstar = true,
                                     restart_file = nothing,
@@ -318,6 +345,29 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
                                 averaging_kernel = OptimizedAsymmetricAveragingKernel(),
                           barotropic_timestepper = ForwardBackwardScheme(),
                                     slow_forcing = FrozenSlowForcing())
+
+    #####
+    ##### Advection
+    #####
+
+    tracer_boundary_scheme   = boundary_scheme_value(tracer_boundary_scheme)
+    momentum_boundary_scheme = boundary_scheme_value(momentum_boundary_scheme)
+
+    # The horizontal momentum terms reconstruct a vorticity, a divergence flux and a squared velocity, so no
+    # single reference gradient carries their units: there the oscillation scale is read off the stencil.
+    momentum_advection = something(momentum_advection,
+                                   split_momentum_advection(nothing, ExplicitTimeDiscretization(),
+                                                            momentum_boundary_scheme, 0,
+                                                            vertical_momentum_reference_gradient))
+
+    tracer_advection = something(tracer_advection,
+                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection;
+                                                         horizontal_reference_gradient = horizontal_tracer_reference_gradient,
+                                                         vertical_reference_gradient = vertical_tracer_reference_gradient))
+
+    # A boundary scheme that departs from the default names the run it produces, so that its output does not
+    # overwrite the default one it is meant to be compared against.
+    testcase = string(testcase) * boundary_scheme_suffix(tracer_boundary_scheme, momentum_boundary_scheme)
 
     #####
     ##### Boundary conditions
@@ -561,6 +611,6 @@ function channel_simulation(d::Discretization; kw...)
                                 averaging_kernel = d.averaging_kernel,
                                 slow_forcing = d.slow_forcing,
                                 free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
-                                tracer_advection = d.tracer_advection,
+                                tracer_advection = forwarded_tracer_advection(d),
                                 testcase = d.label, kw...)
 end

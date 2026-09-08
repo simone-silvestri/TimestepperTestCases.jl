@@ -262,6 +262,18 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      barotropic_timestepper = ForwardBackwardScheme(),
                      slow_forcing = FrozenSlowForcing(),
                      tracer_advection = nothing,
+                     momentum_advection = nothing,
+                     boundary_scheme = nothing,
+                     tracer_boundary_scheme = something(boundary_scheme, default_tracer_boundary_scheme),
+                     momentum_boundary_scheme = something(boundary_scheme, default_momentum_boundary_scheme),
+                     # ∇ref Δ ≈ 0.14 K and ≈0.033 g/kg on the quarter-degree grid, about a decade below the
+                     # typical horizontal gradient, so a topographic step fires the constant candidate while
+                     # smooth data keeps third order. The vertical scales are read off the stencil.
+                     horizontal_temperature_reference_gradient = 5e-6,
+                     vertical_temperature_reference_gradient = 0,
+                     horizontal_salinity_reference_gradient = 1.2e-6,
+                     vertical_salinity_reference_gradient = 0,
+                     vertical_momentum_reference_gradient = 0,
                      Δt = near_global_timestep(Val(timestepper)),
                      cold_start_Δt = Δt / 3,
                      cold_start_duration = 60days,
@@ -295,8 +307,37 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     end
     
     time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = 0.5)
-    momentum_advection = WENOVectorInvariant(; time_discretization)
-    tracer_advection = something(tracer_advection, WENO(order=7; minimum_buffer_upwind_order=3, time_discretization))
+
+    tracer_boundary_scheme   = boundary_scheme_value(tracer_boundary_scheme)
+    momentum_boundary_scheme = boundary_scheme_value(momentum_boundary_scheme)
+
+    # The horizontal momentum terms reconstruct a vorticity, a divergence flux and a squared velocity, so no
+    # single reference gradient carries their units: there the oscillation scale is read off the stencil.
+    momentum_advection = something(momentum_advection,
+                                   split_momentum_advection(nothing, time_discretization, momentum_boundary_scheme,
+                                                            0, vertical_momentum_reference_gradient))
+
+    # Temperature and salinity carry their own reference gradients, so each takes its own scheme.
+    vertically_implicit_weno7 = WENO(order=7; time_discretization)
+
+    tracer_advection = something(tracer_advection,
+                                 (T = tracer_advection_scheme(tracer_boundary_scheme, vertically_implicit_weno7;
+                                                              time_discretization,
+                                                              horizontal_reference_gradient = horizontal_temperature_reference_gradient,
+                                                              vertical_reference_gradient = vertical_temperature_reference_gradient),
+                                  S = tracer_advection_scheme(tracer_boundary_scheme, vertically_implicit_weno7;
+                                                              time_discretization,
+                                                              horizontal_reference_gradient = horizontal_salinity_reference_gradient,
+                                                              vertical_reference_gradient = vertical_salinity_reference_gradient)))
+
+    # A boundary scheme that departs from the default names the run it produces, so that its output does not
+    # overwrite the default one it is meant to be compared against. The label is materialized only where there
+    # is a suffix to append, `nothing` reaching `near_global_filename` as the request for the derived name.
+    boundary_suffix = boundary_scheme_suffix(tracer_boundary_scheme, momentum_boundary_scheme)
+
+    if !isempty(boundary_suffix)
+        label = something(label, near_global_label(timestepper, filter, free_surface)) * boundary_suffix
+    end
 
     wind_fluxes = if wind_stress
         τˣ = near_global_wind_stress(grid; latitudes = wind_stress_latitudes,
@@ -423,6 +464,10 @@ function near_global_progress(sim)
                    iteration(sim), prettytime(sim), prettytime(sim.Δt),
                    maximum(abs, interior(u)), maximum(abs, interior(v)), maximum(abs, interior(w)),
                    maximum(interior(T)), minimum(interior(T)), prettytime(step_time))
+
+    # Julia block-buffers stderr when it is a file, so a batch log only appears when the process exits
+    flush(stderr)
+
     TimestepperTestCases.wall_clock[] = time_ns()
     return nothing
 end
@@ -467,13 +512,11 @@ function near_global(d::Discretization; arch = CPU(), grid = near_global_grid(ar
     # `Discretization` carries the tracer advection of the idealized cases, which the near-global case overrides
     # with its own vertically implicit WENO7; only a scheme that departs from that shared default is forwarded, so
     # a discretization naming its own scheme reaches the model with it and every other one keeps the near-global.
-    tracer_advection = d.tracer_advection === TimestepperTestCases.tracer_advection ? nothing : d.tracer_advection
-
     return near_global(d.timestepper; arch, grid,
                        free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
                        averaging_kernel = d.averaging_kernel,
                        barotropic_timestepper = d.barotropic_timestepper,
                        slow_forcing = d.slow_forcing,
-                       tracer_advection,
+                       tracer_advection = forwarded_tracer_advection(d),
                        label = d.label, kw...)
 end

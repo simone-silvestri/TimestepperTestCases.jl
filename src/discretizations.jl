@@ -60,6 +60,19 @@ disagree with the composition it describes.
 """
 timestep_ratio(d::Discretization) = stability_limit(d.timestepper) / stability_limit(:SplitRungeKutta3)
 
+"""
+    forwarded_tracer_advection(d::Discretization)
+
+The tracer advection of `d` where it departs from the shared `TimestepperTestCases.tracer_advection`, and
+`nothing` where it does not.
+
+Every case builds its own tracer advection out of its `boundary_scheme`, and a `Discretization` that names no
+scheme of its own must not override that: only `WRK3-UP`, which exists to carry a third-order upwind, reaches
+the model with the scheme it stores.
+"""
+forwarded_tracer_advection(d::Discretization) =
+    d.tracer_advection === TimestepperTestCases.tracer_advection ? nothing : d.tracer_advection
+
 Base.summary(d::Discretization) = string("Discretization(\"", d.label, "\")")
 Base.show(io::IO, d::Discretization) = print(io, summary(d))
 

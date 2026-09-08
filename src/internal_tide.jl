@@ -198,7 +198,7 @@ default_free_surface_name(::SplitExplicitFreeSurface) = "split_free_surface"
 default_free_surface_name(::ImplicitFreeSurface) = "implicit_free_surface"
 
 """
-    internal_tide(timestepper::Symbol; free_surface, tracer_advection)
+    internal_tide(timestepper::Symbol; free_surface, tracer_advection, boundary_scheme)
 
 Set up and run the internal tide test case simulation.
 
@@ -209,7 +209,26 @@ $(SIGNATURES)
 
 # Keyword Arguments
 - `free_surface`: Free surface formulation (default: `SplitExplicitFreeSurface` with 60 substeps)
-- `tracer_advection`: Tracer advection scheme (default: 7th-order WENO)
+- `tracer_advection`: Tracer advection scheme (`nothing`, the default, builds it from `tracer_boundary_scheme`)
+- `momentum_advection`: Flux-form momentum advection scheme (`nothing` builds it from `momentum_boundary_scheme`)
+- `boundary_scheme`: the reconstruction the WENO buffer chain terminates in, used in the one cell whose stencil
+  no longer fits -- the domain buffer and, on the immersed seamount, any cell adjacent to an inactive node.
+  Options:
+   * `:cwenoz` -- the third-order central-WENO reconstruction of Semplice, Travaglia and Puppo (2022), whose
+     stencil extends only inwards.
+   * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
+   * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
+     Oceananigans defaults.
+  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`, which are well posed
+  for different reasons -- see the header of `boundary_schemes.jl`.
+- `tracer_boundary_scheme`, `momentum_boundary_scheme`: the same choice made separately for the tracer and the
+  momentum reconstructions, `boundary_scheme` setting both where it is given. Setting one of them alone
+  isolates which of the two the boundary treatment acts through.
+- `horizontal_tracer_reference_gradient`, `vertical_tracer_reference_gradient`,
+  `horizontal_momentum_reference_gradient`, `vertical_momentum_reference_gradient`: the CWENOZ oscillation
+  scale `ϵ = (∇ref Δ)²` below which the reconstruction reads the data as smooth and keeps third order. The
+  default `0` estimates it from the stencil instead, which is what the stratified column wants -- see
+  [`tracer_boundary_reconstruction`](@ref).
 
 # Returns
 - `Simulation` object after running to completion
@@ -233,10 +252,35 @@ function internal_tide(timestepper::Symbol;
                                                                                              timestepper;
                                                                                              averaging_kernel)),
                        free_surface_name=default_free_surface_name(free_surface),
-                       tracer_advection=TimestepperTestCases.tracer_advection,
+                       boundary_scheme=nothing,
+                       tracer_boundary_scheme=something(boundary_scheme, default_tracer_boundary_scheme),
+                       momentum_boundary_scheme=something(boundary_scheme, default_momentum_boundary_scheme),
+                       horizontal_tracer_reference_gradient=0,
+                       vertical_tracer_reference_gradient=0,
+                       horizontal_momentum_reference_gradient=0,
+                       vertical_momentum_reference_gradient=0,
+                       tracer_advection=nothing,
+                       momentum_advection=nothing,
                        Δt=internal_tide_timestep(Val(timestepper)))
 
     param = internal_tide_parameters()
+
+    tracer_boundary_scheme   = boundary_scheme_value(tracer_boundary_scheme)
+    momentum_boundary_scheme = boundary_scheme_value(momentum_boundary_scheme)
+
+    supplied_tracer_advection = !isnothing(tracer_advection)
+
+    # Buoyancy and the passive tracer are reconstructed with the same scheme, so the two reference gradients are
+    # shared: `b` is an acceleration and `c` is dimensionless, and neither is given a scale of its own here.
+    tracer_advection = something(tracer_advection,
+                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection;
+                                                         horizontal_reference_gradient = horizontal_tracer_reference_gradient,
+                                                         vertical_reference_gradient = vertical_tracer_reference_gradient))
+
+    momentum_advection = something(momentum_advection,
+                                   split_flux_form_momentum_advection(5, ExplicitTimeDiscretization(), momentum_boundary_scheme,
+                                                                      horizontal_momentum_reference_gradient,
+                                                                      vertical_momentum_reference_gradient))
 
     coriolis  = FPlane(f = param.f)
     u_forcing = Forcing(tidal_forcing, parameters=param)
@@ -250,8 +294,8 @@ function internal_tide(timestepper::Symbol;
                                         coriolis,
                                         buoyancy = BuoyancyTracer(),
                                         tracers = (:b, :c),
-                                        momentum_advection = WENO(minimum_buffer_upwind_order=1),
-                                        tracer_advection = tracer_advection,
+                                        momentum_advection,
+                                        tracer_advection,
                                         free_surface,
                                         timestepper,
                                         forcing = (; u = u_forcing),
@@ -294,11 +338,18 @@ function internal_tide(timestepper::Symbol;
 
     # The advection scheme is appended only when the caller accepted the default name, which is what keeps a
     # non-default-advection run from overwriting the default one. An explicitly supplied name already
-    # distinguishes the run, so appending to it would only make the filename disagree with the case label.
+    # distinguishes the run, so appending to it would only make the filename disagree with the case label. A
+    # boundary scheme is named rather than typed, two of the three reaching the model as the same
+    # `FluxFormAdvection` and differing only in the reconstruction the chain ends in.
     fsname = free_surface_name
-    if free_surface_name == default_free_surface_name(free_surface) &&
-       tracer_advection != TimestepperTestCases.tracer_advection
-        fsname *= "_$(typeof(tracer_advection).name.name)"
+    if free_surface_name == default_free_surface_name(free_surface)
+        suffix = boundary_scheme_suffix(tracer_boundary_scheme, momentum_boundary_scheme)
+
+        if !isempty(suffix)
+            fsname *= suffix
+        elseif supplied_tracer_advection
+            fsname *= "_$(typeof(tracer_advection).name.name)"
+        end
     end
 
     filename = "internal_tide_$(string(timestepper))_$(fsname)"
@@ -368,5 +419,5 @@ function internal_tide(d::Discretization; grid = internal_tide_grid(),
     end
 
     return internal_tide(d.timestepper; grid, free_surface, free_surface_name = label,
-                         tracer_advection = d.tracer_advection, Δt, kw...)
+                         tracer_advection = forwarded_tracer_advection(d), Δt, kw...)
 end

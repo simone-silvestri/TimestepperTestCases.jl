@@ -24,6 +24,8 @@ using Printf
 export stability_limit, baroclinic_timestep, barotropic_substeps, barotropic_courant
 export Discretization, discretizations, discretization, timestep_and_free_surface, timestep_ratio, plot_style
 export ModifiedRungeKutta4TimeStepper, ProgressiveSlowForcing
+export default_tracer_boundary_scheme, default_momentum_boundary_scheme, boundary_scheme_value
+export split_tracer_advection, split_momentum_advection, split_flux_form_momentum_advection
 
 wall_clock = Ref(time_ns())
 
@@ -64,6 +66,7 @@ const tracer_buffer_scheme = WENO(order=5, buffer_scheme=Centered())
 const tracer_advection     = WENO(order=7, buffer_scheme=tracer_buffer_scheme)
 
 include("scheme_stability.jl")
+include("boundary_schemes.jl")
 include("discretizations.jl")
 
 include("BuoyancyVarianceDissipationComputations/BuoyancyVarianceDissipationComputations.jl")
