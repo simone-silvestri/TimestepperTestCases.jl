@@ -59,7 +59,7 @@ function near_global_grid(arch = CPU();
                           Ny = 600,
                           Nz = 50,
                           depth = 5000meters,
-                          latitude  = (-75, 75),
+                          latitude  = (-60, 60),
                           longitude = (0, 360),
                           # A 15 m floor leaves one-cell pinnacles standing among their 1800 m neighbours --
                           # the Solomon Sea has a 16.7 m column beside a dry cell -- and the flow squeezing
