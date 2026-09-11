@@ -118,16 +118,10 @@ $(SIGNATURES)
    * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
    * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
      Oceananigans defaults.
-  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`, which are well posed
-  for different reasons -- see the header of `boundary_schemes.jl`.
+  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`.
 - `tracer_boundary_scheme`, `momentum_boundary_scheme`: the same choice made separately for the tracer and the
   momentum reconstructions, `boundary_scheme` setting both where it is given. Setting one of them alone
   isolates which of the two the boundary treatment acts through.
-- `horizontal_tracer_reference_gradient`, `vertical_tracer_reference_gradient`,
-  `vertical_momentum_reference_gradient`: the CWENOZ oscillation scale `ϵ = (∇ref Δ)²` below which the
-  reconstruction reads the data as smooth and keeps third order. The default `0` estimates it from the stencil
-  instead -- see [`tracer_boundary_reconstruction`](@ref). The horizontal momentum terms reconstruct a
-  vorticity, a divergence flux and a squared velocity, so they take no reference gradient.
 
 # Returns
 - `Simulation` object configured but not yet run
@@ -153,9 +147,6 @@ function idealized_coast(timestepper::Symbol;
                          boundary_scheme = nothing,
                          tracer_boundary_scheme = something(boundary_scheme, default_tracer_boundary_scheme),
                          momentum_boundary_scheme = something(boundary_scheme, default_momentum_boundary_scheme),
-                         horizontal_tracer_reference_gradient = 0,
-                         vertical_tracer_reference_gradient = 0,
-                         vertical_momentum_reference_gradient = 0,
                          tracer_advection = nothing,
                          momentum_advection = nothing,
                          stop_time = 40days,
@@ -164,18 +155,12 @@ function idealized_coast(timestepper::Symbol;
     tracer_boundary_scheme   = boundary_scheme_value(tracer_boundary_scheme)
     momentum_boundary_scheme = boundary_scheme_value(momentum_boundary_scheme)
 
-    # The horizontal momentum terms reconstruct a vorticity, a divergence flux and a squared velocity, so no
-    # single reference gradient carries their units: there the oscillation scale is read off the stencil.
     momentum_advection = something(momentum_advection,
                                    split_momentum_advection(nothing, ExplicitTimeDiscretization(),
-                                                            momentum_boundary_scheme, 0,
-                                                            vertical_momentum_reference_gradient))
+                                                            momentum_boundary_scheme))
 
-    # Temperature and salinity are reconstructed with the same scheme, so the two reference gradients are shared.
     tracer_advection = something(tracer_advection,
-                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection;
-                                                         horizontal_reference_gradient = horizontal_tracer_reference_gradient,
-                                                         vertical_reference_gradient = vertical_tracer_reference_gradient))
+                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection))
 
     Lx = 192kilometers
     Ly = 192kilometers

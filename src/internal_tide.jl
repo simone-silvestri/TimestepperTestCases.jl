@@ -219,16 +219,10 @@ $(SIGNATURES)
    * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
    * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
      Oceananigans defaults.
-  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`, which are well posed
-  for different reasons -- see the header of `boundary_schemes.jl`.
+  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`.
 - `tracer_boundary_scheme`, `momentum_boundary_scheme`: the same choice made separately for the tracer and the
   momentum reconstructions, `boundary_scheme` setting both where it is given. Setting one of them alone
   isolates which of the two the boundary treatment acts through.
-- `horizontal_tracer_reference_gradient`, `vertical_tracer_reference_gradient`,
-  `horizontal_momentum_reference_gradient`, `vertical_momentum_reference_gradient`: the CWENOZ oscillation
-  scale `ϵ = (∇ref Δ)²` below which the reconstruction reads the data as smooth and keeps third order. The
-  default `0` estimates it from the stencil instead, which is what the stratified column wants -- see
-  [`tracer_boundary_reconstruction`](@ref).
 
 # Returns
 - `Simulation` object after running to completion
@@ -255,10 +249,6 @@ function internal_tide(timestepper::Symbol;
                        boundary_scheme=nothing,
                        tracer_boundary_scheme=something(boundary_scheme, default_tracer_boundary_scheme),
                        momentum_boundary_scheme=something(boundary_scheme, default_momentum_boundary_scheme),
-                       horizontal_tracer_reference_gradient=0,
-                       vertical_tracer_reference_gradient=0,
-                       horizontal_momentum_reference_gradient=0,
-                       vertical_momentum_reference_gradient=0,
                        tracer_advection=nothing,
                        momentum_advection=nothing,
                        Δt=internal_tide_timestep(Val(timestepper)))
@@ -270,17 +260,12 @@ function internal_tide(timestepper::Symbol;
 
     supplied_tracer_advection = !isnothing(tracer_advection)
 
-    # Buoyancy and the passive tracer are reconstructed with the same scheme, so the two reference gradients are
-    # shared: `b` is an acceleration and `c` is dimensionless, and neither is given a scale of its own here.
     tracer_advection = something(tracer_advection,
-                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection;
-                                                         horizontal_reference_gradient = horizontal_tracer_reference_gradient,
-                                                         vertical_reference_gradient = vertical_tracer_reference_gradient))
+                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection))
 
     momentum_advection = something(momentum_advection,
-                                   split_flux_form_momentum_advection(5, ExplicitTimeDiscretization(), momentum_boundary_scheme,
-                                                                      horizontal_momentum_reference_gradient,
-                                                                      vertical_momentum_reference_gradient))
+                                   split_flux_form_momentum_advection(5, ExplicitTimeDiscretization(),
+                                                                      momentum_boundary_scheme))
 
     coriolis  = FPlane(f = param.f)
     u_forcing = Forcing(tidal_forcing, parameters=param)

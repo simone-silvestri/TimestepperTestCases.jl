@@ -289,16 +289,10 @@ $(SIGNATURES)
    * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
    * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
      Oceananigans defaults.
-  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`, which are well posed
-  for different reasons -- see the header of `boundary_schemes.jl`.
+  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`.
 - `tracer_boundary_scheme`, `momentum_boundary_scheme`: the same choice made separately for the tracer and the
   momentum reconstructions, `boundary_scheme` setting both where it is given. Setting one of them alone
   isolates which of the two the boundary treatment acts through.
-- `horizontal_tracer_reference_gradient`, `vertical_tracer_reference_gradient`,
-  `vertical_momentum_reference_gradient`: the CWENOZ oscillation scale `ϵ = (∇ref Δ)²` below which the
-  reconstruction reads the data as smooth and keeps third order. The default `0` estimates it from the stencil
-  instead -- see [`tracer_boundary_reconstruction`](@ref). The horizontal momentum terms reconstruct a
-  vorticity, a divergence flux and a squared velocity, so they take no reference gradient.
 - `closure`: Turbulence closure (default: `CATKEVerticalDiffusivity`)
 - `zstar`: Whether to use z-star vertical coordinates (default: `true`)
 - `restart_file`: Optional restart file path (default: `nothing`)
@@ -329,9 +323,6 @@ function channel_simulation(; momentum_advection = nothing,
                                  boundary_scheme = nothing,
                           tracer_boundary_scheme = something(boundary_scheme, default_tracer_boundary_scheme),
                         momentum_boundary_scheme = something(boundary_scheme, default_momentum_boundary_scheme),
-            horizontal_tracer_reference_gradient = 0,
-              vertical_tracer_reference_gradient = 0,
-            vertical_momentum_reference_gradient = 0,
                                          closure = default_closure(),
                                            zstar = true,
                                     restart_file = nothing,
@@ -353,17 +344,12 @@ function channel_simulation(; momentum_advection = nothing,
     tracer_boundary_scheme   = boundary_scheme_value(tracer_boundary_scheme)
     momentum_boundary_scheme = boundary_scheme_value(momentum_boundary_scheme)
 
-    # The horizontal momentum terms reconstruct a vorticity, a divergence flux and a squared velocity, so no
-    # single reference gradient carries their units: there the oscillation scale is read off the stencil.
     momentum_advection = something(momentum_advection,
                                    split_momentum_advection(nothing, ExplicitTimeDiscretization(),
-                                                            momentum_boundary_scheme, 0,
-                                                            vertical_momentum_reference_gradient))
+                                                            momentum_boundary_scheme))
 
     tracer_advection = something(tracer_advection,
-                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection;
-                                                         horizontal_reference_gradient = horizontal_tracer_reference_gradient,
-                                                         vertical_reference_gradient = vertical_tracer_reference_gradient))
+                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection))
 
     # A boundary scheme that departs from the default names the run it produces, so that its output does not
     # overwrite the default one it is meant to be compared against.

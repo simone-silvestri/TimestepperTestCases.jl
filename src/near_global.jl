@@ -266,14 +266,6 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      boundary_scheme = nothing,
                      tracer_boundary_scheme = something(boundary_scheme, default_tracer_boundary_scheme),
                      momentum_boundary_scheme = something(boundary_scheme, default_momentum_boundary_scheme),
-                     # ∇ref Δ ≈ 0.14 K and ≈0.033 g/kg on the quarter-degree grid, about a decade below the
-                     # typical horizontal gradient, so a topographic step fires the constant candidate while
-                     # smooth data keeps third order. The vertical scales are read off the stencil.
-                     horizontal_temperature_reference_gradient = 5e-6,
-                     vertical_temperature_reference_gradient = 0,
-                     horizontal_salinity_reference_gradient = 1.2e-6,
-                     vertical_salinity_reference_gradient = 0,
-                     vertical_momentum_reference_gradient = 0,
                      Δt = near_global_timestep(Val(timestepper)),
                      cold_start_Δt = Δt / 3,
                      cold_start_duration = 60days,
@@ -311,24 +303,14 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     tracer_boundary_scheme   = boundary_scheme_value(tracer_boundary_scheme)
     momentum_boundary_scheme = boundary_scheme_value(momentum_boundary_scheme)
 
-    # The horizontal momentum terms reconstruct a vorticity, a divergence flux and a squared velocity, so no
-    # single reference gradient carries their units: there the oscillation scale is read off the stencil.
     momentum_advection = something(momentum_advection,
-                                   split_momentum_advection(nothing, time_discretization, momentum_boundary_scheme,
-                                                            0, vertical_momentum_reference_gradient))
+                                   split_momentum_advection(nothing, time_discretization, momentum_boundary_scheme))
 
-    # Temperature and salinity carry their own reference gradients, so each takes its own scheme.
     vertically_implicit_weno7 = WENO(order=7; time_discretization)
 
     tracer_advection = something(tracer_advection,
-                                 (T = tracer_advection_scheme(tracer_boundary_scheme, vertically_implicit_weno7;
-                                                              time_discretization,
-                                                              horizontal_reference_gradient = horizontal_temperature_reference_gradient,
-                                                              vertical_reference_gradient = vertical_temperature_reference_gradient),
-                                  S = tracer_advection_scheme(tracer_boundary_scheme, vertically_implicit_weno7;
-                                                              time_discretization,
-                                                              horizontal_reference_gradient = horizontal_salinity_reference_gradient,
-                                                              vertical_reference_gradient = vertical_salinity_reference_gradient)))
+                                 tracer_advection_scheme(tracer_boundary_scheme, vertically_implicit_weno7;
+                                                         time_discretization))
 
     # A boundary scheme that departs from the default names the run it produces, so that its output does not
     # overwrite the default one it is meant to be compared against. The label is materialized only where there
