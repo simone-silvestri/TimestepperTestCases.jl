@@ -105,7 +105,8 @@ function discretizations()
             Discretization("WRK3-SE-SM05", :SplitRungeKutta3;
                            barotropic_timestepper = fb, averaging_kernel = sm05),
 
-            Discretization("WRK3-SE", :SplitRungeKutta3),
+            Discretization("WRK3-SE", :SplitRungeKutta3;
+                           slow_forcing = StageQuadraticSlowForcing()),
 
             Discretization("SRK3-SE", :SSPRungeKutta3),
 
@@ -120,6 +121,7 @@ function discretizations()
                            implicit_free_surface = true),
 
             Discretization("WRK3-UP", :SplitRungeKutta3;
+                           slow_forcing = StageQuadraticSlowForcing(),
                            tracer_advection = UpwindBiased(order = 3))]
 end
 

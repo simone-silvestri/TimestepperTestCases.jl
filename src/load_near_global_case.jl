@@ -9,15 +9,13 @@
 
 using FFTW
 using JLD2
-using Oceananigans.Grids: φnodes, λnodes, znodes
+using Oceananigans.Grids: φnodes, λnodes, znodes, xspacings
+using Statistics: mean
 
-near_global_dissipation_path(folder, label) = joinpath(folder, "near_global_$(label)_dissipation.jld2")
-near_global_surface_path(folder, label)     = joinpath(folder, "near_global_$(label)_surface.jld2")
-near_global_average_path(folder, label)     = joinpath(folder, "near_global_$(label)_average.jld2")
-near_global_cost_path(folder, label)        = joinpath(folder, "near_global_$(label)_cost.jld2")
+near_global_path(folder, label, kind, prefix = "near_global") = joinpath(folder, "$(prefix)_$(label)_$(kind).jld2")
 
 """
-    load_near_global(folder, label; architecture, dissipation, surface, average)
+    load_near_global(folder, label; architecture, prefix, dissipation, surface, average)
 
 Open the output of the near-global run labelled `label` in `folder`.
 
@@ -42,14 +40,14 @@ snapshots are read one at a time by the diagnostics rather than held. The dissip
 already volume-integrated by the writer -- `Gbx = ∂x(b)² V` and likewise for the others -- which is why the
 reductions below are plain sums and carry no metric of their own.
 """
-function load_near_global(folder, label; architecture = CPU(),
+function load_near_global(folder, label; architecture = CPU(), prefix = "near_global",
                           dissipation = true, surface = true, average = true)
 
     case = Dict{Symbol, Any}()
     case[:label] = label
 
     if dissipation
-        path = near_global_dissipation_path(folder, label)
+        path = near_global_path(folder, label, "dissipation", prefix)
         for name in (:Abx, :Aby, :Abz, :Gbx, :Gby, :Gbz)
             case[name] = FieldTimeSeries(path, string(name); architecture, backend = OnDisk())
         end
@@ -58,7 +56,7 @@ function load_near_global(folder, label; architecture = CPU(),
     end
 
     if surface
-        path = near_global_surface_path(folder, label)
+        path = near_global_path(folder, label, "surface", prefix)
         for name in (:T, :S, :u, :v, :w)
             case[name] = FieldTimeSeries(path, string(name); architecture, backend = OnDisk())
         end
@@ -66,7 +64,7 @@ function load_near_global(folder, label; architecture = CPU(),
     end
 
     if average
-        path = near_global_average_path(folder, label)
+        path = near_global_path(folder, label, "average", prefix)
         for (name, averaged) in zip((:T, :S, :u, :v, :w), (:T̄, :S̄, :ū, :v̄, :w̄))
             case[averaged] = FieldTimeSeries(path, string(name); architecture, backend = OnDisk())
         end
@@ -79,14 +77,15 @@ function load_near_global(folder, label; architecture = CPU(),
 end
 
 """
-    load_near_global_cases(folder; labels, kw...)
+    load_near_global_cases(folder; labels, prefix, kw...)
 
 Open every near-global run present in `folder`, skipping the labels whose output is missing, so that a
 notebook can be run while the remaining variants are still integrating.
 """
-function load_near_global_cases(folder; labels = [d.label for d in near_global_discretizations()], kw...)
-    available = filter(l -> isfile(near_global_dissipation_path(folder, l)), labels)
-    return available, [load_near_global(folder, l; kw...) for l in available]
+function load_near_global_cases(folder; labels = [d.label for d in near_global_discretizations()],
+                                prefix = "near_global", kw...)
+    available = filter(l -> isfile(near_global_path(folder, l, "dissipation", prefix)), labels)
+    return available, [load_near_global(folder, l; prefix, kw...) for l in available]
 end
 
 #####
@@ -94,12 +93,12 @@ end
 #####
 
 """
-    load_near_global_cost(folder, label)
+    load_near_global_cost(folder, label, prefix = "near_global")
 
 The timings written by [`save_near_global_cost`](@ref), or `nothing` where the run predates the cost record.
 """
-function load_near_global_cost(folder, label)
-    path = near_global_cost_path(folder, label)
+function load_near_global_cost(folder, label, prefix = "near_global")
+    path = near_global_path(folder, label, "cost", prefix)
     isfile(path) || return nothing
 
     return JLD2.jldopen(path, "r") do file
@@ -171,6 +170,9 @@ end
 
 The depth-integrated numerical diffusivity as a map, `κ(λ, φ) = -Σ_z(Ax + Ay + Az) / 2Σ_z(Gx + Gy + Gz)`, with
 the staggered directions interpolated onto cell centers. Returns `(κ, λ, φ)`.
+
+The grid is curvilinear, so `λ` and `φ` come back as `Nx × Ny` matrices of the cell-center coordinates and not
+as axes: a plot of `κ` reads them as the coordinates of each cell rather than as a rectangular mesh.
 """
 function near_global_diffusivity_map(case, time_index = length(case[:times]))
     A = interpolate_to_center_x(vertical_sum(case[:Abx][time_index])) .+
@@ -184,8 +186,22 @@ function near_global_diffusivity_map(case, time_index = length(case[:times]))
     grid = case[:Abx].grid
     κ = @. - A / (2G)
 
-    return κ, Array(λnodes(grid, Center())), Array(φnodes(grid, Center()))
+    return κ, center_coordinates(grid)...
 end
+
+# λ and φ of the cell centers, as the `Nx × Ny` matrices a curvilinear grid carries
+center_coordinates(grid) = Array(λnodes(grid, Center(), Center())), Array(φnodes(grid, Center(), Center()))
+
+# Az and Δx on cell centers as plain matrices. The area weights and the zonal transform read these off the
+# grid: on a curvilinear mesh neither of them factors into a function of latitude that could be rebuilt from
+# the coordinates alone.
+function center_areas(grid)
+    Az = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Center),
+                                                               Oceananigans.Operators.Az, grid)
+    return Array(interior(compute!(Field(Az)), :, :, 1))
+end
+
+center_spacings(grid) = Array(interior(compute!(Field(xspacings(grid, Center(), Center(), Center()))), :, :, 1))
 
 """
     near_global_diffusivity_hovmoller(case; time_indices)
@@ -217,7 +233,11 @@ interpolate_to_center_x(a) = 0.5 .* (a .+ circshift(a, (-1, 0)))
 """
     near_global_surface_speed(case, time_index = length(case[:surface_times]))
 
-Surface speed `√(u² + v²)` on cell centers, with land as `NaN`. Returns `(speed, λ, φ)`.
+Surface speed `√(u² + v²)` on cell centers, with land as `NaN`. Returns `(speed, λ, φ)`, the coordinates as
+the matrices of [`near_global_diffusivity_map`](@ref).
+
+`u` and `v` are the grid-aligned components as the model carries them, so away from the Mercator part of the
+mesh they are not eastward and northward; the speed is invariant under that rotation and needs no correction.
 """
 function near_global_surface_speed(case, time_index = length(case[:surface_times]))
     u = interpolate_to_center_x(Array(interior(case[:u][time_index], :, :, 1)))
@@ -227,7 +247,7 @@ function near_global_surface_speed(case, time_index = length(case[:surface_times
     speed = @. sqrt(u^2 + v^2)
     mask_land!(speed, case, time_index)
 
-    return speed, Array(λnodes(grid, Center())), Array(φnodes(grid, Center()))
+    return speed, center_coordinates(grid)...
 end
 
 """
@@ -268,11 +288,51 @@ function near_global_eddy_kinetic_energy(case; time_indices = eachindex(case[:su
     eddy_kinetic_energy = @. ((u² - ū^2 / n) + (v² - v̄^2 / n)) / (2n)
     mask_land!(eddy_kinetic_energy, case, first(time_indices))
 
-    return eddy_kinetic_energy, Array(λnodes(grid, Center())), Array(φnodes(grid, Center()))
+    return eddy_kinetic_energy, center_coordinates(grid)...
 end
 
-# v lives at (Center, Face, Center) and the meridional direction is bounded, so the surface slice carries Ny+1
-# rows against the Ny of a centered field
+"""
+    near_global_surface_kinetic_energy_history(case; time_indices, latitude_band)
+
+Area-weighted mean surface kinetic energy of every snapshot in `time_indices`, the time series the daily
+surface output supports. Returns `(times, kinetic_energy)`.
+
+$(SIGNATURES)
+
+# Keyword arguments
+- `time_indices`: the surface snapshots to read (default the whole series). One pass per case reads the daily
+  output, so subsample where only the shape of the curve matters
+- `latitude_band`: restrict the average to a band in degrees, `(-60, -56)` for the circumpolar band of
+  [`near_global_zonal_spectrum`](@ref); `nothing` keeps the whole domain
+
+The weights are the cell areas `Az` of the wet surface cells, read off the grid: on a curvilinear mesh the
+area does not factor into a function of latitude, so there is nothing simpler than the metric itself to weight
+with. The land mask is taken once, the bathymetry being fixed. This is the surface layer alone: the run writes
+no three-dimensional velocity, so a volume-integrated kinetic energy is not available from the output on disk.
+"""
+function near_global_surface_kinetic_energy_history(case; time_indices = eachindex(case[:surface_times]),
+                                                    latitude_band = nothing)
+
+    grid = case[:u].grid
+    φ = Array(φnodes(grid, Center(), Center()))
+    Az = center_areas(grid)
+    wet = Array(interior(case[:T][first(time_indices)], :, :, 1)) .!= 0
+
+    in_band(i, j) = isnothing(latitude_band) || latitude_band[1] ≤ φ[i, j] ≤ latitude_band[2]
+    weight = [wet[i, j] && in_band(i, j) ? Az[i, j] : 0.0 for i in axes(wet, 1), j in axes(wet, 2)]
+    total_weight = sum(weight)
+
+    kinetic_energy = map(time_indices) do t
+        u = interpolate_to_center_x(Array(interior(case[:u][t], :, :, 1)))
+        v = interpolate_to_center_y_from_surface(case, t)
+        sum(@. weight * (u^2 + v^2) / 2) / total_weight
+    end
+
+    return case[:surface_times][time_indices], kinetic_energy
+end
+
+# v lives at (Center, Face, Center) and the meridional topology is face-extended, so the surface slice carries
+# Ny+1 rows against the Ny of a centered field
 function interpolate_to_center_y_from_surface(case, time_index)
     v = Array(interior(case[:v][time_index], :, :, 1))
     Ny = size(case[:u].grid, 2)
@@ -292,9 +352,10 @@ end
 #####
 
 """
-    near_global_zonal_spectrum(case, name = :u; time_index, latitude_band, skip_land)
+    near_global_zonal_spectrum(case, name = :u; time_indices, latitude_band, minimum_wet_fraction)
 
-Zonal power spectrum of a surface field, averaged over the rows of `latitude_band`.
+Zonal power spectrum of a surface field, averaged over the rows of `latitude_band` and over the snapshots of
+`time_indices`.
 
 $(SIGNATURES)
 
@@ -303,11 +364,16 @@ $(SIGNATURES)
 - `name`: which surface field, `:u`, `:v`, `:T` or `:S`
 
 # Keyword arguments
-- `time_index`: which surface snapshot (default the last)
-- `latitude_band`: the band to average over, in degrees. The default `(-60, -56)` is the one band of this
-  configuration that is worth a zonal transform: it is periodic in the physical sense and, uniquely, entirely
-  free of land -- south of Cape Horn and north of the Antarctic Peninsula -- so the transform sees an actual
-  periodic signal rather than a coastline. Every latitude between 55°S and 45°S clips South America.
+- `time_indices`: the surface snapshots to average over, an index or a range (default the last snapshot). One
+  snapshot carries a single realization per wavenumber, whose scatter is of the order of the estimate itself;
+  averaging over `n` decorrelated snapshots brings it down as `1/√n`. The daily series is long, so the window
+  is better taken over the whole stationary part of the run, subsampled past the eddy decorrelation time.
+- `latitude_band`: the band to average over, in degrees. The default `(-60, -56)` is the band worth a zonal
+  transform: it is periodic in the physical sense and entirely free of land -- south of Cape Horn and north of
+  the Antarctic Peninsula -- so the transform sees an actual periodic signal rather than a coastline. Every
+  latitude between 55°S and 45°S clips South America. It also sits in the interior of the domain, the nearest
+  wall being the Antarctic coast some ten degrees further south, and in the Mercator part of the mesh, where
+  a row is a line of constant latitude and the zonal direction is the grid direction.
 - `minimum_wet_fraction`: rows with a smaller wet fraction are dropped. At the default of `1` only land-free
   rows are kept; relaxing it admits rows with a coastline, whose land cells are filled with the row's wet mean
   so that the transform sees a flat patch rather than a cliff to zero, and whose spectrum is contaminated at
@@ -316,24 +382,24 @@ $(SIGNATURES)
 # Returns
 - `(spectrum, wavenumber)`, the power at each angular wavenumber in rad m⁻¹
 
-Each row is transformed on its own spacing -- `Δx = 2πR cos φ / Nx` shrinks poleward -- and the results are
-interpolated onto the wavenumber axis of the band's central latitude before being averaged, so that the
+Each row is transformed on its own spacing, read off the grid metric and contracting poleward, and the results
+are interpolated onto the wavenumber axis of the band's central latitude before being averaged, so that the
 poleward rows are not silently plotted against the equatorward axis.
 """
 function near_global_zonal_spectrum(case, name = :u;
-                                    time_index = length(case[:surface_times]),
+                                    time_indices = length(case[:surface_times]),
                                     latitude_band = (-60, -56),
                                     minimum_wet_fraction = 1)
 
     grid = case[:u].grid
-    φ = Array(φnodes(grid, Center()))
     Nx = size(grid, 1)
 
-    data = name === :u ? interpolate_to_center_x(Array(interior(case[:u][time_index], :, :, 1))) :
-           name === :v ? interpolate_to_center_y_from_surface(case, time_index) :
-                         Array(interior(case[name][time_index], :, :, 1))
+    # One latitude and one spacing per row: within the band a row is a line of constant latitude along which
+    # the spacing is constant, so the row means are those values and not an approximation of them
+    φ  = vec(mean(Array(φnodes(grid, Center(), Center())), dims = 1))
+    Δx = vec(mean(center_spacings(grid), dims = 1))
 
-    land = Array(interior(case[:T][time_index], :, :, 1)) .== 0
+    land = Array(interior(case[:T][first(time_indices)], :, :, 1)) .== 0
 
     in_band(j) = latitude_band[1] ≤ φ[j] ≤ latitude_band[2]
     wet_fraction(j) = 1 - count(view(land, :, j)) / Nx
@@ -346,10 +412,25 @@ function near_global_zonal_spectrum(case, name = :u;
                             "$minimum_wet_fraction; the wettest reaches $(round(wettest, digits = 3))"))
     end
 
-    data = fill_land_with_row_mean(data, land, rows)
+    row_spacing(j) = Δx[j]
 
-    radius = grid_radius(grid)
-    row_spacing(j) = 2π * radius * cosd(φ[j]) / Nx
+    spectrum, wavenumber = snapshot_zonal_spectrum(case, name, first(time_indices), rows, row_spacing)
+
+    for time_index in Iterators.drop(time_indices, 1)
+        snapshot, _ = snapshot_zonal_spectrum(case, name, time_index, rows, row_spacing)
+        spectrum .+= snapshot
+    end
+
+    return spectrum ./ length(time_indices), wavenumber
+end
+
+function snapshot_zonal_spectrum(case, name, time_index, rows, row_spacing)
+    data = name === :u ? interpolate_to_center_x(Array(interior(case[:u][time_index], :, :, 1))) :
+           name === :v ? interpolate_to_center_y_from_surface(case, time_index) :
+                         Array(interior(case[name][time_index], :, :, 1))
+
+    land = Array(interior(case[:T][time_index], :, :, 1)) .== 0
+    data = fill_land_with_row_mean(data, land, rows)
 
     reference_row = rows[cld(length(rows), 2)]
     reference_spectrum, reference_wavenumber = row_power_spectrum(data, reference_row, row_spacing(reference_row))
@@ -363,8 +444,6 @@ function near_global_zonal_spectrum(case, name = :u;
 
     return spectrum ./ length(rows), reference_wavenumber
 end
-
-grid_radius(grid) = hasproperty(grid, :radius) ? grid.radius : grid_radius(grid.underlying_grid)
 
 function fill_land_with_row_mean(data, land, rows)
     filled = copy(data)

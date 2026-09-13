@@ -2,5 +2,7 @@ using TimestepperTestCases
 using Test
 
 @testset "TimestepperTestCases.jl" begin
-    # Write your tests here.
+    @testset "dense overflow" begin
+        include("test_dense_overflow.jl")
+    end
 end

@@ -1,6 +1,10 @@
 using Oceananigans
 using Oceananigans.Units
-using Oceananigans.Grids: minimum_xspacing, minimum_yspacing, znodes
+using Oceananigans.Grids: znodes, φnode
+using Oceananigans.Operators: intrinsic_vector, Δxᶜᶜᶜ, Δyᶜᶜᶜ
+using Oceananigans.ImmersedBoundaries: static_column_depthᶜᶜᵃ
+using Oceananigans.Utils: launch!
+using Roots: find_zero
 using NumericalEarth
 using Dates: DateTime
 using Printf
@@ -54,6 +58,23 @@ near_global_kernel(::Val{:trig})     = SymmetricTrigAveragingKernel()
 near_global_kernel(::Val{:widetrig}) = WideTrigAveragingKernel()
 near_global_kernel(::Val{:optasym})  = OptimizedAsymmetricAveragingKernel()
 
+"""
+    near_global_vertical_discretization(Nz = 100, depth = 5000meters, surface_spacing = 5meters)
+
+Mutable `ExponentialDiscretization` of `Nz` levels over `depth` [m], with the e-folding scale solved for a top
+cell of `surface_spacing` [m].
+"""
+function near_global_vertical_discretization(Nz = 100, depth = 5000meters, surface_spacing = 5meters)
+    function top_spacing(scale)
+        z = ExponentialDiscretization(Nz, -depth, 0; scale)
+        return z[Nz+1] - z[Nz]
+    end
+
+    scale = find_zero(scale -> top_spacing(scale) - surface_spacing, (depth / Nz, 1000depth))
+
+    return ExponentialDiscretization(Nz, -depth, 0; scale, mutable = true)
+end
+
 function near_global_grid(arch = CPU();
                           Nx = 1440,
                           Ny = 600,
@@ -61,12 +82,6 @@ function near_global_grid(arch = CPU();
                           depth = 5000meters,
                           latitude  = (-60, 60),
                           longitude = (0, 360),
-                          # A 15 m floor leaves one-cell pinnacles standing among their 1800 m neighbours --
-                          # the Solomon Sea has a 16.7 m column beside a dry cell -- and the flow squeezing
-                          # through the constriction accelerates without bound. 30 m puts the floor two cell
-                          # interfaces deeper, and the extra interpolation passes coarsen the native
-                          # bathymetry gradually enough that an isolated spike is averaged away instead of
-                          # aliased onto a single column.
                           minimum_depth = 30meters,
                           interpolation_passes = 20,
                           major_basins = 1)
@@ -83,65 +98,38 @@ function near_global_grid(arch = CPU();
     return ImmersedBoundaryGrid(grid, GridFittedBottom(bottom_height); active_cells_map=true)
 end
 
-# The near-global time steps are empirical rather than derived. The theoretical criterion used by the idealized
-# cases, Δt = 0.7 θ★/(c₁ k), is not well posed here: both the first baroclinic speed and the grid spacing vary
-# over the domain (Δx shrinks as cos φ, from ≈ 27.8 km at the equator to ≈ 7.2 km at 75°), so the binding
-# combination c₁ k is a maximum over the globe and needs the actual stratification field to evaluate. The
-# three-stage value below is measured; the other schemes are scaled from it by the ratio of the imaginary-axis
-# limits, which is the part of the criterion that does transfer.
+# measured, not derived: c₁ and Δx both vary over the domain, so the binding c₁ k needs the stratification field
 near_global_timestep(::Val{:SplitRungeKutta3}) = 20minutes
 
-# Every other scheme is derived from that single reference by the ratio of the imaginary-axis limits
-# θ★(scheme)/θ★(WRK3), exactly as in the idealized cases: AB2 gives up a factor 0.29 and MRK4 earns 1.591.
-near_global_timestep(::Val{scheme}) where scheme =
-    baroclinic_timestep(scheme, near_global_timestep(Val(:SplitRungeKutta3)))
+# every other scheme scales from that reference by θ★(scheme)/θ★(WRK3), as in the idealized cases
+near_global_timestep(::Val{scheme}) where scheme = baroclinic_timestep(scheme, near_global_timestep(Val(:SplitRungeKutta3)))
 
 """
-    near_global_stability_parameters(grid)
+    near_global_barotropic_rate(grid)
 
-Depth and horizontal spacings that set the barotropic Courant number of this case, read off the grid rather
-than stated as numbers: the spacing varies over the domain, so there is no single value to quote.
-
-`Δx` is the zonal spacing at the poleward edge, ≈ 7.2 km at 75° against ≈ 27.8 km at the equator, `Δy` the
-meridional one, and `H` the deepest column, so `c₀ k` is evaluated where it binds.
+Largest `√(gH) 2√(Δx⁻² + Δy⁻²)` over the columns of `grid` [s⁻¹], the rate that binds the barotropic sub-cycle.
 """
-function near_global_stability_parameters(grid)
-    return (; H = grid.Lz, Δx = minimum_xspacing(grid), Δy = minimum_yspacing(grid))
-end
+near_global_barotropic_rate(grid) = maximum(compute!(Field(KernelFunctionOperation{Center, Center, Nothing}(column_barotropic_rate, grid))))
+
+@inline column_barotropic_rate(i, j, k, grid) = barotropic_speed(static_column_depthᶜᶜᵃ(i, j, grid)) *
+                                                staggered_wavenumber(Δxᶜᶜᶜ(i, j, k, grid), Δyᶜᶜᶜ(i, j, k, grid))
 
 """
     near_global_substeps(barotropic_scheme, grid, scheme; averaging_kernel, Δt)
 
-Barotropic substep count for this case, fixed so that the substep Courant number `c₀ k Δτ` sits at 70% of the
-limit of `barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward -- as in
-every other case. The baroclinic step is empirical here, but the substep count that goes with it is derived, so
-the barotropic Courant number stays a stated property of the run.
-
-Contrarily to the idealized cases, `k` is the staggered wavenumber `2√(Δx⁻² + Δy⁻²)` of
-[`staggered_wavenumber`](@ref) and not the spectral `π/Δx`. The grid is anisotropic where it is tightest,
-`Δy/Δx ≈ 3.9` at 75°, so the two conventions no longer agree to the 11% they agree to on an isotropic grid:
-here the spectral one overstates the Courant number of the two-point barotropic operator by 1.52.
-
-The grid is a positional argument because the configuration is described by the grid itself, `near_global_grid`
-carrying resolution and depth as keyword arguments.
+Barotropic substep count that puts the substep Courant number `c₀ k Δτ` at the `barotropic_cfl` of
+`barotropic_scheme`, with `c₀ k` the rate of `near_global_barotropic_rate`.
 """
 function near_global_substeps(barotropic_scheme, grid, scheme = :SplitRungeKutta3;
                               averaging_kernel = OptimizedAsymmetricAveragingKernel(),
                               Δt = near_global_timestep(Val(scheme)))
-    p = near_global_stability_parameters(grid)
-    return barotropic_substeps(barotropic_scheme; p.H, p.Δx, Δt, averaging_kernel,
-                               wavenumber = staggered_wavenumber(p.Δx, p.Δy))
+    return barotropic_substeps(barotropic_scheme; Δt, averaging_kernel, rate = near_global_barotropic_rate(grid))
 end
 
 """
     near_global_discretizations()
 
-The cases of Table 1 run on the near-global configuration: [`discretizations`](@ref) without `WRK3-UP`.
-
-The near-global case fixes tracer advection at the vertically implicit WENO7 of [`near_global`](@ref), whereas
-`WRK3-UP` carries the explicitly discretized third-order upwind it shares with the idealized cases. Run here it
-would depart from `WRK3-SE` in the vertical time discretization as well as in the spatial reconstruction, so it
-no longer isolates the spatial contribution and is left to the idealized cases.
+The cases of Table 1 run on the near-global configuration: `discretizations()` without `WRK3-UP`.
 """
 near_global_discretizations() = filter(d -> d.label != "WRK3-UP", discretizations())
 
@@ -169,12 +157,8 @@ const default_wind_stress_values    = (0.0, 0.2, -0.1, -0.02, -0.1, 0.1, 0.0)
 """
     zonal_wind_stress(φ, latitudes, stresses)
 
-Zonal-mean zonal wind stress at latitude `φ`, in N m⁻², interpolated between the knots `(latitudes, stresses)`.
-
-Piecewise cubic between adjacent knots with vanishing derivative at each of them, as in `WenoNeverworld`, so
-that the profile is smooth and every knot is a local extremum of the stress. Contrarily to `WenoNeverworld`
-the domain reaches beyond the outermost knots, where the stress is held at zero -- continuous, the first and
-last knot carrying no stress.
+Zonal-mean zonal wind stress at latitude `φ` [N m⁻²], piecewise cubic between the knots `(latitudes, stresses)`
+with vanishing derivative at each of them, and zero beyond the outermost knots.
 """
 @inline function zonal_wind_stress(φ, latitudes = default_wind_stress_latitudes,
                                       stresses = default_wind_stress_values)
@@ -193,53 +177,48 @@ end
 """
     near_global_wind_stress(grid; latitudes, stresses, reference_density)
 
-The zonal momentum flux of [`zonal_wind_stress`](@ref) as a surface field, ready to be passed to
-`ocean_simulation` through `additional_surface_fluxes`.
-
-Ocean-only, the surface momentum flux that `ocean_simulation` allocates is never filled -- it is the coupled
-interface that writes it -- so without this the configuration has no momentum sink at the surface at all, and
-the geostrophic adjustment from the initial state has nothing acting against it.
-
-The stress is negated: a top flux `J` contributes `-J/Δz` to the tendency of the boundary cell, so an eastward
-stress reaches the model as a negative flux. `WenoNeverworld` carries the same sign for the same reason.
+The eastward stress of `zonal_wind_stress` as the pair of surface momentum fluxes `(τˣ, τʸ)` [m² s⁻²],
+projected onto the grid directions and negated, a top flux `J` contributing `-J/Δz` to the boundary cell.
 """
 function near_global_wind_stress(grid; latitudes = default_wind_stress_latitudes,
                                        stresses = default_wind_stress_values,
                                        reference_density = 1026)
     τˣ = Field{Face, Center, Nothing}(grid)
-    set!(τˣ, (λ, φ) -> - zonal_wind_stress(φ, latitudes, stresses) / reference_density)
-    Oceananigans.BoundaryConditions.fill_halo_regions!(τˣ)
+    τʸ = Field{Center, Face, Nothing}(grid)
 
-    return τˣ
+    launch!(architecture(grid), grid, :xy, _set_near_global_wind_stress!,
+            τˣ, τʸ, grid, latitudes, stresses, reference_density)
+
+    Oceananigans.BoundaryConditions.fill_halo_regions!(τˣ)
+    Oceananigans.BoundaryConditions.fill_halo_regions!(τʸ)
+
+    return τˣ, τʸ
+end
+
+# the rotation angle is cell-centered, so both components are evaluated at centers and written at their own
+# staggered index: the half-cell offset is well below the scale on which this profile varies
+@kernel function _set_near_global_wind_stress!(τˣ, τʸ, grid, latitudes, stresses, reference_density)
+    i, j = @index(Global, NTuple)
+
+    φ = φnode(i, j, 1, grid, Center(), Center(), Center())
+    τ = - zonal_wind_stress(φ, latitudes, stresses) / reference_density
+
+    τᵢ, τⱼ = intrinsic_vector(i, j, 1, grid, τ, zero(τ))
+
+    @inbounds τˣ[i, j, 1] = τᵢ
+    @inbounds τʸ[i, j, 1] = τⱼ
 end
 
 """
     near_global_surface_restoring(grid, name; piston_velocity, dataset)
 
-Surface restoring of `name` -- `:temperature` or `:salinity` -- towards the `dataset` climatology, following
-the `salinity_surface_restoring` of the OMIP configuration.
+Surface restoring of `name`, `:temperature` or `:salinity`, towards the `dataset` climatology, as a top flux
+through `SurfaceFluxRestoring` so that the interior buoyancy-variance budget stays untouched.
 
 $(SIGNATURES)
 
-The target is the monthly World Ocean Atlas, so the restoring carries the seasonal cycle: `WOAMonthly` is a
-twelve-month climatology cycled by the `Cyclical` time indexing of `DatasetRestoring`, which puts the surface
-back where the season says it should be rather than holding it at one month all year. It is also a smooth
-climatology rather than a state estimate, so it constrains the large-scale surface without pulling the model's
-eddy field towards a different realization of the eddies.
-
-`SurfaceFluxRestoring` evaluates the restoring at the top cell alone and converts the tendency into a top
-flux, `-G Δz`. That matters for this case: a restoring term is a buoyancy source that the buoyancy-variance
-budget does not account for, so a restoring reaching the interior would bias the numerical diffusivity the case
-exists to measure. Entering as a surface flux it leaves the interior budget untouched.
-
-`piston_velocity` is in m day⁻¹ and sets the rate through the thickness of the top cell, so the restoring
-timescale follows the vertical grid instead of being quoted independently of it. Temperature is restored as
-well as salinity, contrarily to OMIP, because this configuration carries no atmosphere: with no bulk heat flux
-the restoring is the only surface constraint on the temperature.
-
-The WOA fields are used as they are stored -- in-situ temperature and practical salinity -- with none of the
-TEOS-10 conversion the OMIP configuration applies, this case running the `LinearEquationOfState` in which the
-two enter through constant expansion coefficients.
+`piston_velocity` is in m day⁻¹ and sets the rate through the thickness of the top cell. The WOA fields are
+used as stored, in-situ temperature and practical salinity, the case running a `LinearEquationOfState`.
 """
 function near_global_surface_restoring(grid, name; piston_velocity = 1/6, dataset = WOAMonthly())
     zF = Array(znodes(grid, Face()))
@@ -270,6 +249,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      cold_start_Δt = Δt / 3,
                      cold_start_duration = 60days,
                      stop_time = 720days,
+                     cost_stop_time = min(stop_time, 365days),
                      dissipation = true,
                      closure = near_global_closure(),
                      bottom_drag_coefficient = 0.003,
@@ -284,6 +264,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      restoring_piston_velocity = 1/6,
                      restoring_dataset = WOAMonthly(),
                      label = nothing,
+                     prefix = "near_global",
                      init_date = DateTime(1993, 1, 1),
                      progress_interval = TimeInterval(5days),
                      surface_output_interval = TimeInterval(1days),
@@ -312,9 +293,8 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                                  tracer_advection_scheme(tracer_boundary_scheme, vertically_implicit_weno7;
                                                          time_discretization))
 
-    # A boundary scheme that departs from the default names the run it produces, so that its output does not
-    # overwrite the default one it is meant to be compared against. The label is materialized only where there
-    # is a suffix to append, `nothing` reaching `near_global_filename` as the request for the derived name.
+    # a boundary scheme that departs from the default names the run it produces, so that its output does not
+    # overwrite the default one
     boundary_suffix = boundary_scheme_suffix(tracer_boundary_scheme, momentum_boundary_scheme)
 
     if !isempty(boundary_suffix)
@@ -322,9 +302,9 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     end
 
     wind_fluxes = if wind_stress
-        τˣ = near_global_wind_stress(grid; latitudes = wind_stress_latitudes,
-                                     stresses = wind_stress_values, reference_density)
-        (; u = FluxBoundaryCondition(τˣ))
+        τˣ, τʸ = near_global_wind_stress(grid; latitudes = wind_stress_latitudes,
+                                        stresses = wind_stress_values, reference_density)
+        (; u = FluxBoundaryCondition(τˣ), v = FluxBoundaryCondition(τʸ))
     else
         NamedTuple()
     end
@@ -354,6 +334,37 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
 
     parent(ocean.model.tracers.T) .= max.(parent(ocean.model.tracers.T), -1.8)
 
+    filename = near_global_filename(prefix, label, timestepper, filter, free_surface)
+    surface  = merge(ocean.model.tracers, ocean.model.velocities)
+
+    ocean.output_writers[:surface] = JLD2Writer(ocean.model, surface;
+                                                schedule = surface_output_interval,
+                                                indices = (:, :, grid.Nz),
+                                                filename = filename * "_surface",
+                                                with_halos = true,
+                                                overwrite_existing = true,
+                                                array_type = Array{Float32})
+
+    ocean.output_writers[:average] = JLD2Writer(ocean.model, surface;
+                                                schedule = dissipation_output_interval,
+                                                indices = (:, :, grid.Nz),
+                                                filename = filename * "_average",
+                                                with_halos = true,
+                                                overwrite_existing = true,
+                                                array_type = Array{Float32})
+
+    add_callback!(ocean, near_global_progress, progress_interval)
+
+    cold_wall = @elapsed run!(ocean)
+
+    ocean.Δt        = Δt
+    ocean.stop_time = cost_stop_time
+    first_production_iteration = iteration(ocean)
+    production_wall  = @elapsed run!(ocean)
+    production_steps = iteration(ocean) - first_production_iteration
+
+    # the buoyancy-variance budget runs every iteration, so it joins only after the segment `seconds_per_step`
+    # is measured over
     if dissipation
         VFCC = Oceananigans.AbstractOperations.grid_metric_operation((Face,   Center, Center), Oceananigans.Operators.volume, grid)
         VCFC = Oceananigans.AbstractOperations.grid_metric_operation((Center, Face,   Center), Oceananigans.Operators.volume, grid)
@@ -370,62 +381,37 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
         diss = merge(BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb), (; Gbx, Gby, Gbz))
         ocean.output_writers[:dissipation] = JLD2Writer(ocean.model, diss;
                                                         schedule = dissipation_output_interval,
-                                                        filename = near_global_filename(label, timestepper, filter, free_surface) * "_dissipation",
+                                                        filename = filename * "_dissipation",
                                                         overwrite_existing = true)
     end
 
-    surface = merge(ocean.model.tracers, ocean.model.velocities)
-    ocean.output_writers[:surface] = JLD2Writer(ocean.model, surface;
-                                                schedule = surface_output_interval,
-                                                indices = (:, :, grid.Nz),
-                                                filename = near_global_filename(label, timestepper, filter, free_surface) * "_surface",
-                                                with_halos = true,
-                                                overwrite_existing = true,
-                                                array_type = Array{Float32})
-
-    ocean.output_writers[:average] = JLD2Writer(ocean.model, surface;
-                                                schedule = dissipation_output_interval,
-                                                indices = (:, :, grid.Nz),
-                                                filename = near_global_filename(label, timestepper, filter, free_surface) * "_average",
-                                                with_halos = true,
-                                                overwrite_existing = true,
-                                                array_type = Array{Float32})
-
-    add_callback!(ocean, near_global_progress, progress_interval)
-
-    cold_wall = @elapsed run!(ocean)
-
-    ocean.Δt        = Δt
     ocean.stop_time = stop_time
-    production_iter₀     = iteration(ocean)
-    production_wall      = @elapsed run!(ocean)
-    production_steps     = iteration(ocean) - production_iter₀
+    dissipation_wall = @elapsed run!(ocean)
 
-    wall_time  = cold_wall + production_wall
+    wall_time  = cold_wall + production_wall + dissipation_wall
     iterations = iteration(ocean)
     seconds_per_step = production_steps == 0 ? NaN : production_wall / production_steps
 
     label = something(label, near_global_label(timestepper, filter, free_surface))
-    @info @sprintf("[near_global] %-14s wall: %s (%d steps, cold %s) -> %.4f s/step",
-                   label, prettytime(wall_time), iterations, prettytime(cold_wall), seconds_per_step)
+    @info @sprintf("[%s] %-14s wall: %s (%d steps, cold %s) -> %.4f s/step",
+                   prefix, label, prettytime(wall_time), iterations, prettytime(cold_wall), seconds_per_step)
 
     substeps = free_surface isa SplitExplicitFreeSurface ? length(free_surface.substepping.averaging_weights) : 0
 
-    save_near_global_cost(label; Δt, substeps, wall_time, cold_wall, production_wall,
-                          iterations, production_steps, seconds_per_step, stop_time)
+    save_near_global_cost(prefix, label; Δt, substeps, wall_time, cold_wall, production_wall, dissipation_wall,
+                          iterations, production_steps, seconds_per_step, cost_stop_time, stop_time)
 
     return (; ocean, label, wall_time, iterations, seconds_per_step)
 end
 
 """
-    save_near_global_cost(label; kw...)
+    save_near_global_cost(prefix, label; kw...)
 
-Write the timings of a near-global run to `near_global_<label>_cost.jld2`, beside its field output, so that
-the cost comparison of Section 5.4.1 can be assembled from the output directory rather than from the return
-value of the runner. Each keyword becomes one entry of the file.
+Write the timings of a run to `<prefix>_<label>_cost.jld2`, beside its field output. Each keyword becomes one
+entry of the file.
 """
-function save_near_global_cost(label; kw...)
-    filename = "near_global_" * label * "_cost.jld2"
+function save_near_global_cost(prefix, label; kw...)
+    filename = prefix * "_" * label * "_cost.jld2"
 
     JLD2.jldopen(filename, "w") do file
         file["label"] = label
@@ -457,21 +443,20 @@ end
 near_global_label(timestepper, filter, fs::SplitExplicitFreeSurface) = timestepper === :QuasiAdamsBashforth2 ? "AB2-SE-$(filter)" : "RK-SE-$(filter)"
 near_global_label(timestepper, filter, fs::ImplicitFreeSurface) = timestepper === :QuasiAdamsBashforth2 ? "AB2-IM" : "RK-IM"
 
-near_global_filename(label, timestepper, filter, fs) = "near_global_" * something(label, near_global_label(timestepper, filter, fs))
+near_global_filename(prefix, label, timestepper, filter, fs) = prefix * "_" * something(label, near_global_label(timestepper, filter, fs))
 
 function run_near_global_cost(; arch = CPU(),
+                                case = near_global,
                                 timestep = scheme -> near_global_timestep(Val(scheme)),
                                 stop_time = 365days,
                                 variants = near_global_discretizations())
 
     results = []
 
-    # A fresh grid per case: the mutable vertical coordinate keeps ηⁿ and the σ scalings on the grid, so a
-    # shared one carries the surface state -- a NaN included -- from each case into the next
+    # each case builds its own grid: the mutable vertical coordinate keeps ηⁿ and the σ scalings on the grid,
+    # so a shared one carries the surface state from one case into the next
     for d in variants
-        grid = near_global_grid(arch)
-        result = near_global(d; arch, grid, Δt = timestep(d.timestepper), stop_time)
-        push!(results, result)
+        push!(results, case(d; arch, Δt = timestep(d.timestepper), stop_time, dissipation = false))
     end
 
     @info "[near_global] cost summary"
@@ -486,14 +471,11 @@ end
 """
     near_global(d::Discretization; arch = CPU(), kw...)
 
-Run the near-global case with the discretization `d` of Table 1. Unlike the idealized cases the time step is
-not derived from a theoretical limit here -- see `near_global_timestep` -- but the ratios between the schemes
-are the same.
+Run the near-global case with the discretization `d` of Table 1.
 """
 function near_global(d::Discretization; arch = CPU(), grid = near_global_grid(arch), kw...)
-    # `Discretization` carries the tracer advection of the idealized cases, which the near-global case overrides
-    # with its own vertically implicit WENO7; only a scheme that departs from that shared default is forwarded, so
-    # a discretization naming its own scheme reaches the model with it and every other one keeps the near-global.
+    # only a tracer advection that departs from the shared default is forwarded; every other discretization
+    # keeps the vertically implicit WENO7 of this case
     return near_global(d.timestepper; arch, grid,
                        free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
                        averaging_kernel = d.averaging_kernel,

@@ -233,41 +233,62 @@ baroclinic_timestep(scheme, reference_Δt; reference_scheme = :SplitRungeKutta3)
     reference_Δt * stability_limit(scheme) / stability_limit(reference_scheme)
 
 """
-    barotropic_substeps(barotropic_scheme; H, Δx, Δt, averaging_kernel, safety = 0.7, granularity = 8,
-                        wavenumber = grid_wavenumber(Δx))
+    barotropic_substeps(barotropic_scheme; Δt, averaging_kernel, H, Δx,
+                        cfl = barotropic_cfl(barotropic_scheme), granularity = 8,
+                        wavenumber = nothing, rate = nothing)
 
-Smallest number of barotropic substeps for which the substep Courant number `c₀ k Δτ` stays at or below
-`safety` times the limit of the substep integrator, rounded up to a multiple of `granularity`.
+Smallest number of barotropic substeps for which the substep Courant number `c₀ k Δτ` stays at or below the
+`cfl` of the substep integrator, rounded up to a multiple of `granularity`.
 
-`k` is `grid_wavenumber(Δx)` unless `wavenumber` is given, in which case `Δx` is not used. The near-global case
-supplies [`staggered_wavenumber`](@ref) there, its grid being anisotropic enough for the two to disagree.
+$(SIGNATURES)
+
+# Keyword arguments
+- `Δt`: the baroclinic step the sub-cycle has to span
+- `averaging_kernel`: the kernel whose window sets the substep size that goes with a given count
+- `H`, `Δx`: depth and spacing the rate is built from, needed unless `rate` is given directly
+- `cfl`: the substep Courant number to hold, per integrator through [`barotropic_cfl`](@ref)
+- `wavenumber`: `grid_wavenumber(Δx)` unless given; [`staggered_wavenumber`](@ref) where the grid is
+  anisotropic enough for the two conventions to disagree
+- `rate`: the binding `c₀ k` itself, for a configuration where the product has to be maximized over the domain
+  rather than evaluated on one depth and one spacing -- see [`near_global_barotropic_rate`](@ref). Given this,
+  `H`, `Δx` and `wavenumber` are not read
 
 The substep size is not `Δt / substeps`: the averaging kernel spans a window wider than the baroclinic step,
 and `weights_from_substeps` returns the fractional step size that goes with the requested count, so the
 Courant number is evaluated on the step the sub-cycle actually takes. Rounding up to a multiple of 8 keeps
 the count compatible with the kernels that require `substeps % 8 == 0`.
-
-The limits are those of the substep integrators: `√3` for the three-stage Runge-Kutta substep and `1` for
-forward-backward, the latter halved from its neutral `2` -- see [`substep_limit`](@ref).
 """
-function barotropic_substeps(barotropic_scheme; H, Δx, Δt, averaging_kernel,
-                             safety = 0.7, granularity = 8, maximum_substeps = 4096,
-                             wavenumber = grid_wavenumber(Δx))
+function barotropic_substeps(barotropic_scheme; Δt, averaging_kernel, H = nothing, Δx = nothing,
+                             cfl = barotropic_cfl(barotropic_scheme),
+                             granularity = 8, maximum_substeps = 4096,
+                             wavenumber = nothing, rate = nothing)
 
-    c₀ = barotropic_speed(H)
-    k  = wavenumber
-    limit = safety * substep_limit(barotropic_scheme)
+    courant_rate = barotropic_courant_rate(rate, H, Δx, wavenumber)
 
     substeps = granularity
     while substeps ≤ maximum_substeps
         fractional_Δt, _, _ = weights_from_substeps(Float64, substeps, averaging_kernel)
-        c₀ * k * fractional_Δt * Δt ≤ limit && return substeps
+        courant_rate * fractional_Δt * Δt ≤ cfl && return substeps
         substeps += granularity
     end
 
     throw(ArgumentError("No substep count below $maximum_substeps keeps the barotropic Courant number " *
-                        "under $limit for Δt = $Δt."))
+                        "under $cfl for Δt = $Δt."))
 end
+
+"""
+    barotropic_cfl(barotropic_scheme)
+
+Substep Courant number `c₀ k Δτ` at which the barotropic sub-cycle is held, one value per substep integrator:
+`0.8` for forward-backward and `1.3` for the three-stage Runge-Kutta substep.
+
+Each sits below the limit of its own integrator by the margin that integrator's transient behaviour asks for,
+and not by a safety factor common to both: the Runge-Kutta substep damps throughout its range and runs at 0.75
+of its `√3`, while forward-backward never damps at any Courant number and is held at 0.8 of the usable limit
+[`substep_limit`](@ref) puts at `1`, itself half of the `2` at which the scheme is merely neutral.
+"""
+@inline barotropic_cfl(::ForwardBackwardScheme) = 0.8
+@inline barotropic_cfl(::RungeKutta3Scheme) = 1.3
 
 """
     substep_limit(barotropic_scheme)
@@ -290,12 +311,21 @@ analysis determines, and the conservative value is the honest one.
 @inline substep_limit(::RungeKutta3Scheme) = sqrt(3)
 
 """
-    barotropic_courant(; H, Δx, Δt, substeps, averaging_kernel, wavenumber = grid_wavenumber(Δx))
+    barotropic_courant(; Δt, substeps, averaging_kernel, H, Δx, wavenumber = nothing, rate = nothing)
 
-Substep Courant number `c₀ k Δτ` that `substeps` actually delivers, for reporting alongside its limit. `k`
-follows the same convention as in [`barotropic_substeps`](@ref).
+Substep Courant number `c₀ k Δτ` that `substeps` actually delivers, for reporting alongside the `cfl` it was
+selected against. `wavenumber` and `rate` follow the same convention as in [`barotropic_substeps`](@ref).
 """
-function barotropic_courant(; H, Δx, Δt, substeps, averaging_kernel, wavenumber = grid_wavenumber(Δx))
+function barotropic_courant(; Δt, substeps, averaging_kernel, H = nothing, Δx = nothing,
+                            wavenumber = nothing, rate = nothing)
+
     fractional_Δt, _, _ = weights_from_substeps(Float64, substeps, averaging_kernel)
-    return barotropic_speed(H) * wavenumber * fractional_Δt * Δt
+    return barotropic_courant_rate(rate, H, Δx, wavenumber) * fractional_Δt * Δt
+end
+
+# `c₀ k` as given, or built from the depth and the spacing with `wavenumber` displacing the spectral default
+function barotropic_courant_rate(rate, H, Δx, wavenumber)
+    isnothing(rate) || return rate
+    k = isnothing(wavenumber) ? grid_wavenumber(Δx) : wavenumber
+    return barotropic_speed(H) * k
 end

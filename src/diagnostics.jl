@@ -163,39 +163,29 @@ function calculate_z★_diagnostics(b::FieldTimeSeries, i)
 end
 
 function calculate_z★!(z★::Field, b::Field, vol, total_area)
-    grid = b.grid
-    arch = architecture(grid)
-
     b_arr = Array(interior(b))[:]
     v_arr = Array(interior(vol))[:]
 
-    valid_indices = (b_arr .!= 0) .& (!).(isnan.(b_arr))
-    b_arr = b_arr[valid_indices]
-    v_arr = v_arr[valid_indices]
+    valid = (b_arr .!= 0) .& (!).(isnan.(b_arr))
 
-    if isempty(b_arr)
-        @warn "calculate_z★!: no valid (nonzero, non-NaN) buoyancy cells — returning NaN z★ (the run for this case is likely degenerate/blown up)."
+    if !any(valid)
+        @warn "calculate_z★!: no valid buoyancy cells, returning NaN z★"
         fill!(z★, convert(eltype(z★), NaN))
         return nothing
     end
 
-    perm           = sortperm(b_arr)
-    sorted_b_field = b_arr[perm]
-    sorted_v_field = v_arr[perm]
-    integrated_v   = cumsum(sorted_v_field)    
+    cells = findall(valid)
+    perm  = sortperm(b_arr[cells])
 
-    launch!(arch, grid, :xyz, _calculate_z★, z★, b, sorted_b_field, integrated_v)
-    
-    z★ ./= total_area
+    # each parcel takes the cumulative volume at its own rank in the sorted order: looking z★ up by buoyancy
+    # gives every member of a block of equal buoyancy the volume of the whole block, which biases z★ high and
+    # makes the reference potential energy fall as the ties break up
+    sorted = zeros(eltype(z★), length(b_arr))
+    sorted[cells[perm]] .= cumsum(v_arr[cells][perm])
+
+    interior(z★) .= reshape(sorted, size(interior(z★))) ./ total_area
 
     return nothing
-end
-
-@kernel function _calculate_z★(z★, b, b_sorted, integrated_v)
-    i, j, k = @index(Global, NTuple)
-    bl  = b[i, j, k]
-    i₁  = clamp(searchsortedlast(b_sorted, bl), 1, length(integrated_v))
-    z★[i, j, k] = integrated_v[i₁]
 end
 
 function calculate_Γ²_diagnostics(z★::FieldTimeSeries, b::FieldTimeSeries; ρ₀ = 1000.0, g = 9.80655)
