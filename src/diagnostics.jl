@@ -183,7 +183,9 @@ function calculate_z★!(z★::Field, b::Field, vol, total_area)
     sorted = zeros(eltype(z★), length(b_arr))
     sorted[cells[perm]] .= cumsum(v_arr[cells][perm])
 
-    interior(z★) .= reshape(sorted, size(interior(z★))) ./ total_area
+    # the sorted state is a column of the same total volume with its surface at z = 0, so subtracting that
+    # volume puts z★ on the z axis of the grid, the densest parcel resting at the bottom of the column
+    interior(z★) .= reshape(sorted .- sum(v_arr[cells]), size(interior(z★))) ./ total_area
 
     return nothing
 end

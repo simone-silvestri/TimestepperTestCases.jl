@@ -10,7 +10,7 @@ $(SIGNATURES)
 # Returns
 - Dictionary with the fields `:u, :w, :T, :S, :b, :η`, the cell volumes `:VCCC`, the buoyancy variance
   dissipation `:Abx, :Abz` and its squared gradients `:Gbx, :Gbz`, the times `:times`, and the volume-averaged
-  `:rpe` time series
+  `:rpe` and `:ape` time series
 
 The tracers and `b` are written volume weighted, so they are divided by `:VCCC` before use. The volumes are
 rebuilt from `η` at every snapshot, the vertical coordinate following the free surface.
@@ -42,7 +42,7 @@ function load_dense_overflow(folder, free_surface_name, timestepper)
     fill_halo_regions!(VCCC)
     case[:VCCC] = VCCC
 
-    case[:rpe] = dense_overflow_rpe(case)
+    case[:rpe], case[:ape] = dense_overflow_rpe(case)
 
     return case
 end
@@ -50,7 +50,7 @@ end
 """
     dense_overflow_rpe(case)
 
-Volume-averaged reference potential energy of every snapshot [m² s⁻²].
+Volume-averaged reference and available potential energy of every snapshot, as `(rpe, ape)` [m² s⁻²].
 
 $(SIGNATURES)
 
@@ -66,13 +66,16 @@ function dense_overflow_rpe(case)
     b = Field{Center, Center, Center}(grid)
     V = Field{Center, Center, Center}(grid)
 
-    return map(eachindex(case[:times])) do t
+    energies = map(eachindex(case[:times])) do t
         volume = interior(case[:VCCC][t])
         interior(b) .= interior(case[:b][t]) ./ volume
         interior(V) .= volume .* wet
 
-        sum(compute_rpe_density(b, V).εe * V) / sum(V)
+        energy = compute_rpe_density(b, V)
+        (sum(energy.εe * V) / sum(V), sum(energy.αe * V) / sum(V))
     end
+
+    return first.(energies), last.(energies)
 end
 
 """
