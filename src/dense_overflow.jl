@@ -18,8 +18,9 @@ $(SIGNATURES)
 - `Nx`, `Nz`: 1 km by 20 m
 - `Tᵖ`, `Tᵃ`, `S`: plug and ambient temperature [°C] and the uniform salinity [psu]
 - `α`, `β`: expansion coefficients of the linear equation of state [°C⁻¹, psu⁻¹]
-- `U`: downslope speed the plume reaches [m s⁻¹]
+- `U`, `W`: horizontal and vertical speed the time step is sized on, above what the plume reaches [m s⁻¹]
 - `ν`: lateral Laplacian viscosity [m² s⁻¹]
+- `Cᴰ`: quadratic bottom drag coefficient
 """
 @inline function dense_overflow_parameters()
     Lx = 200kilometers
@@ -36,9 +37,11 @@ $(SIGNATURES)
     α  = 2e-4
     β  = 8e-4
     U  = 1.5
-    ν  = 1.0
+    W  = 0.5
+    ν  = 1000.0
+    Cᴰ = 1e-2
 
-    return (; Lx, H, Hˢ, xˢ, Lˢ, Lᵖ, Nx, Nz, Tᵖ, Tᵃ, S, α, β, U, ν)
+    return (; Lx, H, Hˢ, xˢ, Lˢ, Lᵖ, Nx, Nz, Tᵖ, Tᵃ, S, α, β, U, W, ν, Cᴰ)
 end
 
 """
@@ -56,16 +59,16 @@ Stratification, depth, spacing and speed that set the time step of this case.
 $(SIGNATURES)
 
 `N²` is the equivalent uniform stratification of the two-layer front, `(π c / H)²` for the interfacial speed
-`c = √(g′ Hˢ (H - Hˢ) / H)`, so that `first_baroclinic_speed` returns `c`. The speed is the downslope one
-raised by `Δx/Δz` times the slope: the plume descends at `w ≈ (H - Hˢ)/2Lˢ` times `u`, and on a 1 km by 20 m
-grid it is the vertical Courant number that binds.
+`c = √(g′ Hˢ (H - Hˢ) / H)`, so that `first_baroclinic_speed` returns `c`. The speed is `U + W Δx/Δz`: on a
+1 km by 20 m grid the vertical Courant number binds, so the vertical velocity enters scaled to the horizontal
+spacing the limit is written on.
 """
 function dense_overflow_stability_parameters(p = dense_overflow_parameters())
     Δx = p.Lx / p.Nx
     Δz = p.H / p.Nz
     g′ = Oceananigans.defaults.gravitational_acceleration * p.α * (p.Tᵃ - p.Tᵖ)
     c  = sqrt(g′ * p.Hˢ * (p.H - p.Hˢ) / p.H)
-    U  = p.U * (1 + (p.H - p.Hˢ) / 2p.Lˢ * Δx / Δz)
+    U  = p.U + p.W * Δx / Δz
 
     return (; N² = (π * c / p.H)^2, H = p.H, Δx, U, horizontal_dimensions = 1)
 end
@@ -128,9 +131,9 @@ $(SIGNATURES)
 - `save_interval`: output interval
 
 A plug of 10 °C water 20 km wide is released on a 500 m shelf into a 20 °C basin 2000 m deep and descends the
-slope. The configuration carries no tracer diffusivity and no closure, so the whole increase of reference
-potential energy over the run is spurious, and the effective diapycnal diffusivity read off it measures the
-discretization alone.
+slope, held back by the quadratic bottom drag and the lateral viscosity of the benchmark. The configuration
+carries no tracer diffusivity, so the whole increase of reference potential energy over the run is spurious,
+and the effective diapycnal diffusivity read off it measures the discretization alone.
 
 # Returns
 - `Simulation` object after running to completion
@@ -172,12 +175,21 @@ function dense_overflow(timestepper::Symbol;
 
     equation_of_state = LinearEquationOfState(thermal_expansion = p.α, haline_contraction = p.β)
 
+    u_drag = FluxBoundaryCondition(u_quadratic_bottom_drag, discrete_form = true, parameters = p.Cᴰ)
+    v_drag = FluxBoundaryCondition(v_quadratic_bottom_drag, discrete_form = true, parameters = p.Cᴰ)
+    u_immersed = FluxBoundaryCondition(u_immersed_bottom_drag, discrete_form = true, parameters = p.Cᴰ)
+    v_immersed = FluxBoundaryCondition(v_immersed_bottom_drag, discrete_form = true, parameters = p.Cᴰ)
+
+    u_bcs = FieldBoundaryConditions(bottom = u_drag, immersed = ImmersedBoundaryCondition(bottom = u_immersed))
+    v_bcs = FieldBoundaryConditions(bottom = v_drag, immersed = ImmersedBoundaryCondition(bottom = v_immersed))
+
     model = HydrostaticFreeSurfaceModel(grid;
                                         timestepper,
                                         coriolis = nothing,
                                         tracers = (:T, :S),
                                         buoyancy = SeawaterBuoyancy(; equation_of_state),
                                         closure = HorizontalScalarDiffusivity(ν = p.ν, κ = 0),
+                                        boundary_conditions = (u = u_bcs, v = v_bcs),
                                         free_surface,
                                         momentum_advection,
                                         tracer_advection)

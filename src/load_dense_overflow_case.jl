@@ -54,9 +54,12 @@ Volume-averaged reference and available potential energy of every snapshot, as `
 
 $(SIGNATURES)
 
-The bathymetry cuts away three quarters of the shelf columns and the dry cells are written as zeros, so the
-re-sorting is given the wet volume alone: a dry cell enters the sort at `b = 0` carrying no volume, and so
-contributes to neither the cumulative distribution nor the integral.
+The dry cells are written as zeros, so the re-sorting is given the wet volume alone: a dry cell enters the
+sort at `b = 0` carrying no volume, and contributes to neither the cumulative distribution nor the integral.
+
+The weights are the volumes of the first snapshot, the bathymetry alone. The basin is not prismatic, so
+`dz★/dV` varies by a factor of five over the column and the centimetres of free-surface breathing would move
+`RPE` further than the mixing being measured does.
 """
 function dense_overflow_rpe(case)
     grid = case[:b].grid
@@ -66,10 +69,10 @@ function dense_overflow_rpe(case)
     b = Field{Center, Center, Center}(grid)
     V = Field{Center, Center, Center}(grid)
 
+    interior(V) .= interior(case[:VCCC][1]) .* wet
+
     energies = map(eachindex(case[:times])) do t
-        volume = interior(case[:VCCC][t])
-        interior(b) .= interior(case[:b][t]) ./ volume
-        interior(V) .= volume .* wet
+        interior(b) .= interior(case[:b][t]) ./ interior(case[:VCCC][t])
 
         energy = compute_rpe_density(b, V)
         (sum(energy.εe * V) / sum(V), sum(energy.αe * V) / sum(V))

@@ -1,5 +1,5 @@
 using Oceananigans.Utils: launch!
-using Oceananigans.Grids: architecture, znode
+using Oceananigans.Grids: architecture, znode, znodes
 using Oceananigans.Architectures: device, on_architecture
 using Oceananigans.Fields: default_indices
 using Oceananigans.Operators
@@ -18,7 +18,6 @@ using KernelAbstractions: @kernel, @index
 end
 
 HeightField(grid) = Field(KernelFunctionOperation{Center, Center, Center}(Oceananigans.Grids.znode, grid, Center(), Center(), Center()))
-AreaField(grid)   = Field(KernelFunctionOperation{Center, Center, Nothing}(Oceananigans.Operators.Azᶜᶜᶜ, grid))
 
 @inline _density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
 
@@ -140,9 +139,8 @@ distribution, providing a reference state for potential energy calculations.
 """
 function calculate_z★_diagnostics(b::Field, vol)
 
-    total_area = sum(AreaField(b.grid))
     z★ = CenterField(b.grid)
-    calculate_z★!(z★, b, vol, total_area)
+    calculate_z★!(z★, b, vol)
         
     return z★
 end
@@ -154,15 +152,24 @@ function calculate_z★_diagnostics(b::FieldTimeSeries, i)
     vol = VolumeField(b.grid)
     z★  = similar(b[1])
 
-    total_area = sum(AreaField(b.grid))
-
     @info "time $i of $(length(times))"
-    calculate_z★!(z★, b[i], vol, total_area)
+    calculate_z★!(z★, b[i], vol)
         
     return z★
 end
 
-function calculate_z★!(z★::Field, b::Field, vol, total_area)
+# Height at which the volume below equals `Vc`, by inverting the cumulative volume `volume_below` of the faces
+# `zf`. A flat-bottomed column of the same total volume would place the sorted state above the real one
+# wherever the basin is not prismatic, and the available energy would come out negative.
+@inline function sorted_height(volume_below, zf, Vc)
+    k  = clamp(searchsortedlast(volume_below, Vc), 1, length(zf) - 1)
+    ΔV = volume_below[k+1] - volume_below[k]
+    θ  = ΔV > 0 ? (Vc - volume_below[k]) / ΔV : zero(Vc)
+
+    return zf[k] + θ * (zf[k+1] - zf[k])
+end
+
+function calculate_z★!(z★::Field, b::Field, vol)
     b_arr = Array(interior(b))[:]
     v_arr = Array(interior(vol))[:]
 
@@ -174,18 +181,23 @@ function calculate_z★!(z★::Field, b::Field, vol, total_area)
         return nothing
     end
 
+    wet_volume   = reshape(v_arr .* valid, size(interior(vol)))
+    volume_below = [0.0; cumsum(vec(sum(wet_volume, dims = (1, 2))))]
+    zf           = Array(znodes(b.grid, Face()))
+
     cells = findall(valid)
     perm  = sortperm(b_arr[cells])
 
     # each parcel takes the cumulative volume at its own rank in the sorted order: looking z★ up by buoyancy
     # gives every member of a block of equal buoyancy the volume of the whole block, which biases z★ high and
     # makes the reference potential energy fall as the ties break up
-    sorted = zeros(eltype(z★), length(b_arr))
-    sorted[cells[perm]] .= cumsum(v_arr[cells][perm])
+    sorted_volume = v_arr[cells][perm]
+    midpoint = cumsum(sorted_volume) .- sorted_volume ./ 2
 
-    # the sorted state is a column of the same total volume with its surface at z = 0, so subtracting that
-    # volume puts z★ on the z axis of the grid, the densest parcel resting at the bottom of the column
-    interior(z★) .= reshape(sorted .- sum(v_arr[cells]), size(interior(z★))) ./ total_area
+    sorted = zeros(eltype(z★), length(b_arr))
+    sorted[cells[perm]] .= sorted_height.(Ref(volume_below), Ref(zf), midpoint)
+
+    interior(z★) .= reshape(sorted, size(interior(z★)))
 
     return nothing
 end
