@@ -19,7 +19,8 @@ $(SIGNATURES)
 - `Tᵖ`, `Tᵃ`, `S`: plug and ambient temperature [°C] and the uniform salinity [psu]
 - `α`, `β`: expansion coefficients of the linear equation of state [°C⁻¹, psu⁻¹]
 - `U`, `W`: horizontal and vertical speed the time step is sized on, above what the plume reaches [m s⁻¹]
-- `ν`: lateral Laplacian viscosity [m² s⁻¹]
+- `ν`: lateral Laplacian viscosity [m² s⁻¹], the low end of the benchmark sweep, the WENO momentum
+  advection supplying the grid-scale dissipation the reference value stands in for
 - `Cᴰ`: quadratic bottom drag coefficient
 """
 @inline function dense_overflow_parameters()
@@ -29,8 +30,8 @@ $(SIGNATURES)
     xˢ = 40kilometers
     Lˢ = 7kilometers
     Lᵖ = 20kilometers
-    Nx = 200
-    Nz = 100
+    Nx = 100
+    Nz = 50
     Tᵖ = 10
     Tᵃ = 20
     S  = 35
@@ -38,8 +39,8 @@ $(SIGNATURES)
     β  = 8e-4
     U  = 1.5
     W  = 0.5
-    ν  = 1000.0
-    Cᴰ = 1e-2
+    ν  = 100.0
+    Cᴰ = 1e-3
 
     return (; Lx, H, Hˢ, xˢ, Lˢ, Lᵖ, Nx, Nz, Tᵖ, Tᵃ, S, α, β, U, W, ν, Cᴰ)
 end

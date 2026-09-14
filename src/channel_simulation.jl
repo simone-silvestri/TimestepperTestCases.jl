@@ -284,12 +284,11 @@ $(SIGNATURES)
 - `boundary_scheme`: the reconstruction the WENO buffer chain terminates in, used in the one cell whose stencil
   no longer fits -- the domain buffer and, where the channel carries a bottom, any cell adjacent to an inactive
   node. Options:
-   * `:cwenoz` -- the third-order central-WENO reconstruction of Semplice, Travaglia and Puppo (2022), whose
-     stencil extends only inwards.
+   * `:ghost_cells` -- `GhostCells()`, which keeps the full order and completes the stencil with ghost values.
    * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
    * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
      Oceananigans defaults.
-  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`.
+  `nothing`, the default, leaves the tracers on `:ghost_cells` and the momentum on `:upwind`.
 - `tracer_boundary_scheme`, `momentum_boundary_scheme`: the same choice made separately for the tracer and the
   momentum reconstructions, `boundary_scheme` setting both where it is given. Setting one of them alone
   isolates which of the two the boundary treatment acts through.
