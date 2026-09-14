@@ -198,6 +198,14 @@ default_free_surface_name(::SplitExplicitFreeSurface) = "split_free_surface"
 default_free_surface_name(::ImplicitFreeSurface) = "implicit_free_surface"
 
 """
+    const internal_tide_boundary_scheme = :ghost_cells
+
+The reconstruction the internal tide terminates both its tracer and its momentum WENO chains in unless the caller
+says otherwise.
+"""
+const internal_tide_boundary_scheme = :ghost_cells
+
+"""
     internal_tide(timestepper::Symbol; free_surface, tracer_advection, boundary_scheme)
 
 Set up and run the internal tide test case simulation.
@@ -214,12 +222,11 @@ $(SIGNATURES)
 - `boundary_scheme`: the reconstruction the WENO buffer chain terminates in, used in the one cell whose stencil
   no longer fits -- the domain buffer and, on the immersed seamount, any cell adjacent to an inactive node.
   Options:
-   * `:cwenoz` -- the third-order central-WENO reconstruction of Semplice, Travaglia and Puppo (2022), whose
-     stencil extends only inwards.
+   * `:ghost_cells` -- `GhostCells()`, which keeps the full order and completes the stencil with ghost values.
    * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
    * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
      Oceananigans defaults.
-  `nothing`, the default, leaves the tracers on `:cwenoz` and the momentum on `:upwind`.
+  `nothing`, the default, leaves both the tracers and the momentum on [`internal_tide_boundary_scheme`](@ref).
 - `tracer_boundary_scheme`, `momentum_boundary_scheme`: the same choice made separately for the tracer and the
   momentum reconstructions, `boundary_scheme` setting both where it is given. Setting one of them alone
   isolates which of the two the boundary treatment acts through.
@@ -247,8 +254,8 @@ function internal_tide(timestepper::Symbol;
                                                                                              averaging_kernel)),
                        free_surface_name=default_free_surface_name(free_surface),
                        boundary_scheme=nothing,
-                       tracer_boundary_scheme=something(boundary_scheme, default_tracer_boundary_scheme),
-                       momentum_boundary_scheme=something(boundary_scheme, default_momentum_boundary_scheme),
+                       tracer_boundary_scheme=something(boundary_scheme, internal_tide_boundary_scheme),
+                       momentum_boundary_scheme=something(boundary_scheme, internal_tide_boundary_scheme),
                        tracer_advection=nothing,
                        momentum_advection=nothing,
                        Δt=internal_tide_timestep(Val(timestepper)))
@@ -328,7 +335,9 @@ function internal_tide(timestepper::Symbol;
     # `FluxFormAdvection` and differing only in the reconstruction the chain ends in.
     fsname = free_surface_name
     if free_surface_name == default_free_surface_name(free_surface)
-        suffix = boundary_scheme_suffix(tracer_boundary_scheme, momentum_boundary_scheme)
+        suffix = boundary_scheme_suffix(tracer_boundary_scheme, momentum_boundary_scheme;
+                                        reference_tracer_scheme = internal_tide_boundary_scheme,
+                                        reference_momentum_scheme = internal_tide_boundary_scheme)
 
         if !isempty(suffix)
             fsname *= suffix
