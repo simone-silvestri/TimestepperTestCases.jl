@@ -11,7 +11,7 @@ export near_global_diffusivity_profile, near_global_diffusivity_map, near_global
 export near_global_surface_speed, near_global_surface_kinetic_energy, near_global_eddy_kinetic_energy
 export near_global_surface_kinetic_energy_history
 export near_global_zonal_spectrum
-export global_ocean, global_ocean_grid
+export global_ocean, global_ocean_grid, global_ocean_cost
 
 using DocStringExtensions
 using Oceananigans

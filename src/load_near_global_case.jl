@@ -109,25 +109,27 @@ end
 """
     near_global_cost_table(cases; reference = "AB2-SE")
 
-Seconds per step, simulated days per wall-clock day and the cost relative to `reference`, for the cases whose
-timings are on disk. The relative column is the one Section 5.4.1 reads: a scheme that costs more per step
-but takes a longer step can still finish the year first, which is what `simulated_days_per_day` shows.
+Seconds per step, simulated years per wall-clock day (SYPD) at the production time step and the cost relative
+to `reference`, for the cases whose timings are on disk. The relative column is the one Section 5.4.1 reads: a scheme that costs more per step
+but takes a longer step can still finish the year first, which is what `simulated_years_per_day` shows.
 """
 function near_global_cost_table(cases; reference = "AB2-SE")
     timed = filter(c -> !isnothing(c[:cost]), cases)
     isempty(timed) && return NamedTuple[]
 
-    # simulated seconds per wall second, which is the same number as simulated days per wall-clock day
-    throughput(c) = c[:cost].Δt / c[:cost].seconds_per_step
+    # a cost run steps below the time step its substeps are sized for, so the throughput is taken at the nominal one
+    nominal_timestep(c) = get(c[:cost], :nominal_timestep, c[:cost].Δt)
+    throughput(c) = near_global_simulated_years_per_day(nominal_timestep(c), c[:cost].seconds_per_step)
 
     reference_case = findfirst(c -> c[:label] == reference, timed)
     reference_throughput = isnothing(reference_case) ? NaN : throughput(timed[reference_case])
 
     return [(; label = c[:label],
-               Δt = c[:cost].Δt,
+               Δt = nominal_timestep(c),
                substeps = c[:cost].substeps,
                seconds_per_step = c[:cost].seconds_per_step,
-               simulated_days_per_day = throughput(c),
+               simulated_days_per_day = 365 * throughput(c),
+               simulated_years_per_day = throughput(c),
                speedup = throughput(c) / reference_throughput) for c in timed]
 end
 

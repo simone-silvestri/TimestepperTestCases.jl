@@ -246,6 +246,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      tracer_boundary_scheme = something(boundary_scheme, default_tracer_boundary_scheme),
                      momentum_boundary_scheme = something(boundary_scheme, default_momentum_boundary_scheme),
                      Δt = near_global_timestep(Val(timestepper)),
+                     nominal_timestep = Δt,
                      cold_start_Δt = Δt / 3,
                      cold_start_duration = 60days,
                      stop_time = 720days,
@@ -265,6 +266,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      restoring_dataset = WOAMonthly(),
                      label = nothing,
                      prefix = "near_global",
+                     output = true,
                      init_date = DateTime(1993, 1, 1),
                      progress_interval = TimeInterval(5days),
                      surface_output_interval = TimeInterval(1days),
@@ -273,7 +275,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     if free_surface === nothing
         # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
         # target, so that the barotropic Courant number is a stated property of the run.
-        substeps = near_global_substeps(barotropic_timestepper, grid; averaging_kernel, Δt)
+        substeps = near_global_substeps(barotropic_timestepper, grid; averaging_kernel, Δt = nominal_timestep)
         free_surface = SplitExplicitFreeSurface(grid; substeps, averaging_kernel,
                                                 timestepper = barotropic_timestepper,
                                                 slow_forcing)
@@ -337,21 +339,23 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
     filename = near_global_filename(prefix, label, timestepper, filter, free_surface)
     surface  = merge(ocean.model.tracers, ocean.model.velocities)
 
-    ocean.output_writers[:surface] = JLD2Writer(ocean.model, surface;
-                                                schedule = surface_output_interval,
-                                                indices = (:, :, grid.Nz),
-                                                filename = filename * "_surface",
-                                                with_halos = true,
-                                                overwrite_existing = true,
-                                                array_type = Array{Float32})
+    if output
+        ocean.output_writers[:surface] = JLD2Writer(ocean.model, surface;
+                                                    schedule = surface_output_interval,
+                                                    indices = (:, :, grid.Nz),
+                                                    filename = filename * "_surface",
+                                                    with_halos = true,
+                                                    overwrite_existing = true,
+                                                    array_type = Array{Float32})
 
-    ocean.output_writers[:average] = JLD2Writer(ocean.model, surface;
-                                                schedule = dissipation_output_interval,
-                                                indices = (:, :, grid.Nz),
-                                                filename = filename * "_average",
-                                                with_halos = true,
-                                                overwrite_existing = true,
-                                                array_type = Array{Float32})
+        ocean.output_writers[:average] = JLD2Writer(ocean.model, surface;
+                                                    schedule = dissipation_output_interval,
+                                                    indices = (:, :, grid.Nz),
+                                                    filename = filename * "_average",
+                                                    with_halos = true,
+                                                    overwrite_existing = true,
+                                                    array_type = Array{Float32})
+    end
 
     add_callback!(ocean, near_global_progress, progress_interval)
 
@@ -385,24 +389,36 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                                                         overwrite_existing = true)
     end
 
+    # `run!` takes one step even when the stop time is already reached
     ocean.stop_time = stop_time
-    dissipation_wall = @elapsed run!(ocean)
+    dissipation_wall = stop_time > cost_stop_time ? @elapsed(run!(ocean)) : 0.0
 
     wall_time  = cold_wall + production_wall + dissipation_wall
     iterations = iteration(ocean)
     seconds_per_step = production_steps == 0 ? NaN : production_wall / production_steps
+    simulated_years_per_day = near_global_simulated_years_per_day(nominal_timestep, seconds_per_step)
 
     label = something(label, near_global_label(timestepper, filter, free_surface))
-    @info @sprintf("[%s] %-14s wall: %s (%d steps, cold %s) -> %.4f s/step",
-                   prefix, label, prettytime(wall_time), iterations, prettytime(cold_wall), seconds_per_step)
+    @info @sprintf("[%s] %-14s wall: %s (%d steps, cold %s) -> %.4f s/step, %.3f SYPD at Δt = %s",
+                   prefix, label, prettytime(wall_time), iterations, prettytime(cold_wall), seconds_per_step,
+                   simulated_years_per_day, prettytime(nominal_timestep))
 
     substeps = free_surface isa SplitExplicitFreeSurface ? length(free_surface.substepping.averaging_weights) : 0
 
-    save_near_global_cost(prefix, label; Δt, substeps, wall_time, cold_wall, production_wall, dissipation_wall,
-                          iterations, production_steps, seconds_per_step, cost_stop_time, stop_time)
+    save_near_global_cost(prefix, label; Δt, nominal_timestep, substeps, wall_time, cold_wall, production_wall, dissipation_wall,
+                          iterations, production_steps, seconds_per_step, simulated_years_per_day,
+                          cost_stop_time, stop_time)
 
-    return (; ocean, label, wall_time, iterations, seconds_per_step)
+    return (; ocean, label, wall_time, iterations, seconds_per_step, nominal_timestep, simulated_years_per_day)
 end
+
+"""
+    near_global_simulated_years_per_day(nominal_timestep, seconds_per_step)
+
+Simulated years per wall-clock day of a run at its production time step `nominal_timestep` [s], whatever step
+`seconds_per_step` was measured at.
+"""
+near_global_simulated_years_per_day(nominal_timestep, seconds_per_step) = nominal_timestep / seconds_per_step / 365
 
 """
     save_near_global_cost(prefix, label; kw...)
