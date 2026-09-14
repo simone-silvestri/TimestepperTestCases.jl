@@ -16,6 +16,15 @@
 #####
 
 using Oceananigans.Advection: GhostCells
+using Oceananigans.Advection.Adapt: Adapt
+using Oceananigans.Architectures: on_architecture
+
+# Oceananigans does not adapt `GhostCells`, so the `RefValue` Δt of an adaptive implicit `scheme` reaches GPU kernels
+Adapt.adapt_structure(to, scheme::GhostCells) =
+    GhostCells(Adapt.adapt(to, scheme.scheme), scheme.curvature_weight, scheme.monotone)
+
+Oceananigans.Architectures.on_architecture(to, scheme::GhostCells) =
+    GhostCells(on_architecture(to, scheme.scheme), scheme.curvature_weight, scheme.monotone)
 
 """
     const default_tracer_boundary_scheme = :ghost_cells
