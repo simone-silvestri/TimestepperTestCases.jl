@@ -105,14 +105,16 @@ near_global_timestep(::Val{:SplitRungeKutta3}) = 20minutes
 near_global_timestep(::Val{scheme}) where scheme = baroclinic_timestep(scheme, near_global_timestep(Val(:SplitRungeKutta3)))
 
 """
-    near_global_barotropic_rate(grid)
+    near_global_barotropic_rate(grid; g = Oceananigans.defaults.gravitational_acceleration)
 
 Largest `√(gH) 2√(Δx⁻² + Δy⁻²)` over the columns of `grid` [s⁻¹], the rate that binds the barotropic sub-cycle.
 """
-near_global_barotropic_rate(grid) = maximum(compute!(Field(KernelFunctionOperation{Center, Center, Nothing}(column_barotropic_rate, grid))))
+near_global_barotropic_rate(grid; g = Oceananigans.defaults.gravitational_acceleration) =
+    maximum(compute!(Field(KernelFunctionOperation{Center, Center, Nothing}(column_barotropic_rate, grid, g))))
 
-@inline column_barotropic_rate(i, j, k, grid) = barotropic_speed(static_column_depthᶜᶜᵃ(i, j, grid)) *
-                                                staggered_wavenumber(Δxᶜᶜᶜ(i, j, k, grid), Δyᶜᶜᶜ(i, j, k, grid))
+# `g` enters as an argument: the global `Oceananigans.defaults` lives in host memory and faults inside a GPU kernel
+@inline column_barotropic_rate(i, j, k, grid, g) = barotropic_speed(static_column_depthᶜᶜᵃ(i, j, grid); g) *
+                                                   staggered_wavenumber(Δxᶜᶜᶜ(i, j, k, grid), Δyᶜᶜᶜ(i, j, k, grid))
 
 """
     near_global_substeps(barotropic_scheme, grid, scheme; averaging_kernel, Δt)
@@ -165,7 +167,12 @@ with vanishing derivative at each of them, and zero beyond the outermost knots.
     φ ≤ first(latitudes) && return zero(φ)
     φ ≥ last(latitudes)  && return zero(φ)
 
-    k = findfirst(≥(φ), latitudes)
+    # a bounded loop, since the `nothing` branch of `findfirst` does not compile in a GPU kernel
+    k = 2
+    while k < length(latitudes) && latitudes[k] < φ
+        k += 1
+    end
+
     φ₁, φ₂ = latitudes[k-1], latitudes[k]
     τ₁, τ₂ = stresses[k-1], stresses[k]
 

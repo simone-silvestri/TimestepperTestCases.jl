@@ -6,11 +6,11 @@
 using NumericalEarth
 
 """
-    global_ocean_grid(arch = CPU(); Nz, depth, surface_spacing, z, dataset, major_basins, halo)
+    global_ocean_grid(arch = CPU(); Nz, depth, surface_spacing, z, dataset, major_basins, minimum_depth, halo)
 
 The eORCA025 tripolar grid, on the vertical coordinate of `near_global_vertical_discretization`. The mesh
 carries its own metrics and its own bathymetry; the northern boundary is the `RightFaceFolded` seam and the
-zonal direction is periodic.
+zonal direction is periodic. Columns shallower than `minimum_depth` are land, as in `near_global_grid`.
 
 $(SIGNATURES)
 """
@@ -21,10 +21,74 @@ function global_ocean_grid(arch = CPU();
                            z = near_global_vertical_discretization(Nz, depth, surface_spacing),
                            dataset = ORCAQuarter(),
                            major_basins = 1,
+                           minimum_depth = 30meters,
                            halo = (7, 7, 7))
 
-    return ORCAGrid(arch, Oceananigans.defaults.FloatType;
+    grid = ORCAGrid(arch, Oceananigans.defaults.FloatType;
                     dataset, z, Nz, halo, major_basins, active_cells_map = true)
+
+    fill_degenerate_metrics!(grid)
+
+    bottom_height = grid.immersed_boundary.bottom_height
+    parent(bottom_height) .= land_above_minimum_depth.(parent(bottom_height), minimum_depth)
+
+    return ImmersedBoundaryGrid(grid.underlying_grid, GridFittedBottom(bottom_height); active_cells_map = true)
+end
+
+@inline land_above_minimum_depth(h, minimum_depth) = ifelse(h > -minimum_depth, zero(h), h)
+
+const horizontal_metric_names = (:Δxᶜᶜᵃ, :Δxᶠᶜᵃ, :Δxᶜᶠᵃ, :Δxᶠᶠᵃ,
+                                 :Δyᶜᶜᵃ, :Δyᶠᶜᵃ, :Δyᶜᶠᵃ, :Δyᶠᶠᵃ,
+                                 :Azᶜᶜᵃ, :Azᶠᶜᵃ, :Azᶜᶠᵃ, :Azᶠᶠᵃ)
+
+"""
+    fill_degenerate_metrics!(grid)
+
+Replace every nonpositive horizontal spacing and area of `grid` with the nearest positive value on the same row
+(or, for a row with none, the nearest row that has one). The eORCA025 mesh carries zero metrics on the rows
+under the northern fold and in the southern halo, whose inverses put `0 × ∞` into the continuity and momentum
+operators.
+"""
+function fill_degenerate_metrics!(grid)
+    underlying_grid = grid isa Oceananigans.ImmersedBoundaries.ImmersedBoundaryGrid ? grid.underlying_grid : grid
+
+    for name in horizontal_metric_names
+        metric = parent(getproperty(underlying_grid, name))
+        host = Array(metric)
+        filled = fill_degenerate_rows!(host)
+        filled > 0 && @info "fill_degenerate_metrics!: $filled nonpositive entries of $name replaced"
+        copyto!(metric, host)
+    end
+
+    return grid
+end
+
+function fill_degenerate_rows!(metric)
+    filled = 0
+    valid_rows = Int[]
+
+    for j in axes(metric, 2)
+        row = view(metric, :, j)
+        valid = findall(>(0), row)
+        isempty(valid) && continue
+        push!(valid_rows, j)
+
+        for i in eachindex(row)
+            if !(row[i] > 0)
+                row[i] = row[valid[argmin(abs.(valid .- i))]]
+                filled += 1
+            end
+        end
+    end
+
+    for j in axes(metric, 2)
+        j in valid_rows && continue
+        nearest = valid_rows[argmin(abs.(valid_rows .- j))]
+        filled += count(x -> !(x > 0), view(metric, :, j))
+        metric[:, j] .= metric[:, nearest]
+    end
+
+    return filled
 end
 
 """
