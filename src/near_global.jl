@@ -259,6 +259,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      stop_time = 720days,
                      cost_stop_time = min(stop_time, 365days),
                      dissipation = true,
+                     statistics = true,
                      closure = near_global_closure(),
                      bottom_drag_coefficient = 0.003,
                      # uᵦ = 0.1 m s⁻¹ stands for the barotropic tide, which this configuration does not force
@@ -277,7 +278,8 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                      init_date = DateTime(1993, 1, 1),
                      progress_interval = TimeInterval(5days),
                      surface_output_interval = TimeInterval(1days),
-                     dissipation_output_interval = AveragedTimeInterval(30days))
+                     dissipation_output_interval = AveragedTimeInterval(30days),
+                     statistics_output_interval = AveragedTimeInterval(7days))
 
     if free_surface === nothing
         # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
@@ -396,6 +398,15 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                                                         overwrite_files = true)
     end
 
+    # Float64 because the variance is recovered as ψ² - ψ̄², which cancels below Float32 precision in the abyss
+    if output && statistics
+        ocean.output_writers[:statistics] = JLD2Writer(ocean.model, near_global_statistics(ocean.model);
+                                                       schedule = statistics_output_interval,
+                                                       filename = filename * "_statistics",
+                                                       overwrite_files = true,
+                                                       array_type = Array{Float64})
+    end
+
     # `run!` takes one step even when the stop time is already reached
     ocean.stop_time = stop_time
     dissipation_wall = stop_time > cost_stop_time ? @elapsed(run!(ocean)) : 0.0
@@ -417,6 +428,31 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                           cost_stop_time, stop_time)
 
     return (; ocean, label, wall_time, iterations, seconds_per_step, nominal_timestep, simulated_years_per_day)
+end
+
+"""
+    near_global_statistics(model)
+
+The fields whose time averages make up the `_statistics` output: the prognostic `u, v, T, S, e, η` and the
+buoyancy `b`, their squares `u², v², T², S², e², η², b²`, from which the variance over an averaging window follows
+as `ψ² - ψ̄²`, and the diffusive dissipation of buoyancy variance by CATKE `χᴷ = 2 κᶜ (∂z b)² V`, volume-integrated
+like the advective production of the `_dissipation` output.
+"""
+function near_global_statistics(model)
+    grid = model.grid
+    u, v, _ = model.velocities
+    T, S, e = model.tracers.T, model.tracers.S, model.tracers.e
+    η = model.free_surface.displacement
+    b = Oceananigans.Models.buoyancy_operation(model)
+
+    means   = (; u, v, T, S, e, η, b)
+    squares = NamedTuple{map(name -> Symbol(name, "²"), keys(means))}(map(ψ -> ψ^2, values(means)))
+
+    V  = Oceananigans.AbstractOperations.grid_metric_operation((Center, Center, Face), Oceananigans.Operators.volume, grid)
+    κᶜ = model.closure_fields.κc
+    χᴷ = 2 * κᶜ * ∂z(b)^2 * V
+
+    return merge(means, squares, (; χᴷ))
 end
 
 """

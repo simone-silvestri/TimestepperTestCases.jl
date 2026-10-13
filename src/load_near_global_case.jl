@@ -1,8 +1,8 @@
 #####
 ##### Loading and post-processing for the near-global and global cases
 #####
-##### The near-global runs write three files per discretization -- `_dissipation`, `_surface` and `_average` --
-##### plus the `_cost` record of `save_near_global_cost`. Contrarily to the idealized cases the fields are too
+##### The near-global runs write four files per discretization -- `_dissipation`, `_surface`, `_average` and
+##### `_statistics` -- plus the `_cost` record of `save_near_global_cost`. Contrarily to the idealized cases the fields are too
 ##### large to hold in memory for six variants at once, so `load_near_global` opens every time series with the
 ##### `OnDisk` backend and the diagnostics below reduce one snapshot at a time. The `global_ocean` runs write the
 ##### same files under the `global_ocean` prefix, on the eORCA025 tripolar mesh, and are read by the same functions.
@@ -16,7 +16,7 @@ using Statistics: mean
 near_global_path(folder, label, kind, prefix = "near_global") = joinpath(folder, "$(prefix)_$(label)_$(kind).jld2")
 
 """
-    load_near_global(folder, label; architecture, prefix, cost_prefix, dissipation, surface, average)
+    load_near_global(folder, label; architecture, prefix, cost_prefix, dissipation, surface, average, statistics)
 
 Open the output of the near-global run labelled `label` in `folder`.
 
@@ -31,13 +31,15 @@ $(SIGNATURES)
 - `prefix`: the output prefix of the run, `"near_global"` or `"global_ocean"`
 - `cost_prefix`: the prefix of the `_cost` record, by default the one of the run. `"global_ocean_cost"` reads
   the dedicated timing runs of `global_ocean_cost` in place of the production segment of the run itself
-- `dissipation`, `surface`, `average`: whether to open each of the three output files, so that a notebook that
-  only wants the surface maps does not pay for the buoyancy-variance budget
+- `dissipation`, `surface`, `average`, `statistics`: whether to open each of the four output files, so that a
+  notebook that only wants the surface maps does not pay for the buoyancy-variance budget. `statistics` is off
+  by default, the runs that predate the weekly statistics carrying no such file
 
 # Returns
 - Dictionary with the buoyancy-variance dissipation `:Abx, :Aby, :Abz`, the squared gradients
   `:Gbx, :Gby, :Gbz`, the surface `:T, :S, :u, :v, :w`, the same fields time-averaged as `:T̄, :S̄, :ū, :v̄, :w̄`,
-  the timings `:cost`, and the times of each group as `:times`, `:surface_times` and `:average_times`
+  the timings `:cost`, the weekly averages of [`near_global_statistics`](@ref) as the dictionary `:statistics`,
+  and the times of each group as `:times`, `:surface_times`, `:average_times` and `:statistics_times`
 
 Every field is opened with `backend = OnDisk()`: a single dissipation file is close to a gigabyte, so the
 snapshots are read one at a time by the diagnostics rather than held. The dissipation and gradient fields are
@@ -45,7 +47,7 @@ already volume-integrated by the writer -- `Gbx = ∂x(b)² V` and likewise for 
 reductions below are plain sums and carry no metric of their own.
 """
 function load_near_global(folder, label; architecture = CPU(), prefix = "near_global", cost_prefix = prefix,
-                          dissipation = true, surface = true, average = true)
+                          dissipation = true, surface = true, average = true, statistics = false)
 
     case = Dict{Symbol, Any}()
     case[:label] = label
@@ -75,28 +77,47 @@ function load_near_global(folder, label; architecture = CPU(), prefix = "near_gl
         case[:average_times] = case[:ū].times
     end
 
+    if statistics
+        path = near_global_path(folder, label, "statistics", prefix)
+        names = (:u, :v, :T, :S, :e, :η, :b)
+        squares = map(name -> Symbol(name, "²"), names)
+        case[:statistics] = Dict(name => FieldTimeSeries(path, string(name); architecture, backend = OnDisk())
+                                 for name in (names..., squares..., :χᴷ))
+        case[:statistics_times] = case[:statistics][:χᴷ].times
+    end
+
     case[:cost] = load_near_global_cost(folder, label, cost_prefix)
 
     return case
 end
 
 """
-    load_near_global_cases(folder; labels, prefix, dissipation, surface, average, kw...)
+    load_near_global_cases(folder; labels, prefix, dissipation, surface, average, statistics, kw...)
 
 Open every near-global run present in `folder`, skipping the labels for which one of the requested output files
 is missing, so that a notebook can be run while the remaining variants are still integrating.
 """
 function load_near_global_cases(folder; labels = [d.label for d in near_global_discretizations()],
-                                prefix = "near_global", dissipation = true, surface = true, average = true, kw...)
+                                prefix = "near_global", dissipation = true, surface = true, average = true,
+                                statistics = false, kw...)
 
-    requested = [kind for (kind, wanted) in (("dissipation", dissipation), ("surface", surface), ("average", average))
-                 if wanted]
+    requested = [kind for (kind, wanted) in (("dissipation", dissipation), ("surface", surface), ("average", average),
+                                             ("statistics", statistics)) if wanted]
 
     on_disk(label) = all(kind -> isfile(near_global_path(folder, label, kind, prefix)), requested)
     available = filter(on_disk, labels)
 
-    return available, [load_near_global(folder, l; prefix, dissipation, surface, average, kw...) for l in available]
+    return available, [load_near_global(folder, l; prefix, dissipation, surface, average, statistics, kw...)
+                        for l in available]
 end
+
+"""
+    near_global_variance(statistics, name, n)
+
+Variance of `name` over the averaging window of snapshot `n` of the `_statistics` output, `ψ² - ψ̄²`, with
+`statistics` the dictionary `case[:statistics]` of [`load_near_global`](@ref).
+"""
+near_global_variance(statistics, name, n) = interior(statistics[Symbol(name, "²")][n]) .- interior(statistics[name][n]) .^ 2
 
 #####
 ##### Timings
