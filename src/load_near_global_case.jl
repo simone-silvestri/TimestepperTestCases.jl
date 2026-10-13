@@ -1,21 +1,22 @@
 #####
-##### Loading and post-processing for the near-global case
+##### Loading and post-processing for the near-global and global cases
 #####
 ##### The near-global runs write three files per discretization -- `_dissipation`, `_surface` and `_average` --
 ##### plus the `_cost` record of `save_near_global_cost`. Contrarily to the idealized cases the fields are too
 ##### large to hold in memory for six variants at once, so `load_near_global` opens every time series with the
-##### `OnDisk` backend and the diagnostics below reduce one snapshot at a time.
+##### `OnDisk` backend and the diagnostics below reduce one snapshot at a time. The `global_ocean` runs write the
+##### same files under the `global_ocean` prefix, on the eORCA025 tripolar mesh, and are read by the same functions.
 #####
 
 using FFTW
 using JLD2
-using Oceananigans.Grids: φnodes, λnodes, znodes, xspacings
+using Oceananigans.Grids: λnode, φnode, znodes, xspacings
 using Statistics: mean
 
 near_global_path(folder, label, kind, prefix = "near_global") = joinpath(folder, "$(prefix)_$(label)_$(kind).jld2")
 
 """
-    load_near_global(folder, label; architecture, prefix, dissipation, surface, average)
+    load_near_global(folder, label; architecture, prefix, cost_prefix, dissipation, surface, average)
 
 Open the output of the near-global run labelled `label` in `folder`.
 
@@ -27,6 +28,9 @@ $(SIGNATURES)
 
 # Keyword arguments
 - `architecture`: architecture to load onto (default `CPU()`)
+- `prefix`: the output prefix of the run, `"near_global"` or `"global_ocean"`
+- `cost_prefix`: the prefix of the `_cost` record, by default the one of the run. `"global_ocean_cost"` reads
+  the dedicated timing runs of `global_ocean_cost` in place of the production segment of the run itself
 - `dissipation`, `surface`, `average`: whether to open each of the three output files, so that a notebook that
   only wants the surface maps does not pay for the buoyancy-variance budget
 
@@ -40,7 +44,7 @@ snapshots are read one at a time by the diagnostics rather than held. The dissip
 already volume-integrated by the writer -- `Gbx = ∂x(b)² V` and likewise for the others -- which is why the
 reductions below are plain sums and carry no metric of their own.
 """
-function load_near_global(folder, label; architecture = CPU(), prefix = "near_global",
+function load_near_global(folder, label; architecture = CPU(), prefix = "near_global", cost_prefix = prefix,
                           dissipation = true, surface = true, average = true)
 
     case = Dict{Symbol, Any}()
@@ -71,21 +75,27 @@ function load_near_global(folder, label; architecture = CPU(), prefix = "near_gl
         case[:average_times] = case[:ū].times
     end
 
-    case[:cost] = load_near_global_cost(folder, label)
+    case[:cost] = load_near_global_cost(folder, label, cost_prefix)
 
     return case
 end
 
 """
-    load_near_global_cases(folder; labels, prefix, kw...)
+    load_near_global_cases(folder; labels, prefix, dissipation, surface, average, kw...)
 
-Open every near-global run present in `folder`, skipping the labels whose output is missing, so that a
-notebook can be run while the remaining variants are still integrating.
+Open every near-global run present in `folder`, skipping the labels for which one of the requested output files
+is missing, so that a notebook can be run while the remaining variants are still integrating.
 """
 function load_near_global_cases(folder; labels = [d.label for d in near_global_discretizations()],
-                                prefix = "near_global", kw...)
-    available = filter(l -> isfile(near_global_path(folder, l, "dissipation", prefix)), labels)
-    return available, [load_near_global(folder, l; prefix, kw...) for l in available]
+                                prefix = "near_global", dissipation = true, surface = true, average = true, kw...)
+
+    requested = [kind for (kind, wanted) in (("dissipation", dissipation), ("surface", surface), ("average", average))
+                 if wanted]
+
+    on_disk(label) = all(kind -> isfile(near_global_path(folder, label, kind, prefix)), requested)
+    available = filter(on_disk, labels)
+
+    return available, [load_near_global(folder, l; prefix, dissipation, surface, average, kw...) for l in available]
 end
 
 #####
@@ -173,8 +183,9 @@ end
 The depth-integrated numerical diffusivity as a map, `κ(λ, φ) = -Σ_z(Ax + Ay + Az) / 2Σ_z(Gx + Gy + Gz)`, with
 the staggered directions interpolated onto cell centers. Returns `(κ, λ, φ)`.
 
-The grid is curvilinear, so `λ` and `φ` come back as `Nx × Ny` matrices of the cell-center coordinates and not
-as axes: a plot of `κ` reads them as the coordinates of each cell rather than as a rectangular mesh.
+`κ` is `Nx × Ny`, and `λ` and `φ` are the `(Nx + 1) × (Ny + 1)` matrices of the cell corners of
+[`near_global_corner_coordinates`](@ref): on the tripolar mesh a cell is a quadrilateral and not a rectangle, so
+the plot draws each cell between its four corners rather than on a pair of axes.
 """
 function near_global_diffusivity_map(case, time_index = length(case[:times]))
     A = interpolate_to_center_x(vertical_sum(case[:Abx][time_index])) .+
@@ -188,11 +199,33 @@ function near_global_diffusivity_map(case, time_index = length(case[:times]))
     grid = case[:Abx].grid
     κ = @. - A / (2G)
 
-    return κ, center_coordinates(grid)...
+    return κ, near_global_corner_coordinates(grid)...
 end
 
-# λ and φ of the cell centers, as the `Nx × Ny` matrices a curvilinear grid carries
-center_coordinates(grid) = Array(λnodes(grid, Center(), Center())), Array(φnodes(grid, Center(), Center()))
+# λ and φ of the cell centers as `Nx × Ny` matrices, on the latitude-longitude and on the tripolar grid alike
+function center_coordinates(grid)
+    Nx, Ny, _ = size(grid)
+    λ = [λnode(i, j, 1, grid, Center(), Center(), Center()) for i in 1:Nx, j in 1:Ny]
+    φ = [φnode(i, j, 1, grid, Center(), Center(), Center()) for i in 1:Nx, j in 1:Ny]
+    return λ, φ
+end
+
+"""
+    near_global_corner_coordinates(grid)
+
+Longitude and latitude of the cell corners of `grid` as two `(Nx + 1) × (Ny + 1)` matrices, the `(Face, Face)`
+nodes from the south-west corner of the first cell to the north-east corner of the last one. These are the
+coordinates the maps of this file return, for either the latitude-longitude or the tripolar grid.
+
+The longitudes are the ones the grid stores: on the tripolar mesh they jump by 360° once per row, where the row
+crosses the date line, and a plot has to unwrap them before drawing a cell across the jump.
+"""
+function near_global_corner_coordinates(grid)
+    Nx, Ny, _ = size(grid)
+    λ = [λnode(i, j, 1, grid, Face(), Face(), Center()) for i in 1:Nx+1, j in 1:Ny+1]
+    φ = [φnode(i, j, 1, grid, Face(), Face(), Center()) for i in 1:Nx+1, j in 1:Ny+1]
+    return λ, φ
+end
 
 # Az and Δx on cell centers as plain matrices. The area weights and the zonal transform read these off the
 # grid: on a curvilinear mesh neither of them factors into a function of latitude that could be rebuilt from
@@ -249,7 +282,7 @@ function near_global_surface_speed(case, time_index = length(case[:surface_times
     speed = @. sqrt(u^2 + v^2)
     mask_land!(speed, case, time_index)
 
-    return speed, center_coordinates(grid)...
+    return speed, near_global_corner_coordinates(grid)...
 end
 
 """
@@ -290,7 +323,7 @@ function near_global_eddy_kinetic_energy(case; time_indices = eachindex(case[:su
     eddy_kinetic_energy = @. ((u² - ū^2 / n) + (v² - v̄^2 / n)) / (2n)
     mask_land!(eddy_kinetic_energy, case, first(time_indices))
 
-    return eddy_kinetic_energy, center_coordinates(grid)...
+    return eddy_kinetic_energy, near_global_corner_coordinates(grid)...
 end
 
 """
@@ -316,7 +349,7 @@ function near_global_surface_kinetic_energy_history(case; time_indices = eachind
                                                     latitude_band = nothing)
 
     grid = case[:u].grid
-    φ = Array(φnodes(grid, Center(), Center()))
+    _, φ = center_coordinates(grid)
     Az = center_areas(grid)
     wet = Array(interior(case[:T][first(time_indices)], :, :, 1)) .!= 0
 
@@ -398,7 +431,7 @@ function near_global_zonal_spectrum(case, name = :u;
 
     # One latitude and one spacing per row: within the band a row is a line of constant latitude along which
     # the spacing is constant, so the row means are those values and not an approximation of them
-    φ  = vec(mean(Array(φnodes(grid, Center(), Center())), dims = 1))
+    φ  = vec(mean(last(center_coordinates(grid)), dims = 1))
     Δx = vec(mean(center_spacings(grid), dims = 1))
 
     land = Array(interior(case[:T][first(time_indices)], :, :, 1)) .== 0

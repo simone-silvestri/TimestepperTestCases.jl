@@ -242,12 +242,12 @@ function internal_seiche(timestepper::Symbol;
     simulation.output_writers[:energy] = JLD2Writer(model, (; KE, APE, ηvar);
                                                     filename = filename * "_energy",
                                                     schedule = IterationInterval(save_interval),
-                                                    overwrite_existing = true)
+                                                    overwrite_files = true)
 
     simulation.output_writers[:fields] = JLD2Writer(model, (; u, w, b, η);
                                                     filename,
                                                     schedule = IterationInterval(max(1, stop_iteration ÷ 20)),
-                                                    overwrite_existing = true)
+                                                    overwrite_files = true)
 
     run!(simulation)
 

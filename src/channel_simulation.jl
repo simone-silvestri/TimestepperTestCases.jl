@@ -284,7 +284,8 @@ $(SIGNATURES)
 - `boundary_scheme`: the reconstruction the WENO buffer chain terminates in, used in the one cell whose stencil
   no longer fits -- the domain buffer and, where the channel carries a bottom, any cell adjacent to an inactive
   node. Options:
-   * `:ghost_cells` -- `GhostCells()`, which keeps the full order and completes the stencil with ghost values.
+   * `:ghost_cells` -- `GhostCells()`, which keeps the full order, completes the stencil with ghost values and
+     limits the reconstructed values next to the boundary, for both the tracers and momentum.
    * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
    * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
      Oceananigans defaults.
@@ -505,7 +506,7 @@ function channel_simulation(; momentum_advection = nothing,
         simulation.output_writers[:first_checkpointer] = Checkpointer(model,
                                                                       schedule = TimeInterval(100days),
                                                                       prefix = "restart" * string(testcase),
-                                                                      overwrite_existing = true)
+                                                                      overwrite_files = true)
         run!(simulation)
 
         # Remove first checkpoint
@@ -522,7 +523,7 @@ function channel_simulation(; momentum_advection = nothing,
     simulation.output_writers[:checkpointer] = Checkpointer(model,
                                                             schedule = TimeInterval(1800days),
                                                             prefix = "channel_checkpoint_" * string(testcase),
-                                                            overwrite_existing = true)
+                                                            overwrite_files = true)
     #####
     ##### Diagnostics
     #####
@@ -558,17 +559,17 @@ function channel_simulation(; momentum_advection = nothing,
     ##### Build checkpointer and output writer
     #####
 
-    overwrite_existing = true
+    overwrite_files = true
 
     simulation.output_writers[:snapshots] = JLD2Writer(model, snapshot_outputs; 
                                                        schedule = ConsecutiveIterations(TimeInterval(360days)),
                                                        filename = "snapshots_" * string(testcase),
-                                                       overwrite_existing)
+                                                       overwrite_files)
 
     simulation.output_writers[:averages] = JLD2Writer(model, average_outputs;
                                                       schedule = AveragedTimeInterval(5 * 360days),
                                                       filename = "averages_" * string(testcase),
-                                                      overwrite_existing)
+                                                      overwrite_files)
 
     # The reference potential energy has to be sorted from an instantaneous buoyancy field: RPE is not linear
     # in `b`, so the reference state of an average is not the average of the reference states. It needs `b`
@@ -578,7 +579,7 @@ function channel_simulation(; momentum_advection = nothing,
     simulation.output_writers[:mixing] = JLD2Writer(model, (; b, η = model.free_surface.displacement);
                                                     schedule = TimeInterval(360days),
                                                     filename = "mixing_" * string(testcase),
-                                                    overwrite_existing)
+                                                    overwrite_files)
 
     if restart_file isa String
         set!(simulation; checkpoint=restart_file)

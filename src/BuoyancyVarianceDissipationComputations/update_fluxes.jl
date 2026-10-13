@@ -94,12 +94,9 @@ locations and cached for use in dissipation computation.
 """
 function finally_cache_fluxes!(dissipation, model)
 
-    # Grab tracer properties
-    C    = model.tracers
     cⁿ⁻¹ = dissipation.previous_state.cⁿ⁻¹
 
     grid = model.grid
-    arch = architecture(grid)
     # Same transport as `cache_fluxes!`: the tracers are advected by the filtered barotropic transport.
     U = model isa HydrostaticFreeSurfaceModel ? model.transport_velocities : model.velocities
     params = flux_parameters(grid)
@@ -112,9 +109,8 @@ function finally_cache_fluxes!(dissipation, model)
 
     Fⁿ   = dissipation.advective_fluxes.Fⁿ
     Fⁿ⁻¹ = dissipation.advective_fluxes.Fⁿ⁻¹
-    advection = getadvection(model.advection, :T)
 
-    cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, timestepper, stage, advection, U, model.buoyancy, C)
+    cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, timestepper, stage, model, U)
 
 
     cⁿ⁺¹ = Models.buoyancy_operation(model.buoyancy, model.grid, model.tracers)
@@ -130,19 +126,46 @@ function finally_cache_fluxes!(dissipation, model)
     return nothing
 end
 
-cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ::QuasiAdamsBashforth2TimeStepper, stage, advection, U, b, C) =
-    launch!(architecture(grid), grid, params, _cache_advective_fluxes!, Fⁿ, Fⁿ⁻¹, grid, advection, U, b, C)
-
-function cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ts::SplitRungeKuttaTimeStepper, stage, advection, U, b, C)
-    if stage == length(ts.β)-1
-        launch!(architecture(grid), grid, params, _cache_advective_fluxes!, Fⁿ, grid, advection, U, b, C)
-    end
+function cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ::QuasiAdamsBashforth2TimeStepper, stage, model, U)
+    launch!(architecture(grid), grid, params, _store_previous_advective_fluxes!, Fⁿ⁻¹, Fⁿ)
+    accumulate_buoyancy_flux!(Fⁿ, grid, params, model, U, σⁿ, one(eltype(grid)), zero(eltype(grid)))
+    return nothing
 end
 
-# Accumulated into the second slot, which is what `assemble_advective_dissipation!` reads for this scheme.
-function cache_advective_fluxes!(Fⁿ, F̄, grid, params, ts::SSPRungeKuttaTimeStepper, stage, advection, U, b, C)
+function cache_advective_fluxes!(Fⁿ, Fⁿ⁻¹, grid, params, ts::SplitRungeKuttaTimeStepper, stage, model, U)
+    if stage == length(ts.β)-1
+        accumulate_buoyancy_flux!(Fⁿ, grid, params, model, U, σⁿ, one(eltype(grid)), zero(eltype(grid)))
+    end
+    return nothing
+end
+
+# Accumulated into the second slot, which is what `assemble_advective_dissipation!` reads for this scheme. The fluxes
+# are summed raw, without the grid scaling σⁿ: the Shu-Osher path leaves the σ cache at unity, so applying σ here as
+# well would scale the budget twice on a moving grid.
+function cache_advective_fluxes!(Fⁿ, F̄, grid, params, ts::SSPRungeKuttaTimeStepper, stage, model, U)
     β, keep = ssp_accumulation_weights(ts, stage, eltype(grid))
-    launch!(architecture(grid), grid, params, _accumulate_ssp_advective_fluxes!, F̄, grid, advection, U, b, C, β, keep)
+    accumulate_buoyancy_flux!(F̄, grid, params, model, U, unit_scaling, β, keep)
+    return nothing
+end
+
+"""
+    accumulate_buoyancy_flux!(Fᵇ, grid, params, model, U, σ, weight, keep)
+
+Set `Fᵇ` to `keep * Fᵇ + weight * g (α Fᵀ - β Fˢ)`, with the tracer fluxes `Fᵀ` and `Fˢ` scaled by `σ`, each computed
+with the advection scheme of its own tracer.
+"""
+function accumulate_buoyancy_flux!(Fᵇ, grid, params, model, U, σ, weight, keep)
+    coefficients = buoyancy_coefficients(model.buoyancy)
+
+    for name in (:T, :S)
+        advection = getadvection(model.advection, name)
+        tracer = model.tracers[name]
+        launch!(architecture(grid), grid, params, _accumulate_advective_fluxes!,
+                Fᵇ, grid, advection, U, tracer, σ, weight * coefficients[name], keep)
+        keep = one(keep)
+    end
+
+    return nothing
 end
 
 update_transport!(Uⁿ, Uⁿ⁻¹, grid, params, ::QuasiAdamsBashforth2TimeStepper, stage, U) =

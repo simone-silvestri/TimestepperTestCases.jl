@@ -8,23 +8,16 @@
 #####
 ##### The three options are
 #####
-#####   :ghost_cells  `GhostCells()`, which keeps the full order and completes the stencil with ghost values that
-#####                 blend the mirror image of the active run with its quadratic extrapolation
+#####   :ghost_cells  `GhostCells()`, which keeps the full order, completes the stencil with the linear extrapolation of
+#####                 the active cells closest to the boundary and limits the reconstructed values next to the boundary
+#####                 to the range of the neighboring cells. Tracers and momentum use the same scheme, which requires a
+#####                 WENO order of at least 5
 #####   :upwind       first-order upwind, monotone, in exactly those cells and nowhere else
 #####   :default      `Centered(order=2)` for tracers and `UpwindBiased(order=1)` for momentum, the Oceananigans
 #####                 defaults
 #####
 
 using Oceananigans.Advection: GhostCells
-using Oceananigans.Advection.Adapt: Adapt
-using Oceananigans.Architectures: on_architecture
-
-# Oceananigans does not adapt `GhostCells`, so the `RefValue` Δt of an adaptive implicit `scheme` reaches GPU kernels
-Adapt.adapt_structure(to, scheme::GhostCells) =
-    GhostCells(Adapt.adapt(to, scheme.scheme), scheme.curvature_weight, scheme.monotone)
-
-Oceananigans.Architectures.on_architecture(to, scheme::GhostCells) =
-    GhostCells(on_architecture(to, scheme.scheme), scheme.curvature_weight, scheme.monotone)
 
 """
     const default_tracer_boundary_scheme = :ghost_cells
@@ -114,8 +107,9 @@ function split_flux_form_advection(boundary_reconstruction, order, time_discreti
     return FluxFormAdvection(horizontal, horizontal, vertical)
 end
 
-split_tracer_advection(order, time_discretization, boundary_scheme) =
-    split_flux_form_advection(tracer_boundary_reconstruction, order, time_discretization, boundary_scheme)
+# A single `WENO`: an adaptive implicit `time_discretization` acts on the vertical flux alone
+weno_tracer_advection(order, time_discretization, boundary_scheme) =
+    WENO(; order, time_discretization, boundary_scheme = tracer_boundary_reconstruction(boundary_scheme))
 
 function split_momentum_advection(order, time_discretization, boundary_scheme)
 
@@ -143,4 +137,4 @@ tracer_advection_scheme(::Val{:default}, default; kw...) = default
 tracer_advection_scheme(boundary_scheme::Val, default;
                         order = 7,
                         time_discretization = ExplicitTimeDiscretization()) =
-    split_tracer_advection(order, time_discretization, boundary_scheme)
+    weno_tracer_advection(order, time_discretization, boundary_scheme)

@@ -9,10 +9,9 @@ using Oceananigans
 # The time step and the barotropic substep count are derived from the discretization and from
 # `internal_tide_stability_parameters()`, not prescribed here.
 
-grid = TimestepperTestCases.internal_tide_grid()
-
 for d in discretizations()
-    sim = TimestepperTestCases.internal_tide(d; grid)
+    grid = TimestepperTestCases.internal_tide_grid()
+    sim  = TimestepperTestCases.internal_tide(d; grid)
 end
 
 timesteppers = Dict("WRK3-SE" => "SplitRungeKutta3",
@@ -28,6 +27,5 @@ for factor in (1//4, 1//8), label in ("WRK3-SE", "SRK3-SE", "MRK4-SE")
         continue
     end
 
-    sim = TimestepperTestCases.internal_tide(discretization(label);
-                                             timestep_factor = factor, label = tag)
+    sim = TimestepperTestCases.internal_tide(discretization(label); timestep_factor = factor, label = tag)
 end

@@ -113,7 +113,8 @@ $(SIGNATURES)
 - `boundary_scheme`: the reconstruction the WENO buffer chain terminates in, used in the one cell whose stencil
   no longer fits -- the domain buffer and, on the sloping bathymetry, any cell adjacent to an inactive node.
   Options:
-   * `:ghost_cells` -- `GhostCells()`, which keeps the full order and completes the stencil with ghost values.
+   * `:ghost_cells` -- `GhostCells()`, which keeps the full order, completes the stencil with ghost values and
+     limits the reconstructed values next to the boundary, for both the tracers and momentum.
    * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
    * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
      Oceananigans defaults.
@@ -335,20 +336,20 @@ function idealized_coast(timestepper::Symbol;
                                                     schedule = TimeInterval(save_fields_interval),
                                                     file_splitting = TimeInterval(1days),
                                                     array_type = Array{Float32},
-                                                    overwrite_existing = true)
+                                                    overwrite_files = true)
 
     simulation.output_writers[:surface] = JLD2Writer(model, outputs;
                                                     filename = filename * "_surface_$(string(timestepper))_$(closure)",
                                                     schedule = TimeInterval(save_fields_interval),
                                                     array_type = Array{Float32},
                                                     indices = (:, :, grid.Nz),
-                                                    overwrite_existing = true)
+                                                    overwrite_files = true)
 
     simulation.output_writers[:averages] = JLD2Writer(model, average_outputs;
                                                       filename = filename * "_averages_$(string(timestepper))_$(closure)",
                                                       schedule = TimeInterval(save_fields_interval),
                                                       array_type = Array{Float32},
-                                                      overwrite_existing = true)
+                                                      overwrite_files = true)
 
     @info "Running the simulation..."
 

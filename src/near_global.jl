@@ -352,7 +352,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                                                     indices = (:, :, grid.Nz),
                                                     filename = filename * "_surface",
                                                     with_halos = true,
-                                                    overwrite_existing = true,
+                                                    overwrite_files = true,
                                                     array_type = Array{Float32})
 
         ocean.output_writers[:average] = JLD2Writer(ocean.model, surface;
@@ -360,7 +360,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
                                                     indices = (:, :, grid.Nz),
                                                     filename = filename * "_average",
                                                     with_halos = true,
-                                                    overwrite_existing = true,
+                                                    overwrite_files = true,
                                                     array_type = Array{Float32})
     end
 
@@ -393,7 +393,7 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
         ocean.output_writers[:dissipation] = JLD2Writer(ocean.model, diss;
                                                         schedule = dissipation_output_interval,
                                                         filename = filename * "_dissipation",
-                                                        overwrite_existing = true)
+                                                        overwrite_files = true)
     end
 
     # `run!` takes one step even when the stop time is already reached

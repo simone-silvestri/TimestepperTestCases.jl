@@ -10,7 +10,7 @@ export load_near_global, load_near_global_cases, near_global_cost_table
 export near_global_diffusivity_profile, near_global_diffusivity_map, near_global_diffusivity_hovmoller
 export near_global_surface_speed, near_global_surface_kinetic_energy, near_global_eddy_kinetic_energy
 export near_global_surface_kinetic_energy_history
-export near_global_zonal_spectrum
+export near_global_zonal_spectrum, near_global_corner_coordinates
 export global_ocean, global_ocean_grid, global_ocean_cost
 
 using DocStringExtensions
@@ -31,7 +31,7 @@ export stability_limit, baroclinic_timestep, barotropic_substeps, barotropic_cou
 export Discretization, discretizations, discretization, timestep_and_free_surface, timestep_ratio, plot_style
 export ModifiedRungeKutta4TimeStepper, ProgressiveSlowForcing, StageQuadraticSlowForcing, FrozenSlowForcing
 export default_tracer_boundary_scheme, default_momentum_boundary_scheme, boundary_scheme_value
-export split_tracer_advection, split_momentum_advection, split_flux_form_momentum_advection
+export weno_tracer_advection, split_momentum_advection, split_flux_form_momentum_advection
 
 wall_clock = Ref(time_ns())
 

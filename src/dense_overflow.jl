@@ -230,7 +230,7 @@ function dense_overflow(timestepper::Symbol;
     simulation.output_writers[:fields] = JLD2Writer(model, merge(outputs, (; η));
                                                     filename = "dense_overflow_$(fsname)_$(string(timestepper))",
                                                     schedule = TimeInterval(save_interval),
-                                                    overwrite_existing = true)
+                                                    overwrite_files = true)
 
     run!(simulation)
 
