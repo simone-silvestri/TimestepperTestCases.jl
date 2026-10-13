@@ -3,6 +3,7 @@ using Oceananigans.Units
 using Oceananigans.Grids: znodes, φnode
 using Oceananigans.Operators: intrinsic_vector, Δxᶜᶜᶜ, Δyᶜᶜᶜ
 using Oceananigans.ImmersedBoundaries: static_column_depthᶜᶜᵃ
+using Oceananigans.OutputWriters: WindowedTimeAverage
 using Oceananigans.Utils: launch!
 using Roots: find_zero
 using NumericalEarth
@@ -400,11 +401,13 @@ function near_global(timestepper::Symbol = :SplitRungeKutta3;
 
     # Float64 because the variance is recovered as ψ² - ψ̄², which cancels below Float32 precision in the abyss
     if output && statistics
-        ocean.output_writers[:statistics] = JLD2Writer(ocean.model, near_global_statistics(ocean.model);
-                                                       schedule = statistics_output_interval,
-                                                       filename = filename * "_statistics",
-                                                       overwrite_files = true,
-                                                       array_type = Array{Float64})
+        statistics_writer = JLD2Writer(ocean.model, near_global_statistics(ocean.model);
+                                       schedule = statistics_output_interval,
+                                       filename = filename * "_statistics",
+                                       overwrite_files = true,
+                                       array_type = Array{Float64})
+
+        ocean.output_writers[:statistics] = initialize_schedules!(statistics_writer, ocean.model)
     end
 
     # `run!` takes one step even when the stop time is already reached
@@ -454,6 +457,22 @@ function near_global_statistics(model)
 
     return merge(means, squares, (; χᴷ))
 end
+
+"""
+    initialize_schedules!(writer, model)
+
+Start the schedule of `writer`, and the averaging windows of its time-averaged outputs, at the current time of
+`model`. `run!` initializes schedules only at iteration 0, so a writer added to a simulation that has already run
+otherwise counts its windows from t = 0.
+"""
+function initialize_schedules!(writer, model)
+    Oceananigans.initialize!(writer.schedule, model)
+    foreach(output -> initialize_output_schedule!(output, model), values(writer.outputs))
+    return writer
+end
+
+initialize_output_schedule!(output, model) = nothing
+initialize_output_schedule!(output::WindowedTimeAverage, model) = Oceananigans.initialize!(output.schedule, model)
 
 """
     near_global_simulated_years_per_day(nominal_timestep, seconds_per_step)
