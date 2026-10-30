@@ -206,8 +206,8 @@ end
 # matrices onto their normalized left and right eigenvectors gives the coupling coefficients Vⱼₗ. These determine the
 # direct correction within the selected mode and propagation direction, and the indirect correction through other modes.
 
-reference_matrix = uncoupled_matrix(phase, modes; scheme=WickerSkamarock3(), solver=RungeKutta3(), filter)
-corrections = coupling_corrections(complete_matrix, reference_matrix, modes)
+Mᵤ = uncoupled_matrix(phase, modes; scheme=WickerSkamarock3(), solver=RungeKutta3(), filter)
+corrections = coupling_corrections(Mₘ, Mᵤ, modes)
 
 corrections.direct_magnitude, corrections.indirect_magnitude, corrections.other_magnitude
 

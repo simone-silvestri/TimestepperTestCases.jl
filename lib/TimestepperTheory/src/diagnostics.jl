@@ -75,11 +75,25 @@ function coupling_corrections(M, Mᵤ, modes; selected_mode=1, propagation=1)
     λ̂ = coupled.values[argmax(overlaps)]
     λⱼ = λ[j]
     magnitude_correction(δ) = real(conj(λⱼ) * δ) / abs(λⱼ)
-    return (; direct=δλ¹, indirect=δλ², other=baroclinic_correction, transfers=V, eigenvalues=λ, right=R, left=L, selected=j,
-              direct_magnitude=magnitude_correction(δλ¹), indirect_magnitude=magnitude_correction(δλ²), other_magnitude=magnitude_correction(baroclinic_correction),
-              reference_eigenvalue=λⱼ, actual_eigenvalue=λ̂, overlap=maximum(overlaps),
-              damping=1 - abs(λⱼ), growth=abs(λ̂) - 1, coupling=abs(λ̂) - abs(λⱼ),
-              spectral_growth=maximum(abs, coupled.values) - 1)
+
+    return (; direct       = δλ¹, 
+              indirect     = δλ², 
+              other        = baroclinic_correction, 
+              transfers    = V, 
+              eigenvalues  = λ, 
+              right        = R, 
+              left         = L, 
+              selected     = j,
+              direct_magnitude     = magnitude_correction(δλ¹), 
+              indirect_magnitude   = magnitude_correction(δλ²), 
+              other_magnitude      = magnitude_correction(baroclinic_correction),
+              reference_eigenvalue = λⱼ, 
+              actual_eigenvalue    = λ̂, 
+              overlap              = maximum(overlaps),
+              damping              = 1 - abs(λⱼ), 
+              growth               = abs(λ̂) - 1, 
+              coupling             = abs(λ̂) - abs(λⱼ),
+              spectral_growth      = maximum(abs, coupled.values) - 1)
 end
 
 """
@@ -105,7 +119,11 @@ function frozen_predictions(μ₀, modes; scheme=WickerSkamarock3(), selected_mo
         Vᵦⱼ[l] = χ / sqrt(typeof(float(μ₀))(2)) * ((λₗ - 1) * ℓₗ[1] + im * μ₀ * (1 + λₗ) * ℓₗ[2] / 2)
         Vⱼᵦ[l] = χ / sqrt(typeof(float(μ₀))(2)) * ((λₗ - 1) * rₗ[1] + im * μ₀ * pressure_transfer(scheme, λₗ, rₗ, W½))
     end
-    return (; direct=χ² * real(δλ¹), indirect=χ² * real(δλ²), total=χ² * real(δλ), forward=Vⱼᵦ, reverse=Vᵦⱼ)
+    return (; direct   = χ² * real(δλ¹),  
+              indirect = χ² * real(δλ²), 
+              total    = χ² * real(δλ), 
+              forward  = Vⱼᵦ, 
+              reverse  = Vᵦⱼ)
 end
 
 """

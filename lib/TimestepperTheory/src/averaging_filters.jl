@@ -47,14 +47,16 @@ function averaging_filter(float_type, ::F2Filter, Nₛ)
 end
 
 function averaging_filter(float_type, ::F3Filter, Nₛ)
-    ν = float_type(595115 // 1000000)
-    Δτ  = float_type(2) / Nₛ
-    τ    = collect(1:Nₛ) .* Δτ
+    ν  = float_type(595115 // 1000000)
+    Δτ = float_type(2) / Nₛ
+    τ  = collect(1:Nₛ) .* Δτ
+
     u = (τ .- float_type(909165 // 1000000)) ./ float_type(864972 // 1000000)
     B = [abs(uᵢ) <= 1 ? (1 - uᵢ^2)^ν * uᵢ^j : zero(uᵢ) for uᵢ in u, j in 0:4]
-    M = [sum(B[:, j] .* (τ .- 1).^p) for p in 0:3, j in 1:5]
+    M = [sum(B[:, j] .* (τ .- 1).^p) for p in 0:3, j in 1:5] # filter moments
     b = M \ float_type[1, 0, 0, 0]
     w = B * b
+    
     resize!(w, findlast(!iszero, w))
     w ./= sum(w)
     Δτ = inv(sum(j * wⱼ for (j, wⱼ) in enumerate(w)))
