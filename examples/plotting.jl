@@ -1,7 +1,8 @@
 using CairoMakie
 using LaTeXStrings
 
-set_theme!(Theme(fontsize=16, fonts=(; regular="TeX Gyre Termes"), Legend=(; framevisible=true)))
+manuscript_font = joinpath(pkgdir(Makie.MathTeXEngine), "assets", "fonts", "ComputerModern", "cmr10.ttf")
+set_theme!(Theme(fontsize=16, fonts=(; regular=manuscript_font, bold=manuscript_font), Legend=(; framevisible=true)))
 
 function save_example(figure, name)
     directory = joinpath(@__DIR__, "output")
@@ -22,7 +23,9 @@ function plot_internal_tide(profiles, differences)
         lines!(profile_axis, profile.κᵗ, profile.z / 1000; style...)
     end
     Legend(figure[2, 1:3], history; nbanks=4, framevisible=true)
-    limit = maximum(maximum(abs, filter(isfinite, vec(profile.Δκ))) for profile in differences)
+    rowsize!(figure.layout, 2, Auto(false))
+    rowgap!(figure.layout, 16)
+    limit = 1.5e-5
     for (column, profile) in enumerate(differences)
         axis = Axis(figure[3, column]; title=profile.label * " − WRK3-SE", xlabel=L"t\;[\mathrm{days}]", ylabel=L"z\;[\mathrm{km}]")
         heatmap!(axis, profile.t / 86400, profile.z / 1000, transpose(profile.Δκ);

@@ -6,8 +6,8 @@
 
 using TimestepperTestCases
 using JLD2
-include("data_sources.jl") #hide
-include("plotting.jl") #hide
+include("data_sources.jl") #src
+include("plotting.jl") #src
 
 directory = isempty(ARGS) ? nothing : first(ARGS)
 measurements = NamedTuple[]
@@ -34,5 +34,5 @@ for (measurement, throughput) in zip(measurements, relative_throughput)
     println(measurement.label, ": ", measurement.years_per_day, " simulated years/day; ", throughput, " relative to AB2-SE")
 end
 
-plot_global_cost(measurements, relative_throughput) #hide
+plot_global_cost(measurements, relative_throughput) #src
 # ![Global computational throughput](global_throughput.png)

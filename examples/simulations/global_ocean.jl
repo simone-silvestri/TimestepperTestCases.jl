@@ -1,4 +1,6 @@
 using TimestepperTestCases
+using NumericalEarth
+using WorldOceanAtlasTools
 using Oceananigans
 using Oceananigans.Units
 using CUDA

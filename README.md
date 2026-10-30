@@ -1,15 +1,33 @@
 # TimestepperTestCases.jl
 
+[![Documentation build](https://github.com/simone-silvestri/TimestepperTestCases.jl/actions/workflows/Documenter.yml/badge.svg)](https://github.com/simone-silvestri/TimestepperTestCases.jl/actions/workflows/Documenter.yml)
+
 Julia implementations of ocean-model test cases, buoyancy-variance diagnostics, and the time-discretization analysis accompanying the manuscript *A conservative Runge–Kutta framework for nonlinear free-surface ocean models*.
 
 ## Packages
 
-| Package | Location | Purpose |
-| --- | --- | --- |
-| TimestepperTestCases | `src/` | Oceananigans simulation setups and numerical-mixing diagnostics |
-| [TimestepperTheory](lib/TimestepperTheory/README.md) | `lib/TimestepperTheory/` | Amplification factors, averaging filters, modal evolution matrices, and direct and indirect coupling corrections |
+`TimestepperTestCases` in `src/` provides Oceananigans simulation setups and numerical-mixing diagnostics. [TimestepperTheory](lib/TimestepperTheory/README.md), in `lib/TimestepperTheory/`, provides amplification factors, averaging filters, modal evolution matrices, and direct and indirect coupling corrections.
 
 The theory package runs on a CPU without Oceananigans or simulation output. Its Literate example reproduces the computations and figures of Sections 2–4. The simulation package includes internal tides, re-entrant channel flow, and an optional NumericalEarth extension for the global configuration.
+
+## Repository layout
+
+```text
+TimestepperTestCases.jl/
+├── src/                         # Simulation setups and variance diagnostics
+├── ext/                         # NumericalEarth global configuration
+├── lib/TimestepperTheory/       # Theory package, tests, and Literate example
+├── examples/
+│   ├── simulations/             # Internal-tide, channel, and global drivers
+│   ├── internal_tide.jl         # Internal-tide diagnostics
+│   ├── channel.jl               # Channel diagnostics
+│   ├── global_ocean.jl          # Global throughput comparison
+│   └── datasets.toml            # Dataset download locations and checksums
+├── docs/                        # Documenter sources and build script
+└── test/                        # Simulation-package tests
+```
+
+Local simulation data, generated figures, notebooks, and documentation builds are ignored by Git.
 
 ## Run the theory example
 
@@ -33,7 +51,7 @@ Instantiate the root environment, which specifies the Oceananigans revision and 
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
-The simulation drivers are in `internal_tide/`, `channel_simulation/`, and `global_ocean/`. The global tripolar configuration uses the NumericalEarth and WorldOceanAtlasTools extension.
+The simulation drivers are in `examples/simulations/`; run them from the repository root. The global tripolar configuration uses the NumericalEarth and WorldOceanAtlasTools extension.
 
 ## Analyze local or published data
 

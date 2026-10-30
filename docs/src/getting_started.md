@@ -82,5 +82,5 @@ TimestepperTestCases.jl requires:
 
 - Learn about the [experiments](experiments/internal_tide.md) in detail
 - Understand the [diagnostics](diagnostics.md) used to quantify numerical mixing
-- Explore the [notebooks](notebooks.md) for reproducing figures
+- Run the [Julia examples](data_examples.md) with local or published data
 

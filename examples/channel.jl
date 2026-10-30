@@ -7,9 +7,9 @@
 using TimestepperTestCases
 using Oceananigans
 using Statistics
-include("data_sources.jl") #hide
-include("compact_data.jl") #hide
-include("plotting.jl") #hide
+include("data_sources.jl") #src
+include("compact_data.jl") #src
+include("plotting.jl") #src
 
 directory = isempty(ARGS) ? nothing : first(ARGS)
 labels = ("AB2-SE", "WRK3-SE", "MRK4-SE", "WRK3-UP")
@@ -36,6 +36,6 @@ end
 reference = only(filter(section -> section.label == "WRK3-SE", sections))
 differences = [(; section..., ΔPₕ=section.Pₕ - reference.Pₕ, ΔPz=section.Pz - reference.Pz) for section in sections if section.label != reference.label]
 
-plot_channel(profiles, reference, differences) #hide
+plot_channel(profiles, reference, differences) #src
 # ![Channel numerical diffusivity](channel_diffusivity.png)
 # ![Channel variance-tendency differences](channel_dissipation.png)

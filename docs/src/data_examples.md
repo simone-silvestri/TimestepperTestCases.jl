@@ -21,7 +21,7 @@ julia --project=examples examples/global_ocean.jl /path/to/global_ocean AB2-SE W
 
 ## Computations and outputs
 
-- Internal tide: local numerical diffusivity, horizontal and temporal averages, and depth–time differences against WRK3-SE.
+- Internal tide: numerical diffusivity from the ratio of horizontally averaged variance destruction and squared gradients, depth and temporal averages, and depth–time differences against WRK3-SE.
 - Channel: numerical diffusivity profiles, physical-to-numerical diffusivity ratios, and signed variance-tendency differences against WRK3-SE. The final saved averaging window is used.
 - Global: simulated years per wall-clock day and throughput relative to AB2-SE, calculated using the nominal production timestep.
 
