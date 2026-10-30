@@ -216,9 +216,40 @@ $(SIGNATURES)
 
 Time steps are chosen to match computational cost between different timesteppers.
 """
-simulation_Δt(::Val{:QuasiAdamsBashforth2}) = 5minutes
-simulation_Δt(::Val{:SplitRungeKutta3})     = 10minutes
-simulation_Δt(::Val{:SplitRungeKutta6})     = 20minutes
+simulation_Δt(::Val{scheme}) where scheme = baroclinic_timestep(scheme; channel_stability_parameters()...)
+
+"""
+    channel_stability_parameters()
+
+Stratification, depth and grid spacing that set the first baroclinic Courant number of this case.
+
+The channel's stratification is surface-intensified, `N²(z) = ΔB exp(z/h) / (h (1 - exp(-Lz/h)))` from the
+initial buoyancy profile, so `N²` is passed as a function and `c₁` comes from the WKB integral. Treating the
+surface value as if it were uniform would overstate `c₁` by more than a factor of two.
+"""
+function channel_stability_parameters()
+    α, g = 2e-4, 9.8061
+    ΔB   = 8 * α * g
+    Lz   = 3000.0
+    h    = 1000.0
+
+    N²(z) = ΔB * exp(z / h) / (h * (1 - exp(-Lz / h)))
+
+    return (N² = N², H = Lz, Δx = Lx / 200)
+end
+
+"""
+    channel_substeps(barotropic_scheme, scheme; averaging_kernel)
+
+Barotropic substep count for this case, fixed so that the substep Courant number sits at 70% of the limit of
+`barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward.
+"""
+function channel_substeps(barotropic_scheme, scheme = :SplitRungeKutta3;
+                          averaging_kernel = OptimizedAsymmetricAveragingKernel())
+    p  = channel_stability_parameters()
+    Δt = simulation_Δt(Val(scheme))
+    return barotropic_substeps(barotropic_scheme; p.H, p.Δx, Δt, averaging_kernel)
+end
 
 """
     default_closure()
@@ -247,8 +278,9 @@ Set up and run the idealized re-entrant channel flow simulation.
 $(SIGNATURES)
 
 # Keyword Arguments
-- `momentum_advection`: Momentum advection scheme (default: `WENOVectorInvariant()`)
-- `tracer_advection`: Tracer advection scheme (default: 7th-order WENO)
+- `momentum_advection`: Vector-invariant momentum advection scheme (`nothing`, the default, builds it with
+  [`split_momentum_advection`](@ref), reproducing `WENOVectorInvariant()`)
+- `tracer_advection`: Tracer advection scheme (`nothing`, the default, uses `TimestepperTestCases.tracer_advection`)
 - `closure`: Turbulence closure (default: `CATKEVerticalDiffusivity`)
 - `zstar`: Whether to use z-star vertical coordinates (default: `true`)
 - `restart_file`: Optional restart file path (default: `nothing`)
@@ -257,7 +289,9 @@ $(SIGNATURES)
 - `timestepper`: Timestepper symbol (default: `:SplitRungeKutta`)
 - `grid`: Grid to use (default: `default_grid(...)`)
 - `initial_file`: Optional initial condition file (default: `"tIni_80y_90L.bin"`)
-- `testcase`: Test case identifier string (default: `"0"`)
+- `testcase`: Test case identifier string (default: `"0"`), which names every output file of the run. A
+  boundary scheme that departs from the default is appended to it, so that its output does not overwrite the
+  default run it is meant to be compared against.
 
 # Returns
 - `Simulation` object after running to completion
@@ -271,20 +305,30 @@ The simulation includes a spin-up phase followed by a long integration (40 years
 time-averaged outputs. This test case demonstrates how numerical mixing interacts with
 explicit physical mixing in an equilibrated configuration, as shown in the paper.
 """
-function channel_simulation(; momentum_advection = WENOVectorInvariant(), 
-                                tracer_advection = TimestepperTestCases.tracer_advection, 
+
+function channel_simulation(; momentum_advection = nothing,
+                                tracer_advection = nothing,
                                          closure = default_closure(),
                                            zstar = true,
                                     restart_file = nothing,
                                     free_surface = nothing,
-                                            arch = CPU(),
+                                            arch = GPU(),
                                    bottom_height = nothing,
                                      timestepper = :SplitRungeKutta3,
                                             grid = default_grid(arch, zstar, bottom_height),
                                     initial_file = "tIni_80y_90L.bin",
                                         testcase = "0",
                                 averaging_kernel = OptimizedAsymmetricAveragingKernel(),
-                          barotropic_timestepper = ForwardBackwardScheme())
+                          barotropic_timestepper = ForwardBackwardScheme(),
+                                    slow_forcing = FrozenSlowForcing())
+
+    #####
+    ##### Advection
+    #####
+
+    momentum_advection = something(momentum_advection, split_momentum_advection(nothing, ExplicitTimeDiscretization()))
+    tracer_advection   = something(tracer_advection, TimestepperTestCases.tracer_advection)
+    testcase           = string(testcase)
 
     #####
     ##### Boundary conditions
@@ -345,7 +389,11 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
 
     coriolis = BetaPlane(f₀ = -1e-4, β = 1e-11)
     if isnothing(free_surface)
-        free_surface = SplitExplicitFreeSurface(grid; cfl=0.7, fixed_Δt=actual_Δt+2minutes, averaging_kernel, timestepper=barotropic_timestepper)
+        # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
+        # target, so that the barotropic Courant number is a stated property of the run.
+        substeps = channel_substeps(barotropic_timestepper, timestepper; averaging_kernel)
+        free_surface = SplitExplicitFreeSurface(grid; substeps, averaging_kernel,
+                                                timestepper=barotropic_timestepper, slow_forcing)
     end
     tracers = hasclosure(closure, CATKEVerticalDiffusivity) ? (:b, :e) : (:b, )
     
@@ -433,7 +481,7 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
         simulation.output_writers[:first_checkpointer] = Checkpointer(model,
                                                                       schedule = TimeInterval(100days),
                                                                       prefix = "restart" * string(testcase),
-                                                                      overwrite_existing = true)
+                                                                      overwrite_files = true)
         run!(simulation)
 
         # Remove first checkpoint
@@ -450,7 +498,7 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
     simulation.output_writers[:checkpointer] = Checkpointer(model,
                                                             schedule = TimeInterval(1800days),
                                                             prefix = "channel_checkpoint_" * string(testcase),
-                                                            overwrite_existing = true)
+                                                            overwrite_files = true)
     #####
     ##### Diagnostics
     #####
@@ -476,24 +524,37 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
 
     g = (; Gbx, Gby, Gbz)
 
+    u, v, w = model.velocities
+    second_moments = (; vb = v * b, wb = w * b, u² = u * u, v² = v * v)
+
     snapshot_outputs = merge(model.velocities, model.tracers, f, g, (; η = model.free_surface.displacement), vol)
-    average_outputs  = merge(snapshot_outputs, f, g)
+    average_outputs  = merge(snapshot_outputs, second_moments)
 
     #####
     ##### Build checkpointer and output writer
     #####
 
-    overwrite_existing = true
+    overwrite_files = true
 
     simulation.output_writers[:snapshots] = JLD2Writer(model, snapshot_outputs; 
                                                        schedule = ConsecutiveIterations(TimeInterval(360days)),
                                                        filename = "snapshots_" * string(testcase),
-                                                       overwrite_existing)
+                                                       overwrite_files)
 
-    simulation.output_writers[:averages] = JLD2Writer(model, average_outputs; 
+    simulation.output_writers[:averages] = JLD2Writer(model, average_outputs;
                                                       schedule = AveragedTimeInterval(5 * 360days),
                                                       filename = "averages_" * string(testcase),
-                                                      overwrite_existing)
+                                                      overwrite_files)
+
+    # The reference potential energy has to be sorted from an instantaneous buoyancy field: RPE is not linear
+    # in `b`, so the reference state of an average is not the average of the reference states. It needs `b`
+    # and the cell volumes, and under z-star the volumes are the static ones scaled column-wise by
+    # σ = (H + η)/H, so the two-dimensional `η` stands in for the three-dimensional volume field. That keeps
+    # this file at the size of `b` alone -- 2.3 GB over the run against the 88 GB of `snapshot_outputs`.
+    simulation.output_writers[:mixing] = JLD2Writer(model, (; b, η = model.free_surface.displacement);
+                                                    schedule = TimeInterval(360days),
+                                                    filename = "mixing_" * string(testcase),
+                                                    overwrite_files)
 
     if restart_file isa String
         set!(simulation; checkpoint=restart_file)
@@ -511,4 +572,19 @@ function channel_simulation(; momentum_advection = WENOVectorInvariant(),
     run!(simulation)
 
     return simulation
+end
+
+"""
+    channel_simulation(d::Discretization; kw...)
+
+Run the channel case with the discretization `d` of Table 1.
+"""
+function channel_simulation(d::Discretization; kw...)
+    return channel_simulation(; timestepper = d.timestepper,
+                                barotropic_timestepper = d.barotropic_timestepper,
+                                averaging_kernel = d.averaging_kernel,
+                                slow_forcing = d.slow_forcing,
+                                free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
+                                tracer_advection = forwarded_tracer_advection(d),
+                                testcase = d.label, kw...)
 end

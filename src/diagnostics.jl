@@ -1,5 +1,5 @@
 using Oceananigans.Utils: launch!
-using Oceananigans.Grids: architecture, znode
+using Oceananigans.Grids: architecture, znode, znodes
 using Oceananigans.Architectures: device, on_architecture
 using Oceananigans.Fields: default_indices
 using Oceananigans.Operators
@@ -18,7 +18,6 @@ using KernelAbstractions: @kernel, @index
 end
 
 HeightField(grid) = Field(KernelFunctionOperation{Center, Center, Center}(Oceananigans.Grids.znode, grid, Center(), Center(), Center()))
-AreaField(grid)   = Field(KernelFunctionOperation{Center, Center, Nothing}(Oceananigans.Operators.Azᶜᶜᶜ, grid))
 
 @inline _density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
 
@@ -140,9 +139,8 @@ distribution, providing a reference state for potential energy calculations.
 """
 function calculate_z★_diagnostics(b::Field, vol)
 
-    total_area = sum(AreaField(b.grid))
     z★ = CenterField(b.grid)
-    calculate_z★!(z★, b, vol, total_area)
+    calculate_z★!(z★, b, vol)
         
     return z★
 end
@@ -154,48 +152,54 @@ function calculate_z★_diagnostics(b::FieldTimeSeries, i)
     vol = VolumeField(b.grid)
     z★  = similar(b[1])
 
-    total_area = sum(AreaField(b.grid))
-
     @info "time $i of $(length(times))"
-    calculate_z★!(z★, b[i], vol, total_area)
+    calculate_z★!(z★, b[i], vol)
         
     return z★
 end
 
-function calculate_z★!(z★::Field, b::Field, vol, total_area)
-    grid = b.grid
-    arch = architecture(grid)
+# Height at which the volume below equals `Vc`, by inverting the cumulative volume `volume_below` of the faces
+# `zf`. A flat-bottomed column of the same total volume would place the sorted state above the real one
+# wherever the basin is not prismatic, and the available energy would come out negative.
+@inline function sorted_height(volume_below, zf, Vc)
+    k  = clamp(searchsortedlast(volume_below, Vc), 1, length(zf) - 1)
+    ΔV = volume_below[k+1] - volume_below[k]
+    θ  = ΔV > 0 ? (Vc - volume_below[k]) / ΔV : zero(Vc)
 
+    return zf[k] + θ * (zf[k+1] - zf[k])
+end
+
+function calculate_z★!(z★::Field, b::Field, vol)
     b_arr = Array(interior(b))[:]
     v_arr = Array(interior(vol))[:]
 
-    valid_indices = (b_arr .!= 0) .& (!).(isnan.(b_arr))
-    b_arr = b_arr[valid_indices]
-    v_arr = v_arr[valid_indices]
+    valid = (b_arr .!= 0) .& (!).(isnan.(b_arr))
 
-    if isempty(b_arr)
-        @warn "calculate_z★!: no valid (nonzero, non-NaN) buoyancy cells — returning NaN z★ (the run for this case is likely degenerate/blown up)."
+    if !any(valid)
+        @warn "calculate_z★!: no valid buoyancy cells, returning NaN z★"
         fill!(z★, convert(eltype(z★), NaN))
         return nothing
     end
 
-    perm           = sortperm(b_arr)
-    sorted_b_field = b_arr[perm]
-    sorted_v_field = v_arr[perm]
-    integrated_v   = cumsum(sorted_v_field)    
+    wet_volume   = reshape(v_arr .* valid, size(interior(vol)))
+    volume_below = [0.0; cumsum(vec(sum(wet_volume, dims = (1, 2))))]
+    zf           = Array(znodes(b.grid, Face()))
 
-    launch!(arch, grid, :xyz, _calculate_z★, z★, b, sorted_b_field, integrated_v)
-    
-    z★ ./= total_area
+    cells = findall(valid)
+    perm  = sortperm(b_arr[cells])
+
+    # each parcel takes the cumulative volume at its own rank in the sorted order: looking z★ up by buoyancy
+    # gives every member of a block of equal buoyancy the volume of the whole block, which biases z★ high and
+    # makes the reference potential energy fall as the ties break up
+    sorted_volume = v_arr[cells][perm]
+    midpoint = cumsum(sorted_volume) .- sorted_volume ./ 2
+
+    sorted = zeros(eltype(z★), length(b_arr))
+    sorted[cells[perm]] .= sorted_height.(Ref(volume_below), Ref(zf), midpoint)
+
+    interior(z★) .= reshape(sorted, size(interior(z★)))
 
     return nothing
-end
-
-@kernel function _calculate_z★(z★, b, b_sorted, integrated_v)
-    i, j, k = @index(Global, NTuple)
-    bl  = b[i, j, k]
-    i₁  = clamp(searchsortedlast(b_sorted, bl), 1, length(integrated_v))
-    z★[i, j, k] = integrated_v[i₁]
 end
 
 function calculate_Γ²_diagnostics(z★::FieldTimeSeries, b::FieldTimeSeries; ρ₀ = 1000.0, g = 9.80655)
@@ -248,3 +252,46 @@ end
     end
 end
 
+u2(case, i) = (case[:u][i])^2 / case[:VFCC][i]
+v2(case, i) = (case[:v][i])^2 / case[:VCFC][i]
+w2(case, i) = (case[:w][i])^2 / case[:VCCF][i]
+
+um2(case, i) = (mean(case[:u][i], dims=1))^2 / mean(case[:VFCC][i], dims=1)
+vm2(case, i) = (mean(case[:v][i], dims=1))^2 / mean(case[:VCFC][i], dims=1)
+wm2(case, i) = (mean(case[:w][i], dims=1))^2 / mean(case[:VCCF][i], dims=1)
+
+using FFTW
+
+function power_spectrum_x(var, x)
+    Nx      = length(x)
+    Nfx     = Int64(Nx)
+    spectra = zeros(ComplexF64, Int(Nfx/2))
+    dx      = x[2] - x[1]
+
+    freqs = fftfreq(Nfx, 1.0 / dx) # 0,+ve freq,-ve freqs (lowest to highest)
+    freqs = freqs[1:Int(Nfx/2)] .* 2.0 .* π
+
+    fourier      = fft(var) / Nfx
+    spectra[1]  += fourier[1] .* conj(fourier[1])
+
+    for m in 2:Int(Nfx/2)
+        spectra[m] += 2.0 * fourier[m] * conj(fourier[m]) # factor 2 for neg freq contribution
+    end
+
+    return spectra, freqs
+end
+
+function y_average_spectra(var::Field, irange, jrange; k=40, spectra=power_spectrum_x)
+
+    xdomain = xnodes(var)[irange]
+    ydomain = ynodes(var)[jrange]
+    spec, freq = spectra(interior(var, irange, jrange[1], k), xdomain)
+
+    for j in jrange[2:end]
+        spec .+= spectra(interior(var, irange, j, k), xdomain)[1]
+    end
+
+    spec .*= 1 / length(jrange)
+
+    return spec, freq
+end

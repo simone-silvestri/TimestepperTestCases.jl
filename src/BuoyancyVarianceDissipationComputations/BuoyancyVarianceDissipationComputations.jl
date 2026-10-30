@@ -5,14 +5,18 @@ export BuoyancyVarianceDissipation
 using DocStringExtensions
 using Oceananigans.Advection
 using Oceananigans.BoundaryConditions
-using Oceananigans.Grids: architecture, AbstractGrid
+using Oceananigans.Grids: architecture, AbstractGrid, Face, Center
 using Oceananigans.Utils
 using Oceananigans.Fields
 using Oceananigans.Fields: Field, VelocityFields
 using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
 using Oceananigans.TimeSteppers: QuasiAdamsBashforth2TimeStepper,
-                                 SplitRungeKuttaTimeStepper
+                                 SplitRungeKuttaTimeStepper,
+                                 SSPRungeKuttaTimeStepper,
+                                 MultiStageTimeStepper,
+                                 ssp_quadrature_weights
+using Oceananigans.Models: HydrostaticFreeSurfaceModel
 
 using Oceananigans.TurbulenceClosures: viscosity,
                                        diffusivity,
@@ -89,9 +93,9 @@ This diagnostic is especially useful for models that use a dissipative advection
 like WENO or UpwindBiased, as it quantifies the spurious mixing introduced by numerical
 discretization.
 
-!!! compat "Time stepper compatibility"
-    The variance dissipation diagnostic is supported for `QuasiAdamsBashforth2TimeStepper`
-    and `SplitRungeKuttaTimeStepper`.
+!!! compat "Model and time stepper compatibility"
+    The variance dissipation diagnostic is supported for a `HydrostaticFreeSurfaceModel` stepped with a
+    `QuasiAdamsBashforth2TimeStepper`, a `SplitRungeKuttaTimeStepper` or an `SSPRungeKuttaTimeStepper`.
 """
 function BuoyancyVarianceDissipation(grid; 
                                      Uⁿ⁻¹ = VelocityFields(grid),
@@ -101,20 +105,30 @@ function BuoyancyVarianceDissipation(grid;
     Fⁿ   = c_grid_vector(grid)
     Fⁿ⁻¹ = c_grid_vector(grid)
     cⁿ⁻¹ = CenterField(grid)
-    
-    previous_state   = (; cⁿ⁻¹, Uⁿ⁻¹, Uⁿ)
+    Tᵐ⁻¹ = CenterField(grid)
+    Sᵐ⁻¹ = CenterField(grid)
+
+    # stretching of the horizontal face areas at the end of the previous stage
+    σᵐ⁻¹ = (x = Field{Face,   Center, Nothing}(grid),
+            y = Field{Center, Face,   Nothing}(grid))
+
+    for σ in σᵐ⁻¹
+        fill!(parent(σ), 1)
+    end
+
+    previous_state   = (; cⁿ⁻¹, Tᵐ⁻¹, Sᵐ⁻¹, Uⁿ⁻¹, Uⁿ, σᵐ⁻¹)
     advective_fluxes = (; Fⁿ, Fⁿ⁻¹)
 
     return BuoyancyVarianceDissipation(P, advective_fluxes, previous_state)
 end
 
-# Callback: assemble the buoyancy-variance dissipation from the previously cached fluxes, then re-cache
-# the fluxes for the next step. Requires `:T` and `:S` tracers (buoyancy via the linear equation of state).
+# Callback: cache the flux of the stage that has just ended, assemble the buoyancy-variance dissipation at the end of
+# the step, and keep the state the next stage starts from. Requires `:T` and `:S` tracers (buoyancy via the linear
+# equation of state).
 function (ϵ::BuoyancyVarianceDissipation)(model)
 
-    # Check if the model has a velocity field
-    if !hasproperty(model, :velocities)
-        throw(ArgumentError("Model must have a velocity field."))
+    if !(model isa HydrostaticFreeSurfaceModel)
+        throw(ArgumentError("BuoyancyVarianceDissipation requires a HydrostaticFreeSurfaceModel."))
     end
 
     # Check if the model has tracers
@@ -122,11 +136,9 @@ function (ϵ::BuoyancyVarianceDissipation)(model)
         throw(ArgumentError("Model must have tracers T and S."))
     end
 
-    # First we compute the dissipation from previously computed fluxes
-    compute_dissipation!(ϵ, model)
-
-    # Then we update the fluxes to be used in the next time step
     cache_fluxes!(ϵ, model)
+    compute_dissipation!(ϵ, model)
+    store_stage_state!(ϵ, model)
 
     return nothing
 end

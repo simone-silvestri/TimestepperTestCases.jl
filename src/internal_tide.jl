@@ -82,9 +82,33 @@ $(SIGNATURES)
 The time steps are chosen to match computational cost between AB2 and RK schemes while
 maintaining stability, as described in the paper.
 """
-internal_tide_timestep(::Val{:QuasiAdamsBashforth2}) =  5minutes
-internal_tide_timestep(::Val{:SplitRungeKutta3})     = 15minutes
-internal_tide_timestep(::Val{:SSPRungeKutta3})       = 15minutes
+internal_tide_timestep(::Val{scheme}) where scheme =
+    baroclinic_timestep(scheme; internal_tide_stability_parameters()...)
+
+"""
+    internal_tide_stability_parameters()
+
+Stratification, depth and grid spacing that set the first baroclinic Courant number of this case, and with it
+the time step of every scheme through [`baroclinic_timestep`](@ref).
+"""
+function internal_tide_stability_parameters()
+    p = internal_tide_parameters()
+    return (N² = p.Nᵢ², H = p.H, Δx = 2p.L / p.Nx, safety = 1)
+end
+
+"""
+    internal_tide_substeps(barotropic_scheme, scheme; averaging_kernel)
+
+Barotropic substep count for this case, fixed so that the substep Courant number `c₀ k Δτ` sits at 70% of the
+limit of `barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward. The
+count therefore depends on the substep integrator as well as on the baroclinic time step.
+"""
+function internal_tide_substeps(barotropic_scheme, scheme = :SplitRungeKutta3;
+                                averaging_kernel = OptimizedAsymmetricAveragingKernel())
+    p  = internal_tide_stability_parameters()
+    Δt = internal_tide_timestep(Val(scheme))
+    return barotropic_substeps(barotropic_scheme; p.H, p.Δx, Δt, averaging_kernel)
+end
 
 @kernel function _compute_dissipation!(Δtσc², σc²⁻, c, grid, Δt)
     i, j, k = @index(Global, NTuple)
@@ -109,7 +133,8 @@ $(SIGNATURES)
 - `nothing` (modifies `sim.model.auxiliary_fields` in place)
 
 This function computes the dissipation rate of tracer variance, defined as
-`Δtc² = (c² - c⁻²) / Δt` where `c⁻` is the tracer value from the previous time step.
+`Δtc² = (c² - c⁻²) / Δt` where `c⁻` is the tracer value from the previous time step and `Δt` the length of the
+step just taken, which is shorter than the nominal one on the steps that land on an output time.
 The results are stored in `sim.model.auxiliary_fields.Δtc²` and `sim.model.auxiliary_fields.Δtb²`.
 
 This diagnostic is used to quantify numerical mixing introduced by the time discretization,
@@ -123,14 +148,14 @@ function compute_tracer_dissipation!(sim)
     Δtc² = sim.model.auxiliary_fields.Δtc²
     Oceananigans.Utils.launch!(CPU(), grid, :xyz,
                                _compute_dissipation!,
-                               Δtc², c⁻, c, grid, sim.Δt)
+                               Δtc², c⁻, c, grid, sim.model.clock.last_Δt)
 
     b    = sim.model.tracers.b
     b⁻   = sim.model.auxiliary_fields.b⁻      # holds the previous thickness-weighted variance σb²⁻
     Δtb² = sim.model.auxiliary_fields.Δtb²
     Oceananigans.Utils.launch!(CPU(), grid, :xyz,
                                _compute_dissipation!,
-                               Δtb², b⁻, b, grid, sim.Δt)
+                               Δtb², b⁻, b, grid, sim.model.clock.last_Δt)
 
     return nothing
 end
@@ -174,7 +199,7 @@ default_free_surface_name(::SplitExplicitFreeSurface) = "split_free_surface"
 default_free_surface_name(::ImplicitFreeSurface) = "implicit_free_surface"
 
 """
-    internal_tide(timestepper::Symbol; free_surface, tracer_advection)
+    internal_tide(timestepper::Symbol; free_surface, tracer_advection, momentum_advection)
 
 Set up and run the internal tide test case simulation.
 
@@ -185,7 +210,9 @@ $(SIGNATURES)
 
 # Keyword Arguments
 - `free_surface`: Free surface formulation (default: `SplitExplicitFreeSurface` with 60 substeps)
-- `tracer_advection`: Tracer advection scheme (default: 7th-order WENO)
+- `tracer_advection`: Tracer advection scheme (`nothing`, the default, uses `TimestepperTestCases.tracer_advection`)
+- `momentum_advection`: Flux-form momentum advection scheme (`nothing`, the default, builds a fifth-order one with
+  [`split_flux_form_momentum_advection`](@ref))
 
 # Returns
 - `Simulation` object after running to completion
@@ -198,13 +225,27 @@ tracer fields, and dissipation diagnostics.
 The test case isolates the role of time discretization in numerical mixing, as spatial
 advection plays a secondary role in this mostly linear configuration.
 """
+
 function internal_tide(timestepper::Symbol;
                        grid = internal_tide_grid(),
-                       free_surface=SplitExplicitFreeSurface(grid; substeps=60, averaging_kernel=OptimizedAsymmetricAveragingKernel()),
+                       barotropic_timestepper=ForwardBackwardScheme(),
+                       averaging_kernel=OptimizedAsymmetricAveragingKernel(),
+                       free_surface=SplitExplicitFreeSurface(grid; averaging_kernel,
+                                                             timestepper=barotropic_timestepper,
+                                                             substeps=internal_tide_substeps(barotropic_timestepper,
+                                                                                             timestepper;
+                                                                                             averaging_kernel)),
                        free_surface_name=default_free_surface_name(free_surface),
-                       tracer_advection=TimestepperTestCases.tracer_advection)
+                       tracer_advection=nothing,
+                       momentum_advection=nothing,
+                       Δt=internal_tide_timestep(Val(timestepper)))
 
     param = internal_tide_parameters()
+
+    supplied_tracer_advection = !isnothing(tracer_advection)
+
+    tracer_advection   = something(tracer_advection, TimestepperTestCases.tracer_advection)
+    momentum_advection = something(momentum_advection, split_flux_form_momentum_advection(5, ExplicitTimeDiscretization()))
 
     coriolis  = FPlane(f = param.f)
     u_forcing = Forcing(tidal_forcing, parameters=param)
@@ -218,8 +259,8 @@ function internal_tide(timestepper::Symbol;
                                         coriolis,
                                         buoyancy = BuoyancyTracer(),
                                         tracers = (:b, :c),
-                                        momentum_advection = WENO(minimum_buffer_upwind_order=1),
-                                        tracer_advection = tracer_advection,
+                                        momentum_advection,
+                                        tracer_advection,
                                         free_surface,
                                         timestepper,
                                         forcing = (; u = u_forcing),
@@ -229,7 +270,7 @@ function internal_tide(timestepper::Symbol;
     cᵢ(x, z) = exp( - (z + 1kilometers)^2 / (2 * (25meters)^2))
     set!(model, u=param.U₂, b=bᵢ)
 
-    Δt = internal_tide_timestep(Val(timestepper)) 
+    # `Δt` arrives as a keyword argument, defaulting to the criterion of `internal_tide_timestep`.
     stop_time = 40days
     simulation = Simulation(model; Δt, stop_time)
 
@@ -260,8 +301,11 @@ function internal_tide(timestepper::Symbol;
 
     g = (; Gbx, Gbz, Gcx, Gcz)
 
+    # The advection scheme is appended only when the caller accepted the default name, which is what keeps a
+    # non-default-advection run from overwriting the default one. An explicitly supplied name already
+    # distinguishes the run, so appending to it would only make the filename disagree with the case label.
     fsname = free_surface_name
-    if tracer_advection != TimestepperTestCases.tracer_advection
+    if free_surface_name == default_free_surface_name(free_surface) && supplied_tracer_advection
         fsname *= "_$(typeof(tracer_advection).name.name)"
     end
 
@@ -297,9 +341,40 @@ function internal_tide(timestepper::Symbol;
     simulation.output_writers[:fields] = JLD2Writer(model, outputs; 
                                                     filename,
                                                     schedule = TimeInterval(save_fields_interval),
-                                                    overwrite_existing = true)
+                                                    overwrite_files = true)
     
     run!(simulation)
 
     return simulation
+end
+
+"""
+    internal_tide(d::Discretization; grid, timestep_factor = 1, label = d.label, kw...)
+
+Run the internal tide case with the discretization `d`.
+
+`timestep_factor` scales the time step away from the criterion of [`baroclinic_timestep`](@ref), and the
+barotropic substep count is recomputed from the scaled step so that the sub-step Courant number is unchanged.
+It exists for the temporal-resolution test of section 5.1: the compositions differ in how hard they damp the
+barotropic mode, and that difference is confined to scales below the temporal Nyquist of the baroclinic step,
+so refining the step should bring them together if the difference is a resolution effect.
+"""
+function internal_tide(d::Discretization; grid = internal_tide_grid(),
+                       timestep_factor = 1, label = d.label, kw...)
+
+    parameters = internal_tide_stability_parameters()
+    Δt, free_surface = timestep_and_free_surface(d, grid, parameters)
+
+    if timestep_factor != 1
+        Δt = Δt * timestep_factor
+        substeps = barotropic_substeps(d.barotropic_timestepper; parameters.H, parameters.Δx, Δt,
+                                       d.averaging_kernel)
+        free_surface = SplitExplicitFreeSurface(grid; substeps,
+                                                averaging_kernel = d.averaging_kernel,
+                                                timestepper = d.barotropic_timestepper,
+                                                slow_forcing = d.slow_forcing)
+    end
+
+    return internal_tide(d.timestepper; grid, free_surface, free_surface_name = label,
+                         tracer_advection = forwarded_tracer_advection(d), Δt, kw...)
 end

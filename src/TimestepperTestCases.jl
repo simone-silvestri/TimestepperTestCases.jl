@@ -1,7 +1,15 @@
 module TimestepperTestCases
 
-export internal_tide, internal_seiche, idealized_coast, channel_simulation
-export near_global, near_global_grid, near_global_variants, run_near_global_cost
+export internal_tide, channel_simulation
+export global_ocean, global_ocean_grid, global_ocean_vertical_discretization
+export global_ocean_barotropic_rate
+export global_ocean_discretizations
+export load_global_ocean, load_global_ocean_cases, global_ocean_cost_table, global_ocean_variance
+export global_ocean_diffusivity_profile, global_ocean_diffusivity_map, global_ocean_diffusivity_hovmoller
+export global_ocean_surface_speed, global_ocean_surface_kinetic_energy, global_ocean_eddy_kinetic_energy
+export global_ocean_surface_kinetic_energy_history
+export global_ocean_zonal_spectrum, global_ocean_corner_coordinates
+export global_ocean_cost
 
 using DocStringExtensions
 using Oceananigans
@@ -9,11 +17,18 @@ using Oceananigans.Grids
 using Oceananigans.Units
 using Oceananigans.Models
 using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces:
-    WideTrig74AveragingKernel, WideTrig2AveragingKernel, OptimizedAsymmetricAveragingKernel,
-    ForwardBackwardScheme, RungeKutta3Scheme,
-    FrozenSlowForcing, StageQuadraticSlowForcing
+    WideTrigAveragingKernel, OptimizedAsymmetricAveragingKernel,
+    LowDissipationAveragingKernel,
+    ForwardBackwardScheme, RungeKutta3Scheme, averaging_shape_function,
+    FrozenSlowForcing, StageQuadraticSlowForcing, ProgressiveSlowForcing
+using Oceananigans.TimeSteppers: ModifiedRungeKutta4TimeStepper
 using KernelAbstractions: @kernel, @index
 using Printf
+
+export stability_limit, baroclinic_timestep, barotropic_substeps, barotropic_courant, barotropic_cfl
+export Discretization, discretizations, discretization, timestep_and_free_surface, timestep_ratio, plot_style
+export ModifiedRungeKutta4TimeStepper, ProgressiveSlowForcing, StageQuadraticSlowForcing, FrozenSlowForcing
+export weno_tracer_advection, split_momentum_advection, split_flux_form_momentum_advection
 
 wall_clock = Ref(time_ns())
 
@@ -49,21 +64,29 @@ function print_progress(sim)
     return nothing
 end
 
+# Upstream `prognostic_state(::AbstractTimeStepper)` reads `Gⁿ` and `G⁻`, fields the SSP stepper does not
+# carry; like `SplitRungeKuttaTimeStepper`, it holds no state between time steps, so checkpointing skips it.
+import Oceananigans: prognostic_state, restore_prognostic_state!
+using Oceananigans.TimeSteppers: SSPRungeKuttaTimeStepper
+
+prognostic_state(::SSPRungeKuttaTimeStepper) = nothing
+restore_prognostic_state!(restored::SSPRungeKuttaTimeStepper, ::Nothing) = restored
+
 # For all test cases
-const tracer_buffer_scheme = WENO(order=5, buffer_scheme=Centered())
-const tracer_advection     = WENO(order=7, buffer_scheme=tracer_buffer_scheme)
+const tracer_advection = WENO(order=7)
+
+include("scheme_stability.jl")
+include("advection_schemes.jl")
+include("discretizations.jl")
 
 include("BuoyancyVarianceDissipationComputations/BuoyancyVarianceDissipationComputations.jl")
 using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation
 
 # Simulations!
 include("internal_tide.jl")
-include("internal_seiche.jl")
-include("idealized_coast.jl")
 include("channel_simulation.jl")
 
-# Realistic near-global quarter-degree cost + buoyancy-dissipation case (needs NumericalEarth).
-include("near_global.jl")
+include("global_ocean_interface.jl")
 
 using Oceananigans
 using Oceananigans.AbstractOperations: grid_metric_operation
@@ -84,9 +107,8 @@ using KernelAbstractions: @kernel, @index
 
 # Diagnostics!
 include("diagnostics.jl")
-include("load_idealized_coast_case.jl")
 include("load_internal_tide_case.jl")
-include("load_internal_seiche_case.jl")
 include("load_channel_case.jl")
+include("load_global_ocean_case.jl")
 
 end

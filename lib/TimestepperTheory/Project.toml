@@ -1,0 +1,19 @@
+name = "TimestepperTheory"
+uuid = "35f6078b-b0d4-454d-a5b8-93c578e09ca7"
+version = "0.1.0"
+
+[deps]
+DocStringExtensions = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
+GenericSchur = "c145ed77-6b09-5dd9-b285-bf645a82121e"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+
+[compat]
+DocStringExtensions = "0.9"
+GenericSchur = "0.5"
+julia = "1.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
