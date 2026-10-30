@@ -3,15 +3,14 @@ $(TYPEDSIGNATURES)
 
 Return the uncoupled evolution matrix: the barotropic evolution matrix W for mode zero and the outer stability polynomial for each baroclinic mode.
 """
-function uncoupled_matrix(μ₀, modes; scheme=WickerSkamarock3(), solver=RungeKutta3(),
-                          filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))), sampling=MidpointSampling(), a=23 // 100)
+function uncoupled_matrix(μ₀, modes; scheme=WickerSkamarock3(), solver=RungeKutta3(), filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))))
     N = length(modes.α)
     M = zeros(Complex{typeof(float(μ₀))}, 2N, 2N)
-    W = barotropic_window(μ₀, solver; filter, sampling)
+    W = barotropic_window(μ₀, solver; filter)
     M[[1, N + 1], [1, N + 1]] = W
-    for index in 2:N
-        Lₓ = -im * μ₀ * [0 1; modes.α[index]^2 0]
-        M[[index, N + index], [index, N + index]] = stability_polynomial(Lₓ; scheme, a)
+    for q in 1:N-1
+        Lₓ = -im * μ₀ * [0 1; modes.α[q + 1]^2 0]
+        M[[q + 1, N + q + 1], [q + 1, N + q + 1]] = stability_polynomial(Lₓ; scheme)
     end
     return M
 end
@@ -29,16 +28,17 @@ maximum energy-scaled eigenvector overlap. `overlap` reports that match; exact e
 function coupling_corrections(M, Mᵤ, modes; selected_mode=1, propagation=1)
     N = length(modes.α)
     T = eltype(modes.α)
-    R = zeros(Complex{T}, 2N, 2N)
-    L = zeros(Complex{T}, 2N, 2N)
+    R = zeros(Complex{T}, 2N, 2N) # rⱼ = R[:, j]
+    L = zeros(Complex{T}, 2N, 2N) # ℓⱼ = L[j, :]
     λ = zeros(Complex{T}, 2N)
 
-    external_indices = [1, N + 1]
-    external = eigen(Mᵤ[external_indices, external_indices])
-    R[external_indices, 1:2] = external.vectors
-    L[1:2, external_indices] = inv(external.vectors)
-    λ[1:2] = external.values
+    barotropic_indices = [1, N + 1]
+    λᵦ, Rᵦ = eigen(Mᵤ[barotropic_indices, barotropic_indices])
+    R[barotropic_indices, 1:2] = Rᵦ
+    L[1:2, barotropic_indices] = inv(Rᵦ)
+    λ[1:2] = λᵦ
 
+    # Computing uncoupled eigenvectors and eigenvalues
     for q in 1:N-1, (d, σ) in enumerate((1, -1))
         k = 2q + d
         indices = [q + 1, N + q + 1]
@@ -48,11 +48,12 @@ function coupling_corrections(M, Mᵤ, modes; selected_mode=1, propagation=1)
         λ[k] = (L[k:k, indices] * Mᵤ[indices, indices] * R[indices, k])[1]
     end
 
+    # Exact V matrix
     V = L * (M - Mᵤ) * R
     j = 2selected_mode + (propagation == 1 ? 1 : 2)
     δλ¹ = V[j, j]
     δλ² = zero(δλ¹)
-    other = zero(δλ¹)
+    baroclinic_correction = zero(δλ¹)
     for l in eachindex(λ)
         l == j && continue
         λ[j] == λ[l] && throw(DomainError(λ[j], "The perturbation expansion requires distinct eigenvalues."))
@@ -60,25 +61,25 @@ function coupling_corrections(M, Mᵤ, modes; selected_mode=1, propagation=1)
         if l <= 2
             δλ² += δ
         else
-            other += δ
+            baroclinic_correction += δ
         end
     end
 
-    full = eigen(M)
-    scaling = Diagonal([ones(T, N); inv.(modes.α)])
-    target = scaling * R[:, j]
-    overlaps = map(eachcol(full.vectors)) do r
-        scaled_vector = scaling * r
-        return abs(dot(target, scaled_vector)) / (norm(target) * norm(scaled_vector))
+    coupled = eigen(M)
+    energy_scaling = Diagonal([ones(T, N); inv.(modes.α)])
+    scaled_reference = energy_scaling * R[:, j]
+    overlaps = map(eachcol(coupled.vectors)) do r
+        scaled_vector = energy_scaling * r
+        return abs(dot(scaled_reference, scaled_vector)) / (norm(scaled_reference) * norm(scaled_vector))
     end
-    λ̂ = full.values[argmax(overlaps)]
+    λ̂ = coupled.values[argmax(overlaps)]
     λⱼ = λ[j]
-    radial(δ) = real(conj(λⱼ) * δ) / abs(λⱼ)
-    return (; direct=δλ¹, indirect=δλ², other, transfers=V, eigenvalues=λ, right=R, left=L, selected=j,
-              direct_magnitude=radial(δλ¹), indirect_magnitude=radial(δλ²), other_magnitude=radial(other),
+    magnitude_correction(δ) = real(conj(λⱼ) * δ) / abs(λⱼ)
+    return (; direct=δλ¹, indirect=δλ², other=baroclinic_correction, transfers=V, eigenvalues=λ, right=R, left=L, selected=j,
+              direct_magnitude=magnitude_correction(δλ¹), indirect_magnitude=magnitude_correction(δλ²), other_magnitude=magnitude_correction(baroclinic_correction),
               reference_eigenvalue=λⱼ, actual_eigenvalue=λ̂, overlap=maximum(overlaps),
               damping=1 - abs(λⱼ), growth=abs(λ̂) - 1, coupling=abs(λ̂) - abs(λⱼ),
-              spectral_growth=maximum(abs, full.values) - 1)
+              spectral_growth=maximum(abs, coupled.values) - 1)
 end
 
 """
@@ -86,28 +87,25 @@ $(TYPEDSIGNATURES)
 
 Evaluate the leading weak-stratification frozen-forcing predictions for WRK3, MRK4, or SRK3, including the exact modal weight χ².
 """
-function frozen_predictions(μ₀, modes; scheme=WickerSkamarock3(), selected_mode=1, solver=RungeKutta3(),
-                            filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))))
+function frozen_predictions(μ₀, modes; scheme=WickerSkamarock3(), selected_mode=1, solver=RungeKutta3(), filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))))
     W  = barotropic_window(μ₀, solver; filter)
     W½ = barotropic_window(μ₀ / 2, solver; filter)
-    δλ¹, total = frozen_corrections(μ₀, scheme, W, W½)
+    δλ, δλ¹, δλ² = frozen_corrections(μ₀, scheme, W, W½)
 
-    χ = modes.χ[selected_mode + 1]
+    χ  = modes.χ[selected_mode + 1]
     χ² = χ^2
-    external = eigen(W)
-    L = inv(external.vectors)
-    forward = zeros(Complex{typeof(float(μ₀))}, 2)
-    reverse = similar(forward)
+    λᵦ, Rᵦ = eigen(W)
+    Lᵦ = inv(Rᵦ)
+    Vⱼᵦ = zeros(Complex{typeof(float(μ₀))}, 2)
+    Vᵦⱼ = similar(Vⱼᵦ)
     for l in 1:2
-        λₗ = external.values[l]
-        rₗ = external.vectors[:, l]
-        ℓₗ = L[l, :]
-        reverse[l] = χ / sqrt(typeof(float(μ₀))(2)) *
-                           ((λₗ - 1) * ℓₗ[1] + im * μ₀ * (1 + λₗ) * ℓₗ[2] / 2)
-        pressure_response = pressure_transfer(scheme, λₗ, rₗ, W½)
-        forward[l] = χ / sqrt(typeof(float(μ₀))(2)) * ((λₗ - 1) * rₗ[1] + im * μ₀ * pressure_response)
+        λₗ = λᵦ[l]
+        rₗ = Rᵦ[:, l]
+        ℓₗ = Lᵦ[l, :]
+        Vᵦⱼ[l] = χ / sqrt(typeof(float(μ₀))(2)) * ((λₗ - 1) * ℓₗ[1] + im * μ₀ * (1 + λₗ) * ℓₗ[2] / 2)
+        Vⱼᵦ[l] = χ / sqrt(typeof(float(μ₀))(2)) * ((λₗ - 1) * rₗ[1] + im * μ₀ * pressure_transfer(scheme, λₗ, rₗ, W½))
     end
-    return (; direct=χ² * real(δλ¹), indirect=χ² * real(total - δλ¹), total=χ² * real(total), forward, reverse)
+    return (; direct=χ² * real(δλ¹), indirect=χ² * real(δλ²), total=χ² * real(δλ), forward=Vⱼᵦ, reverse=Vᵦⱼ)
 end
 
 """
@@ -123,8 +121,8 @@ function global_error(μ₀, modes; horizon=64, scheme=WickerSkamarock3(), kwarg
     μ = typeof(float(μ₀))(horizon) / steps
     M = evolution_matrix(μ, modes; scheme, kwargs...)
     Mⁿ = propagated_state(M, steps, scheme, μ, modes)
-    scaling = Diagonal([ones(eltype(modes.α), length(modes.α)); inv.(modes.α)])
-    E = scaling * (Mⁿ - exact_evolution(typeof(float(μ₀))(horizon), modes)) / scaling
+    energy_scaling = Diagonal([ones(eltype(modes.α), length(modes.α)); inv.(modes.α)])
+    E = energy_scaling * (Mⁿ - exact_evolution(typeof(float(μ₀))(horizon), modes)) / energy_scaling
     error = opnorm(ComplexF64.(E))
     return (; phase=μ, error)
 end
@@ -138,18 +136,20 @@ end
 
 function frozen_corrections(μ₀, ::Union{WickerSkamarock3, ModifiedRungeKutta4}, W, W½)
     S = inv(I - W)
-    δλ¹ = (W[1, 1] - 1 + im * μ₀ * W[1, 2] / 2 + im * μ₀ * W½[2, 1]
-              - μ₀^2 * (W½[2, 2] - 1) / 3 - μ₀^2 / 2) / 2
-    total = μ₀^2 * (W½[2, 2] - 1 - 6 * (W½ * S)[2, 2]) / 12
-    return δλ¹, total
+    δλ¹ = (W[1, 1] - 1 + im * μ₀ * W[1, 2] / 2 + im * μ₀ * W½[2, 1] - μ₀^2 * (W½[2, 2] - 1) / 3 - μ₀^2 / 2) / 2
+    δλ² = (1 - W[1, 1]) / 2 - im * μ₀ * W[1, 2] / 4 - im * μ₀ * W½[2, 1] / 2
+    δλ² += μ₀^2 * W½[2, 2] / 4 - μ₀^2 * (W½ * S)[2, 2] / 2
+    δλ = μ₀^2 * (W½[2, 2] - 1 - 6 * (W½ * S)[2, 2]) / 12
+    return δλ, δλ¹, δλ²
 end
 
 function frozen_corrections(μ₀, ::ShuOsher3, W, W½)
     S = inv(I - W)
-    δλ¹ = (W[1, 1] - 1 + im * μ₀ * (W[1, 2] + W[2, 1]) / 2
-              - μ₀^2 * (2 + W[2, 2]) / 6) / 2
-    total = μ₀^2 * (5 + W[2, 2] - 12 * S[2, 2]) / 24
-    return δλ¹, total
+    δλ¹ = (W[1, 1] - 1 + im * μ₀ * (W[1, 2] + W[2, 1]) / 2 - μ₀^2 * (2 + W[2, 2]) / 6) / 2
+    δλ²  = (1 - W[1, 1]) / 2 - im * μ₀ * (W[1, 2] + W[2, 1]) / 4
+    δλ² += μ₀^2 * (3 + W[2, 2]) / 8 - μ₀^2 * S[2, 2] / 2
+    δλ = μ₀^2 * (5 + W[2, 2] - 12 * S[2, 2]) / 24
+    return δλ, δλ¹, δλ²
 end
 
 pressure_transfer(::ShuOsher3, λₗ, r, W½) = (1 + λₗ) * r[2] / 2
@@ -158,7 +158,7 @@ pressure_transfer(::Union{WickerSkamarock3, ModifiedRungeKutta4}, λₗ, r, W½)
 propagated_state(M, steps, ::AbstractRungeKuttaScheme, μ₀, modes) = M^steps
 
 function propagated_state(M, steps, ::AdamsBashforth2, μ₀, modes)
-    dimension = 2length(modes.α)
-    history = [Matrix{eltype(M)}(I, dimension, dimension); exact_evolution(-μ₀, modes)]
-    return (M^steps * history)[1:dimension, :]
+    N = length(modes.α)
+    history = [Matrix{eltype(M)}(I, 2N, 2N); exact_evolution(-μ₀, modes)]
+    return (M^steps * history)[1:2N, :]
 end

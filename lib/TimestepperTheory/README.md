@@ -29,10 +29,10 @@ Open `lib/TimestepperTheory/output/time_discretization.html`. The reproduction s
 Numerical choices use concrete objects and multiple dispatch. For example, `averaging_filter(F3Filter())` builds the F3 weights,
 and `evolution_matrix(μ₀, modes; scheme=ShuOsher3(), forcing=SSPForcing(), solver=RungeKutta3())` constructs the SRK3 matrix.
 
-The outer schemes are `WickerSkamarock3()`, `ShuOsher3()`, `ModifiedRungeKutta4()`, and `AdamsBashforth2()`. Barotropic solvers
+The outer schemes are `WickerSkamarock3()`, `ShuOsher3()`, `ModifiedRungeKutta4()`, and `AdamsBashforth2()`. The first-stage fraction is set by `ModifiedRungeKutta4(a=23 // 100)`; `a=1 // 4` gives the classical fourth-order stability polynomial. Barotropic solvers
 are `ForwardBackward()`, `RungeKutta3()`, `ExactSolver()`, and `ImplicitSolver()`. Filters are `NoFilter()`, `F1Filter()`,
 `F2Filter()`, and `F3Filter()`. Forcing reconstruction uses `FrozenForcing()`, `FinalStageQuadraticForcing()`,
-`ProgressiveForcing()`, or `SSPForcing()`. The manuscript configuration helper returns these objects in its `scheme`, `solver`,
+`ProgressiveForcing()`, or `SSPForcing()`. The time-dependent reconstructions accept `sampling=MidpointSampling()` (default) or `sampling=ContinuousSampling()` for an exact, unfiltered barotropic solve. The manuscript configuration helper returns these objects in its `scheme`, `solver`,
 `forcing`, and `averaging` fields.
 
 ## Coordinates and time

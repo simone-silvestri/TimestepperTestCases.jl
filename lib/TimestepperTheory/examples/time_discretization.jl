@@ -40,14 +40,13 @@ let
         lines!(axis, Float64.(phases), Float64.(growth); color=:blue, linestyle=index == 1 ? :dash : :solid, label) #src
         append!(rows, [(; scheme="AB2", parameter=Float64(ξ), phase, growth=value) for (phase, value) in zip(phases, growth)])
     end
-    for (index, scheme) in enumerate((RungeKutta2(), WickerSkamarock3(), ModifiedRungeKutta4(), ModifiedRungeKutta4()))
-        a = index == 3 ? 1 // 4 : 23 // 100
-        growth = [abs(amplification_factor(phase, scheme; a)) - 1 for phase in phases]
+    for (index, scheme) in enumerate((RungeKutta2(), WickerSkamarock3(), ModifiedRungeKutta4(a=1 // 4), ModifiedRungeKutta4()))
+        growth = [abs(amplification_factor(phase, scheme)) - 1 for phase in phases]
         label = (L"\mathrm{RK2}", L"\mathrm{RK3}", L"\mathrm{RK4}", L"\mathrm{MRK4},\ a=0.23")[index] #src
         lines!(axis, Float64.(phases), Float64.(growth); color=(:green, :red, :purple, :purple)[index], #src
                linestyle=index == 4 ? :dash : :solid, label) #src
         name = ("RK2", "RK3", "RK4", "MRK4")[index]
-        append!(rows, [(; scheme=name, parameter=Float64(a), phase, growth=value) for (phase, value) in zip(phases, growth)])
+        append!(rows, [(; scheme=name, parameter=scheme isa ModifiedRungeKutta4 ? Float64(scheme.a) : NaN, phase, growth=value) for (phase, value) in zip(phases, growth)])
     end
     limits!(axis, -0.05, 3.05, -1.2, 6) #src
     Legend(figure[1, 2], axis; framevisible=true, labelsize=10, patchsize=(24, 10), rowgap=7) #src
@@ -329,14 +328,15 @@ setprecision(256) do
                    xticks=[1e-3, 1e-1], limits=((1e-3, 1), (0.7, 1.05))) for column in 1:3] #src
     configurations = ((ExactSolver(), NoFilter(), ContinuousSampling()), (RungeKutta3(), F3Filter(), MidpointSampling()),
                       (ForwardBackward(), F3Filter(), MidpointSampling()))
-    for (forcing_index, forcing) in enumerate((FrozenForcing(), FinalStageQuadraticForcing(), ProgressiveForcing())), (solver, averaging, sampling) in configurations
+    for (forcing_index, reconstruction) in enumerate((FrozenForcing, FinalStageQuadraticForcing, ProgressiveForcing)), (solver, averaging, sampling) in configurations
+        forcing = reconstruction === FrozenForcing ? FrozenForcing() : reconstruction(; sampling)
         response_name = sampling isa ContinuousSampling ? "continuous" : solver isa RungeKutta3 ? "RK3_F3" : "FB_F3"
         filter = averaging_filter(averaging; float_type=BigFloat)
         stratifications = [big"0.64" / 4^index for index in 0:10]
         results = map(stratifications) do stratification
             modes = vertical_modes(stratification, 4)
-            matrix = evolution_matrix(reference_phase, modes; forcing, solver, filter, sampling)
-            reference = uncoupled_matrix(reference_phase, modes; solver, filter, sampling)
+            matrix = evolution_matrix(reference_phase, modes; forcing, solver, filter)
+            reference = uncoupled_matrix(reference_phase, modes; solver, filter)
             result = coupling_corrections(matrix, reference, modes)
             prediction = frozen_predictions(reference_phase, modes; solver, filter)
             push!(rows, (; forcing, response=response_name, phase=reference_phase, stratification,

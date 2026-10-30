@@ -108,9 +108,7 @@ end
 
 Phase speed `c₁ = N H / π` of the first baroclinic mode of a constant stratification `N²` over a depth `H`.
 
-This is the rigid-lid limit. The exact free-surface speed is `α₁ √(gH)` with `α₁` the root of `x tan x = ε`,
-`ε = N²H/g`, which differs by `O(ε)`; the seiche case, whose whole point is that distinction, uses the exact
-modal solver of [`seiche_vertical_mode`](@ref) instead.
+This is the rigid-lid limit.
 """
 @inline first_baroclinic_speed(N², H) = sqrt(N²) * H / π
 
@@ -250,7 +248,7 @@ $(SIGNATURES)
 - `wavenumber`: `grid_wavenumber(Δx)` unless given; [`staggered_wavenumber`](@ref) where the grid is
   anisotropic enough for the two conventions to disagree
 - `rate`: the binding `c₀ k` itself, for a configuration where the product has to be maximized over the domain
-  rather than evaluated on one depth and one spacing -- see [`global_ocean_barotropic_rate`](@ref). Given this,
+  rather than evaluated on one depth and one spacing -- see `global_ocean_barotropic_rate`. Given this,
   `H`, `Δx` and `wavenumber` are not read
 
 The substep size is not `Δt / substeps`: the averaging kernel spans a window wider than the baroclinic step,

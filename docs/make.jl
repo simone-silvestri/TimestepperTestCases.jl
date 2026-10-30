@@ -23,7 +23,7 @@ end
 
 for name in ("internal_tide", "channel", "global_ocean")
     source = joinpath(@__DIR__, "..", "examples", name * ".jl")
-    page = Literate.markdown(source, generated; execute=false, flavor=Literate.CommonMarkFlavor(), credit=false)
+    local page = Literate.markdown(source, generated; execute=false, flavor=Literate.CommonMarkFlavor(), credit=false)
     content = read(page, String)
     for image in eachmatch(r"!\[.*?\]\(([^)]+)\)", content)
         path = joinpath(@__DIR__, "..", "examples", "output", image.captures[1])

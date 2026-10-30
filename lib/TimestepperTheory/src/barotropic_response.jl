@@ -58,13 +58,13 @@ function forced_response(μₘ, solver::ExactSolver, filter, ::ContinuousSamplin
     for p in 1:2
         if abs(μₘ) <= 1
             term = L[:, 2] / (p + 1)
-            total = copy(term)
+            series_sum = copy(term)
             for q in 0:precision(T)
                 term = L * term / (q + p + 2)
-                total += term
-                norm(term) < eps(T) * norm(total) && break
+                series_sum += term
+                norm(term) < eps(T) * norm(series_sum) && break
             end
-            U[:, p + 1] = total
+            U[:, p + 1] = series_sum
         else
             U[:, p + 1] = p * (L \ U[:, p]) - T[0, 1]
         end

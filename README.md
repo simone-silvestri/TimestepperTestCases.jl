@@ -92,6 +92,19 @@ julia --project=. -e 'using Pkg; Pkg.test()'
 
 The theory tests check modal identities, filter moments, stage updates, amplification factors, and temporal convergence. The root tests check baroclinic stability limits and require the Oceananigans environment.
 
+## Citation
+
+If you use this repository, please cite the accompanying manuscript:
+
+```bibtex
+@unpublished{silvestri2026conservative,
+  title  = {A conservative {Runge--Kutta} framework for nonlinear free-surface ocean models},
+  author = {Silvestri, Simone and Campin, Jean-Michel and Wagner, Gregory and Constantinou, Navid C. and Bishnu, Siddhartha and Lee, Xin Kai and Ferrari, Raffaele},
+  year   = {2026},
+  note   = {Manuscript}
+}
+```
+
 ## License
 
 See [LICENSE](LICENSE).

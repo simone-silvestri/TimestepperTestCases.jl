@@ -28,7 +28,7 @@ $(SIGNATURES)
 # Returns
 - Dictionary with the buoyancy-variance dissipation `:Abx, :Aby, :Abz`, the squared gradients
   `:Gbx, :Gby, :Gbz`, the surface `:T, :S, :u, :v, :w`, the same fields time-averaged as `:T̄, :S̄, :ū, :v̄, :w̄`,
-  the timings `:cost`, the weekly averages of [`global_ocean_statistics`](@ref) as the dictionary `:statistics`,
+  the timings `:cost`, the weekly averages of `global_ocean_statistics` as the dictionary `:statistics`,
   and the times of each group as `:times`, `:surface_times`, `:average_times` and `:statistics_times`
 
 Every field is opened with `backend = OnDisk()`: a single dissipation file is close to a gigabyte, so the
@@ -116,7 +116,7 @@ global_ocean_variance(statistics, name, n) = interior(statistics[Symbol(name, "�
 """
     load_global_ocean_cost(folder, label, prefix = "global_ocean")
 
-The timings written by [`save_global_ocean_cost`](@ref), or `nothing` where the run predates the cost record.
+The timings written by `save_global_ocean_cost`, or `nothing` where the run predates the cost record.
 """
 function load_global_ocean_cost(folder, label, prefix = "global_ocean")
     path = global_ocean_path(folder, label, "cost", prefix)

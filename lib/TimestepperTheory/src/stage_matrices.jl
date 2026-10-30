@@ -20,9 +20,9 @@ function scheme_configuration(name)
     throw(ArgumentError("Unknown manuscript configuration $name."))
 end
 
-stage_fractions(::WickerSkamarock3, a, T)    = T.((1 // 3, 1 // 2, 1))
-stage_fractions(::ModifiedRungeKutta4, a, T) = T.((a, 1 // 3, 1 // 2, 1))
-stage_fractions(::ShuOsher3, a, T)           = T.((1, 1, 1))
+stage_fractions(::WickerSkamarock3, T)         = T.((1 // 3, 1 // 2, 1))
+stage_fractions(scheme::ModifiedRungeKutta4, T) = T.((scheme.a, 1 // 3, 1 // 2, 1))
+stage_fractions(::ShuOsher3, T)                = T.((1, 1, 1))
 
 function reconstruction_weights(m, γ)
     T = eltype(γ)
@@ -41,18 +41,18 @@ Return arrays `(A, B, M)` with A[m] = Aₘ, B[m] = Bₘ, and M[m] = Mₘ.
 They satisfy Mₘ = Aₘ + BₘMₘ₋₁ with M₀ = I; earlier-stage reconstructed forcing is included in Aₘ.
 `μ₀` is the barotropic Courant number μ₀ = k√(gH)Δt, and `modes` supplies the normalized modal basis in state order [u; h].
 
-`a` is the first-stage fraction for MRK4. Polynomial forcing uses local time s = t′/stage_duration.
+`scheme.a` is the first-stage fraction for MRK4. Polynomial forcing uses local time s = t′/stage_duration.
 The implicit formulation supports WickerSkamarock3() with FrozenForcing(). SRK3 uses the blended matrices with χᵀχ ≈ 1.
 C contains polynomial reconstruction weights, and the rows of 𝓕 multiply yⁿ. K is the frozen-forcing block in Bₘ.
 O is the zero block, and M[j + 1] stores the manuscript's Mⱼ.
 For the implicit solve, U = [I O] and H = [O I] select the modal amplitudes; ηⁿ and η⁻ multiply yⁿ and yᵐ⁻¹.
 """
 function stage_matrices(μ₀, modes; scheme=WickerSkamarock3(), forcing=FinalStageQuadraticForcing(), solver=RungeKutta3(),
-                        filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))), sampling=MidpointSampling(), a=23 // 100)
-    return stage_matrices(solver, scheme, forcing, μ₀, modes; filter, sampling, a)
+                        filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))))
+    return stage_matrices(solver, scheme, forcing, μ₀, modes; filter)
 end
 
-function stage_matrices(solver::Union{ForwardBackward, RungeKutta3, ExactSolver}, scheme, forcing, μ₀, modes; filter, sampling, a)
+function stage_matrices(solver::Union{ForwardBackward, RungeKutta3, ExactSolver}, scheme, forcing, μ₀, modes; filter)
     T  = typeof(float(μ₀))
     N  = length(modes.α)
     O  = zeros(Complex{T}, N, N)
@@ -64,14 +64,14 @@ function stage_matrices(solver::Union{ForwardBackward, RungeKutta3, ExactSolver}
     𝒫 = I - χ * χᵀ
     
     D = Diagonal(modes.α.^2)
-    γ = stage_fractions(scheme, a, T)
+    γ = stage_fractions(scheme, T)
     M = [M₀]
     A = Matrix{Complex{T}}[]
     B = Matrix{Complex{T}}[]
 
     for m in eachindex(γ)
         μₘ = γ[m] * μ₀
-        W, W̃, ūₚ, ūₚ⁺ = barotropic_response(μₘ; solver, filter, sampling)
+        W, W̃, ūₚ, ūₚ⁺ = barotropic_response(μₘ; solver, filter, sampling=forcing_sampling(forcing))
         
         # Stage A matrix
         Aₘ = [𝒫 + W[1, 1] * χ * χᵀ             W[1, 2] * χ * ψᵀ;
@@ -148,7 +148,7 @@ function blend_stage(::ShuOsher3, m, Aₘ, Bₘ)
 end
 
 function stage_matrices(::ImplicitSolver, scheme::WickerSkamarock3, ::FrozenForcing, μ₀, modes;
-                        filter, sampling, a)
+                        filter)
     T = typeof(float(μ₀))
     N = length(modes.α)
     O = zeros(Complex{T}, N, N)
@@ -162,7 +162,7 @@ function stage_matrices(::ImplicitSolver, scheme::WickerSkamarock3, ::FrozenForc
     B = Matrix{Complex{T}}[]
     M = [Matrix{Complex{T}}(I, 2N, 2N)]
 
-    for γₘ in stage_fractions(scheme, a, T)
+    for γₘ in stage_fractions(scheme, T)
         μₘ = γₘ * μ₀
         var"u★" = -im * μₘ * (I - χ * ψᵀ) * H
         ηⁿ = (ψᵀ * H - im * μₘ * χᵀ * U) / (1 + μₘ^2)
@@ -185,9 +185,9 @@ $(TYPEDSIGNATURES)
 Return the complete timestep matrix; AB2 acts on [yⁿ; yⁿ⁻¹] and uses the quasi-AB2 parameter ξ = 1/10 by default.
 """
 function evolution_matrix(μ₀, modes; scheme=WickerSkamarock3(), forcing=FinalStageQuadraticForcing(), solver=RungeKutta3(),
-                          filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))), sampling=MidpointSampling(),
-                          a=23 // 100, ξ=1 // 10)
-    return evolution_matrix(scheme, μ₀, modes; forcing, solver, filter, sampling, a, ξ)
+                          filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))),
+                          ξ=1 // 10)
+    return evolution_matrix(scheme, μ₀, modes; forcing, solver, filter, ξ)
 end
 
 function evolution_matrix(scheme::AbstractRungeKuttaScheme, μ₀, modes; ξ=1 // 10, kwargs...)
@@ -195,10 +195,10 @@ function evolution_matrix(scheme::AbstractRungeKuttaScheme, μ₀, modes; ξ=1 /
     return stages.M[end]
 end
 
-function evolution_matrix(::AdamsBashforth2, μ₀, modes; forcing, solver, filter, sampling, a, ξ)
+function evolution_matrix(::AdamsBashforth2, μ₀, modes; forcing, solver, filter, ξ)
     T = typeof(float(μ₀))
     N = length(modes.α)
-    W, W̃, ūₚ, ūₚ⁺ = barotropic_response(μ₀; solver, filter, sampling)
+    W, W̃, ūₚ, ūₚ⁺ = barotropic_response(μ₀; solver, filter)
     χ = modes.χ
     χᵀ = transpose(χ)
     ψᵀ = transpose(modes.ψ)
@@ -220,12 +220,3 @@ function evolution_matrix(::AdamsBashforth2, μ₀, modes; forcing, solver, filt
     M₀ = Matrix{Complex{T}}(I, 2N, 2N)
     return [Mⁿ M⁻; M₀ zero(M₀)]
 end
-
-"""
-$(TYPEDSIGNATURES)
-
-Evaluate the outer Runge–Kutta stability polynomial at a scalar or square matrix argument.
-"""
-stability_polynomial(z; scheme=WickerSkamarock3(), a=23 // 100)  = stability_polynomial(z, scheme, a)
-stability_polynomial(z, ::Union{WickerSkamarock3, ShuOsher3}, a) = one(z) + z + z^2 / 2 + z^3 / 6
-stability_polynomial(z, ::ModifiedRungeKutta4, a)                = one(z) + z + z^2 / 2 + z^3 / 6 + a * z^4 / 6

@@ -56,7 +56,7 @@ end
 end
 
 @testset "Stage matrices versus direct updates" begin
-    for scheme in (WickerSkamarock3(), ShuOsher3(), ModifiedRungeKutta4()), solver in (ForwardBackward(), RungeKutta3(), ExactSolver()), count in (1, 4)
+    for scheme in (WickerSkamarock3(), ShuOsher3(), ModifiedRungeKutta4(), ModifiedRungeKutta4(a=1 // 4)), solver in (ForwardBackward(), RungeKutta3(), ExactSolver()), count in (1, 4)
         modes = vertical_modes(0.05, count)
         filter = averaging_filter(F3Filter())
         initial = ComplexF64[sin(index) + im * cos(index) for index in 1:2(count+1)]
@@ -81,8 +81,8 @@ end
     setprecision(256) do
         modes = vertical_modes(big"0.0001", 4)
         filter = averaging_filter(NoFilter(); float_type=BigFloat)
-        matrix = evolution_matrix(big"2.0", modes; forcing=FrozenForcing(), solver=ExactSolver(), filter, sampling=ContinuousSampling())
-        reference = uncoupled_matrix(big"2.0", modes; solver=ExactSolver(), filter, sampling=ContinuousSampling())
+        matrix = evolution_matrix(big"2.0", modes; forcing=FrozenForcing(), solver=ExactSolver(), filter)
+        reference = uncoupled_matrix(big"2.0", modes; solver=ExactSolver(), filter)
         corrections = coupling_corrections(matrix, reference, modes)
         @test corrections.left * corrections.right ≈ I
         @test norm(reference * corrections.right - corrections.right * Diagonal(corrections.eigenvalues)) < big"1e-65"
@@ -127,13 +127,24 @@ end
             @test prediction.total ≈ -modes.χ[2]^2 * phase^2 * coefficient
         end
         modes = vertical_modes(big"0.0001", 2)
-        for forcing in (FrozenForcing(), FinalStageQuadraticForcing(), ProgressiveForcing())
+        for scheme in (WickerSkamarock3(), ShuOsher3(), ModifiedRungeKutta4()), solver in (ExactSolver(), RungeKutta3()), phase in (big"0.1", big"0.7", big"2")
+            filter = averaging_filter(solver isa ExactSolver ? NoFilter() : F3Filter(); float_type=BigFloat)
+            prediction = frozen_predictions(phase, modes; scheme, solver, filter)
+            W = barotropic_response(phase; solver, filter).W
+            λᵦ, Rᵦ = eigen(W)
+            δλ² = sum(prediction.forward .* prediction.reverse ./ (1 .- λᵦ))
+            @test prediction.indirect ≈ real(δλ²) rtol=big"1e-50"
+            @test prediction.total ≈ prediction.direct + prediction.indirect rtol=big"1e-50"
+        end
+        filter = averaging_filter(NoFilter(); float_type=BigFloat)
+        modes = vertical_modes(big"0.0001", 2)
+        for forcing in (FrozenForcing(), FinalStageQuadraticForcing(sampling=ContinuousSampling()), ProgressiveForcing(sampling=ContinuousSampling()))
             phase = big"0.01"
-            matrix = evolution_matrix(phase, modes; scheme=ModifiedRungeKutta4(), forcing, solver=ExactSolver(), filter, sampling=ContinuousSampling())
-            reference = uncoupled_matrix(phase, modes; scheme=ModifiedRungeKutta4(), solver=ExactSolver(), filter, sampling=ContinuousSampling())
+            matrix = evolution_matrix(phase, modes; scheme=ModifiedRungeKutta4(), forcing, solver=ExactSolver(), filter)
+            reference = uncoupled_matrix(phase, modes; scheme=ModifiedRungeKutta4(), solver=ExactSolver(), filter)
             result = coupling_corrections(matrix, reference, modes)
             coefficient = result.coupling / (phase * modes.α[2])^4
-            expected = forcing == FrozenForcing() ? -1 // 48 : forcing == FinalStageQuadraticForcing() ? 1 // 48 : 0
+            expected = forcing == FrozenForcing() ? -1 // 48 : forcing isa FinalStageQuadraticForcing ? 1 // 48 : 0
             @test abs(coefficient - expected) < big"1e-5"
         end
     end
@@ -149,7 +160,7 @@ end
     for phase in (big"0.1", big"1", big"3")
         @test amplification_factor(phase, WickerSkamarock3()) == amplification_factor(phase, ShuOsher3())
         @test amplification_factor(phase, RungeKutta2()) == 1 - im * phase - phase^2 / 2
-        @test amplification_factor(phase, ModifiedRungeKutta4(); a=1 // 4) ≈ sum((-im * phase)^order / factorial(order) for order in 0:4)
+        @test amplification_factor(phase, ModifiedRungeKutta4(a=1 // 4)) ≈ sum((-im * phase)^order / factorial(order) for order in 0:4)
     end
     for averaging in (F1Filter(), F2Filter(), F3Filter())
         filter = averaging_filter(averaging, 64; float_type=BigFloat)

@@ -1,9 +1,9 @@
 function direct_step(phase, modes, initial; scheme=WickerSkamarock3(), forcing=FinalStageQuadraticForcing(), solver=RungeKutta3(),
-                     filter=averaging_filter(F3Filter(); float_type=typeof(phase)), sampling=MidpointSampling(), a=23 // 100)
+                     filter=averaging_filter(F3Filter(); float_type=typeof(phase)))
     count = length(modes.α)
     velocity = initial[1:count]
     pressure = initial[count+1:2count]
-    fractions = scheme == ModifiedRungeKutta4() ? [a, 1 // 3, 1 // 2, 1] : scheme == ShuOsher3() ? [1, 1, 1] : [1 // 3, 1 // 2, 1]
+    fractions = scheme isa ModifiedRungeKutta4 ? [scheme.a, 1 // 3, 1 // 2, 1] : scheme == ShuOsher3() ? [1, 1, 1] : [1 // 3, 1 // 2, 1]
     pressures = [copy(pressure)]
     initial_velocity = sum(modes.χ .* velocity)
     initial_surface = sum(modes.ψ .* pressure)
@@ -18,12 +18,12 @@ function direct_step(phase, modes, initial; scheme=WickerSkamarock3(), forcing=F
             corrected_velocity = velocity + modes.χ * (transport - sum(modes.χ .* velocity))
             next_pressure = initial[count+1:2count] - im * stage_phase * modes.α.^2 .* corrected_velocity
         else
-            response = barotropic_response(stage_phase; solver, filter, sampling)
+            response = barotropic_response(stage_phase; solver, filter, sampling=TimestepperTheory.forcing_sampling(forcing))
             samples = [sum(modes.Π .* sample) for sample in pressures]
             coefficients = zeros(eltype(initial), 3)
             if forcing == SSPForcing() && stage == 3
                 coefficients[1] = samples[1] / 6 + samples[2] / 6 + 2samples[3] / 3
-            elseif forcing in (FrozenForcing(), SSPForcing()) || stage == 1 || (forcing == FinalStageQuadraticForcing() && stage < length(fractions))
+            elseif forcing in (FrozenForcing(), SSPForcing()) || stage == 1 || (forcing isa FinalStageQuadraticForcing && stage < length(fractions))
                 coefficients[1] = samples[end]
             else
                 nodes = [0; fractions[1:stage-1]] ./ fractions[stage]
