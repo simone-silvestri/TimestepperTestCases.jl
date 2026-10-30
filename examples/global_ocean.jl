@@ -12,7 +12,12 @@ include("plotting.jl") #hide
 directory = isempty(ARGS) ? nothing : first(ARGS)
 measurements = NamedTuple[]
 
-for variant in global_ocean_discretizations()
+variants = global_ocean_discretizations()
+if length(ARGS) > 1
+    variants = [variant for variant in variants if variant.label in ARGS[2:end]]
+end
+
+for variant in variants
     filename = "global_ocean_cost_$(variant.label)_cost.jld2"
     path = dataset_file("global_ocean", filename; directory)
     record = JLD2.load(path)

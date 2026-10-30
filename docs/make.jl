@@ -21,6 +21,21 @@ for image in eachmatch(r"!\[.*?\]\(([^)]+)\)", read(page, String))
     cp(joinpath(results, image.captures[1]), joinpath(generated, image.captures[1]); force=true)
 end
 
+for name in ("internal_tide", "channel", "global_ocean")
+    source = joinpath(@__DIR__, "..", "examples", name * ".jl")
+    page = Literate.markdown(source, generated; execute=false, flavor=Literate.CommonMarkFlavor(), credit=false)
+    content = read(page, String)
+    for image in eachmatch(r"!\[.*?\]\(([^)]+)\)", content)
+        path = joinpath(@__DIR__, "..", "examples", "output", image.captures[1])
+        if isfile(path)
+            cp(path, joinpath(generated, image.captures[1]); force=true)
+        else
+            content = replace(content, image.match => "Run this example with local or published data to generate the figure.")
+        end
+    end
+    write(page, content)
+end
+
 experiment_pages = [
     "Internal Tide" => "experiments/internal_tide.md",
     "Channel Flow" => "experiments/channel.md",
@@ -38,7 +53,12 @@ pages = [
         "Theory API" => "theory_api.md",
     ],
     "Stability Analysis" => "stability.md",
-    "Notebooks" => "notebooks.md",
+    "Data-driven examples" => [
+        "Data and execution" => "data_examples.md",
+        "Internal tide" => "generated/internal_tide.md",
+        "Channel" => "generated/channel.md",
+        "Global cost" => "generated/global_ocean.md",
+    ],
     "API Reference" => "api_reference.md",
 ]
 

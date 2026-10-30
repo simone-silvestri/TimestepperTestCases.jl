@@ -20,7 +20,7 @@ This monorepo contains ocean-model test cases, buoyancy-variance diagnostics, an
 - [Re-entrant channel](experiments/channel.md)
 - [Variance-budget diagnostics](diagnostics.md)
 - [Simulation API](api_reference.md)
-- [Analysis notebooks](notebooks.md)
+- [Data-driven Julia examples](data_examples.md)
 
 ## Build locally
 

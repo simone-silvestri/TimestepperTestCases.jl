@@ -33,7 +33,20 @@ Instantiate the root environment, which specifies the Oceananigans revision and 
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
-The [simulation documentation](docs/src/experiments/internal_tide.md) describes the setups and diagnostics. Simulation drivers and analysis notebooks are provided in the case directories and `notebooks/`; their data requirements are separate from the theory example. The global configuration uses the NumericalEarth and WorldOceanAtlasTools package extension.
+The simulation drivers are in `internal_tide/`, `channel_simulation/`, and `global_ocean/`. The global tripolar configuration uses the NumericalEarth and WorldOceanAtlasTools extension.
+
+## Analyze local or published data
+
+The Julia examples accept a local data directory and generate figures in the ignored `examples/output/` directory:
+
+```sh
+julia --project=examples -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
+julia --project=examples examples/internal_tide.jl /path/to/internal_tide
+julia --project=examples examples/channel.jl /path/to/channel_simulation
+julia --project=examples examples/global_ocean.jl /path/to/global_ocean
+```
+
+Without a directory argument, each example looks in the corresponding case directory in this checkout. Internal-tide and channel outputs are reduced to compact plain-array JLD2 files for publication. Dataset URLs and checksums in `examples/datasets.toml` are placeholders pending upload. See the [data guide](docs/src/data_examples.md) for the covered diagnostics, compact formats, and publication steps. Locally retained notebooks are ignored and excluded from the published tree.
 
 ## Documentation
 
@@ -59,7 +72,7 @@ julia --project=lib/TimestepperTheory -e 'using Pkg; Pkg.instantiate(); Pkg.test
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-The theory tests check modal identities, filter moments, stage updates, amplification factors, and temporal convergence. The root tests exercise the simulation package and require its Oceananigans environment.
+The theory tests check modal identities, filter moments, stage updates, amplification factors, and temporal convergence. The root tests check baroclinic stability limits and require the Oceananigans environment.
 
 ## License
 

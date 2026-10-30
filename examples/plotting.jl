@@ -21,14 +21,14 @@ function plot_internal_tide(profiles, differences)
         lines!(history, profile.t / 86400, profile.κᶻ; style..., label=profile.label)
         lines!(profile_axis, profile.κᵗ, profile.z / 1000; style...)
     end
-    FigureLegend(figure[2, 1:3], history; nbanks=4, framevisible=true)
+    Legend(figure[2, 1:3], history; nbanks=4, framevisible=true)
     limit = maximum(maximum(abs, filter(isfinite, vec(profile.Δκ))) for profile in differences)
     for (column, profile) in enumerate(differences)
         axis = Axis(figure[3, column]; title=profile.label * " − WRK3-SE", xlabel=L"t\;[\mathrm{days}]", ylabel=L"z\;[\mathrm{km}]")
         heatmap!(axis, profile.t / 86400, profile.z / 1000, transpose(profile.Δκ);
-                 colormap=:balance, colorrange=(-limit, limit), colorscale=Symlog10(limit / 100))
+                 colormap=:balance, colorrange=(-limit, limit), colorscale=Makie.Symlog10(limit / 100))
     end
-    Colorbar(figure[3, 4]; colormap=:balance, limits=(-limit, limit), scale=Symlog10(limit / 100), label=L"\Delta\kappa\;[\mathrm{m^2\,s^{-1}}]")
+    Colorbar(figure[3, 4]; colormap=:balance, limits=(-limit, limit), scale=Makie.Symlog10(limit / 100), label=L"\Delta\kappa\;[\mathrm{m^2\,s^{-1}}]")
     return save_example(figure, "internal_tide_diffusivity")
 end
 
@@ -44,7 +44,7 @@ function plot_channel(profiles, reference, differences)
         end
     end
     vlines!(axes[3], [1]; color=:black, linestyle=:dot)
-    FigureLegend(figure[2, 1:3], axes[1]; nbanks=4, framevisible=true)
+    Legend(figure[2, 1:3], axes[1]; nbanks=4, framevisible=true)
     save_example(figure, "channel_diffusivity")
 
     figure = Figure(size=(1250, 650))
@@ -52,15 +52,15 @@ function plot_channel(profiles, reference, differences)
         values = getproperty(reference, property)
         limit = maximum(abs, filter(isfinite, vec(values)))
         axis = Axis(figure[row, 1]; title=reference.label, xlabel=L"y\;[\mathrm{km}]", ylabel=L"z\;[\mathrm{km}]")
-        heatmap!(axis, reference.y / 1000, reference.z / 1000, values; colormap=:balance, colorrange=(-limit, limit), colorscale=Symlog10(limit / 100))
-        Colorbar(figure[row, 2]; limits=(-limit, limit), colormap=:balance, scale=Symlog10(limit / 100))
+        heatmap!(axis, reference.y / 1000, reference.z / 1000, values; colormap=:balance, colorrange=(-limit, limit), colorscale=Makie.Symlog10(limit / 100))
+        Colorbar(figure[row, 2]; limits=(-limit, limit), colormap=:balance, scale=Makie.Symlog10(limit / 100))
         limit = maximum(maximum(abs, filter(isfinite, vec(getproperty(section, difference_property)))) for section in differences)
         for (column, section) in enumerate(differences)
             axis = Axis(figure[row, column+2]; title=section.label * " − WRK3-SE", xlabel=L"y\;[\mathrm{km}]", ylabel=L"z\;[\mathrm{km}]")
             heatmap!(axis, section.y / 1000, section.z / 1000, getproperty(section, difference_property);
-                     colormap=:balance, colorrange=(-limit, limit), colorscale=Symlog10(limit / 100))
+                     colormap=:balance, colorrange=(-limit, limit), colorscale=Makie.Symlog10(limit / 100))
         end
-        Colorbar(figure[row, 6]; limits=(-limit, limit), colormap=:balance, scale=Symlog10(limit / 100))
+        Colorbar(figure[row, 6]; limits=(-limit, limit), colormap=:balance, scale=Makie.Symlog10(limit / 100))
     end
     return save_example(figure, "channel_dissipation")
 end
