@@ -10,6 +10,7 @@ using TimestepperTestCases
 using Oceananigans
 using Statistics
 include("data_sources.jl") #hide
+include("compact_data.jl") #hide
 include("plotting.jl") #hide
 
 directory = isempty(ARGS) ? nothing : first(ARGS)
@@ -22,16 +23,19 @@ profiles = NamedTuple[]
 
 for variant in variants
     filename = "internal_tide_$(variant.timestepper)_$(variant.label).jld2"
-    path = dataset_file("internal_tide", filename; directory)
-    case = TimestepperTestCases.load_internal_tide(dirname(path) * "/", string(variant.timestepper), variant.label)
-    t = case[:κb].times
-    z = collect(znodes(case[:κb].grid, Center()))
-    κ = hcat([vec(mean(interior(case[:κb][n]); dims=(1, 2))) for n in eachindex(t)]...)
+    data = compact_dataset("internal_tide", filename, prepare_internal_tide; directory)
+    t, z = data.t, data.z
+    P = data.fields["Abx"] + data.fields["Abz"]
+    G = data.fields["Gbz"]
+    κ = zeros(length(z), length(t))
+    for n in eachindex(t), k in eachindex(z)
+        wet = data.wet[:, k]
+        κ[k, n] = mean(-P[wet, k, n] ./ (2G[wet, k, n]))
+    end
     κᵗ = vec(sum((κ[:, 1:end-1] + κ[:, 2:end]) .* reshape(diff(t), 1, :) / 2; dims=2)) / (t[end] - t[1])
-    Δz = diff(collect(znodes(case[:κb].grid, Face())))
-    κᶻ = vec(sum(κ .* Δz; dims=1)) / sum(Δz)
+    κᶻ = vec(sum(κ .* data.Δz; dims=1)) / sum(data.Δz)
     push!(profiles, (; label=variant.label, t, z, κ, κᵗ, κᶻ))
-    case = nothing
+    data = nothing
     GC.gc()
 end
 

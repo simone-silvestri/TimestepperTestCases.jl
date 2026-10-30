@@ -8,6 +8,7 @@ using TimestepperTestCases
 using Oceananigans
 using Statistics
 include("data_sources.jl") #hide
+include("compact_data.jl") #hide
 include("plotting.jl") #hide
 
 directory = isempty(ARGS) ? nothing : first(ARGS)
@@ -19,27 +20,16 @@ sections = NamedTuple[]
 # diffusivity is the ratio of the horizontally averaged variance tendency to twice the averaged squared gradient.
 
 for label in labels
-    path = dataset_file("channel_simulation", "averages_$label.jld2"; directory)
-    fields = Dict(name => FieldTimeSeries(path, name; backend=OnDisk()) for name in ("Abx", "Aby", "Abz", "Gbx", "Gby", "Gbz", "Dbz"))
-    grid = fields["Abx"].grid
-    n = length(fields["Abx"].times)
-    centered = Dict{String, Array{Float64, 3}}()
-    for name in keys(fields)
-        field = Field{Center, Center, Center}(grid)
-        set!(field, fields[name][n])
-        centered[name] = Array(interior(field))
-    end
-    Pₕ = centered["Abx"] + centered["Aby"]
-    Pz = centered["Abz"]
-    Gₕ = centered["Gbx"] + centered["Gby"]
-    Gz = centered["Gbz"]
-    κₕ = vec(-sum(Pₕ; dims=(1, 2)) ./ (2sum(Gₕ; dims=(1, 2))))
-    κ = vec(-sum(Pₕ + Pz; dims=(1, 2)) ./ (2sum(Gₕ + Gz; dims=(1, 2))))
-    κᵖ = vec(-sum(centered["Dbz"]; dims=(1, 2)) ./ (2sum(Gz; dims=(1, 2))))
-    z = collect(znodes(grid, Center()))
-    y = collect(ynodes(grid, Center()))
-    push!(profiles, (; label, z, κₕ, κ, ratio=κᵖ ./ κ, time=fields["Abx"].times[n]))
-    push!(sections, (; label, y, z, Pₕ=dropdims(mean(Pₕ; dims=1); dims=1), Pz=dropdims(mean(Pz; dims=1); dims=1)))
+    data = compact_dataset("channel_simulation", "averages_$label.jld2", prepare_channel; directory)
+    Pₕ = data.fields["Abx"] + data.fields["Aby"]
+    Pz = data.fields["Abz"]
+    Gₕ = data.fields["Gbx"] + data.fields["Gby"]
+    Gz = data.fields["Gbz"]
+    κₕ = vec(-sum(Pₕ; dims=1) ./ (2sum(Gₕ; dims=1)))
+    κ = vec(-sum(Pₕ + Pz; dims=1) ./ (2sum(Gₕ + Gz; dims=1)))
+    κᵖ = vec(-sum(data.fields["Dbz"]; dims=1) ./ (2sum(Gz; dims=1)))
+    push!(profiles, (; label, data.z, κₕ, κ, ratio=κᵖ ./ κ, data.time))
+    push!(sections, (; label, data.y, data.z, Pₕ, Pz))
 end
 
 # The section differences retain the sign of the variance tendency and use WRK3-SE as the reference.
