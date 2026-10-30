@@ -12,7 +12,6 @@ This repository includes Jupyter notebooks for reproducing figures and analysis 
 ### Results Analysis
 
 - **`Results_internal_tide.ipynb`**: Analysis and visualization of internal tide results
-- **`Results_idealized_coast.ipynb`**: Analysis and visualization of idealized coast results
 - **`Results_channel.ipynb`**: Analysis and visualization of channel simulation results
 
 ### Stability Analysis
@@ -84,14 +83,11 @@ using TimestepperTestCases
 internal_tide(:SplitRungeKutta3)
 internal_tide(:QuasiAdamsBashforth2)
 
-idealized_coast(:SplitRungeKutta3)
-idealized_coast(:QuasiAdamsBashforth2)
-
 channel_simulation(timestepper=:SplitRungeKutta3)
 channel_simulation(timestepper=:QuasiAdamsBashforth2)
 ```
 
-Output files should be in the directories expected by the notebooks (typically `internal_tide/`, `idealized_coast/`, and `channel-simulation/`).
+Output files should be in the directories expected by the notebooks (typically `internal_tide/` and `channel-simulation/`).
 
 ## Customization
 

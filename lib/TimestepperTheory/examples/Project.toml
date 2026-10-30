@@ -1,0 +1,13 @@
+[deps]
+Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
+Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+TimestepperTheory = "35f6078b-b0d4-454d-a5b8-93c578e09ca7"
+
+[compat]
+Literate = "2"
+CairoMakie = "0.15"
+LaTeXStrings = "1"
+julia = "1.10"

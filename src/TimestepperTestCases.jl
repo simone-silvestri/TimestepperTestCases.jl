@@ -1,17 +1,15 @@
 module TimestepperTestCases
 
-export internal_tide, internal_seiche, idealized_coast, channel_simulation, dense_overflow
-export dense_overflow_grid, dense_overflow_timestep, dense_overflow_parameters
-export load_dense_overflow, dense_overflow_rpe, dense_overflow_diffusivity
-export near_global, near_global_grid, near_global_vertical_discretization
-export near_global_barotropic_rate
-export near_global_discretizations, run_near_global_cost
-export load_near_global, load_near_global_cases, near_global_cost_table, near_global_variance
-export near_global_diffusivity_profile, near_global_diffusivity_map, near_global_diffusivity_hovmoller
-export near_global_surface_speed, near_global_surface_kinetic_energy, near_global_eddy_kinetic_energy
-export near_global_surface_kinetic_energy_history
-export near_global_zonal_spectrum, near_global_corner_coordinates
-export global_ocean, global_ocean_grid, global_ocean_cost
+export internal_tide, channel_simulation
+export global_ocean, global_ocean_grid, global_ocean_vertical_discretization
+export global_ocean_barotropic_rate
+export global_ocean_discretizations
+export load_global_ocean, load_global_ocean_cases, global_ocean_cost_table, global_ocean_variance
+export global_ocean_diffusivity_profile, global_ocean_diffusivity_map, global_ocean_diffusivity_hovmoller
+export global_ocean_surface_speed, global_ocean_surface_kinetic_energy, global_ocean_eddy_kinetic_energy
+export global_ocean_surface_kinetic_energy_history
+export global_ocean_zonal_spectrum, global_ocean_corner_coordinates
+export global_ocean_cost
 
 using DocStringExtensions
 using Oceananigans
@@ -30,7 +28,6 @@ using Printf
 export stability_limit, baroclinic_timestep, barotropic_substeps, barotropic_courant, barotropic_cfl
 export Discretization, discretizations, discretization, timestep_and_free_surface, timestep_ratio, plot_style
 export ModifiedRungeKutta4TimeStepper, ProgressiveSlowForcing, StageQuadraticSlowForcing, FrozenSlowForcing
-export default_tracer_boundary_scheme, default_momentum_boundary_scheme, boundary_scheme_value
 export weno_tracer_advection, split_momentum_advection, split_flux_form_momentum_advection
 
 wall_clock = Ref(time_ns())
@@ -76,11 +73,10 @@ prognostic_state(::SSPRungeKuttaTimeStepper) = nothing
 restore_prognostic_state!(restored::SSPRungeKuttaTimeStepper, ::Nothing) = restored
 
 # For all test cases
-const tracer_buffer_scheme = WENO(order=5, buffer_scheme=Centered())
-const tracer_advection     = WENO(order=7, buffer_scheme=tracer_buffer_scheme)
+const tracer_advection = WENO(order=7)
 
 include("scheme_stability.jl")
-include("boundary_schemes.jl")
+include("advection_schemes.jl")
 include("discretizations.jl")
 
 include("BuoyancyVarianceDissipationComputations/BuoyancyVarianceDissipationComputations.jl")
@@ -88,14 +84,9 @@ using .BuoyancyVarianceDissipationComputations: BuoyancyVarianceDissipation
 
 # Simulations!
 include("internal_tide.jl")
-include("internal_seiche.jl")
-include("idealized_coast.jl")
 include("channel_simulation.jl")
-include("dense_overflow.jl")
 
-# Realistic near-global quarter-degree cost + buoyancy-dissipation case (needs NumericalEarth).
-include("near_global.jl")
-include("global_ocean.jl")
+include("global_ocean_interface.jl")
 
 using Oceananigans
 using Oceananigans.AbstractOperations: grid_metric_operation
@@ -116,11 +107,8 @@ using KernelAbstractions: @kernel, @index
 
 # Diagnostics!
 include("diagnostics.jl")
-include("load_idealized_coast_case.jl")
 include("load_internal_tide_case.jl")
-include("load_internal_seiche_case.jl")
 include("load_channel_case.jl")
-include("load_dense_overflow_case.jl")
-include("load_near_global_case.jl")
+include("load_global_ocean_case.jl")
 
 end

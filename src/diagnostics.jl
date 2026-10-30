@@ -252,3 +252,46 @@ end
     end
 end
 
+u2(case, i) = (case[:u][i])^2 / case[:VFCC][i]
+v2(case, i) = (case[:v][i])^2 / case[:VCFC][i]
+w2(case, i) = (case[:w][i])^2 / case[:VCCF][i]
+
+um2(case, i) = (mean(case[:u][i], dims=1))^2 / mean(case[:VFCC][i], dims=1)
+vm2(case, i) = (mean(case[:v][i], dims=1))^2 / mean(case[:VCFC][i], dims=1)
+wm2(case, i) = (mean(case[:w][i], dims=1))^2 / mean(case[:VCCF][i], dims=1)
+
+using FFTW
+
+function power_spectrum_x(var, x)
+    Nx      = length(x)
+    Nfx     = Int64(Nx)
+    spectra = zeros(ComplexF64, Int(Nfx/2))
+    dx      = x[2] - x[1]
+
+    freqs = fftfreq(Nfx, 1.0 / dx) # 0,+ve freq,-ve freqs (lowest to highest)
+    freqs = freqs[1:Int(Nfx/2)] .* 2.0 .* π
+
+    fourier      = fft(var) / Nfx
+    spectra[1]  += fourier[1] .* conj(fourier[1])
+
+    for m in 2:Int(Nfx/2)
+        spectra[m] += 2.0 * fourier[m] * conj(fourier[m]) # factor 2 for neg freq contribution
+    end
+
+    return spectra, freqs
+end
+
+function y_average_spectra(var::Field, irange, jrange; k=40, spectra=power_spectrum_x)
+
+    xdomain = xnodes(var)[irange]
+    ydomain = ynodes(var)[jrange]
+    spec, freq = spectra(interior(var, irange, jrange[1], k), xdomain)
+
+    for j in jrange[2:end]
+        spec .+= spectra(interior(var, irange, j, k), xdomain)[1]
+    end
+
+    spec .*= 1 / length(jrange)
+
+    return spec, freq
+end

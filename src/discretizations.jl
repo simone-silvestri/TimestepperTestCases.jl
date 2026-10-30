@@ -2,7 +2,7 @@
 ##### The discretizations of Table 1, defined once and shared by every test case
 #####
 ##### A test case is the product of two independent choices: the physical configuration (internal tide,
-##### coastal adjustment, channel, near-global) and the numerical discretization. Only the discretizations are
+##### channel, global) and the numerical discretization. Only the discretizations are
 ##### collected here; the configuration enters through its `stability_parameters`, from which the time step and
 ##### the substep count are *derived* rather than stored. Nothing in this file carries a time step, a substep
 ##### count or a ratio between them: those follow from the composition's own coefficients through
@@ -66,9 +66,8 @@ timestep_ratio(d::Discretization) = stability_limit(d.timestepper) / stability_l
 The tracer advection of `d` where it departs from the shared `TimestepperTestCases.tracer_advection`, and
 `nothing` where it does not.
 
-Every case builds its own tracer advection out of its `boundary_scheme`, and a `Discretization` that names no
-scheme of its own must not override that: only `WRK3-UP`, which exists to carry a third-order upwind, reaches
-the model with the scheme it stores.
+A `Discretization` that names no scheme of its own must not override the one of the case: only `WRK3-UP`, which
+exists to carry a third-order upwind, reaches the model with the scheme it stores.
 """
 forwarded_tracer_advection(d::Discretization) =
     d.tracer_advection === TimestepperTestCases.tracer_advection ? nothing : d.tracer_advection

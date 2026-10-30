@@ -250,7 +250,7 @@ $(SIGNATURES)
 - `wavenumber`: `grid_wavenumber(Δx)` unless given; [`staggered_wavenumber`](@ref) where the grid is
   anisotropic enough for the two conventions to disagree
 - `rate`: the binding `c₀ k` itself, for a configuration where the product has to be maximized over the domain
-  rather than evaluated on one depth and one spacing -- see [`near_global_barotropic_rate`](@ref). Given this,
+  rather than evaluated on one depth and one spacing -- see [`global_ocean_barotropic_rate`](@ref). Given this,
   `H`, `Δx` and `wavenumber` are not read
 
 The substep size is not `Δt / substeps`: the averaging kernel spans a window wider than the baroclinic step,

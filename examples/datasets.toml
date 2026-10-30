@@ -1,0 +1,16 @@
+# Fill in the versioned record URLs and SHA-256 hashes after uploading the selected output files.
+# Existing local files do not require a download URL.
+[internal_tide]
+doi = ""
+base_url = ""
+[internal_tide.sha256]
+
+[channel_simulation]
+doi = ""
+base_url = ""
+[channel_simulation.sha256]
+
+[global_ocean]
+doi = ""
+base_url = ""
+[global_ocean.sha256]

@@ -1,58 +1,34 @@
-```@meta
-CurrentModule = TimestepperTestCases
-```
-
 # TimestepperTestCases.jl
 
-[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://simone-silvestri.github.io/TimestepperTestCases.jl/stable/)
-[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://simone-silvestri.github.io/TimestepperTestCases.jl/dev/)
-[![Build Status](https://github.com/simone-silvestri/TimestepperTestCases.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/simone-silvestri/TimestepperTestCases.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Coverage](https://codecov.io/gh/simone-silvestri/TimestepperTestCases.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/simone-silvestri/TimestepperTestCases.jl)
+This monorepo contains ocean-model test cases, buoyancy-variance diagnostics, and the time-discretization analysis accompanying *A conservative Runge–Kutta framework for nonlinear free-surface ocean models*.
 
-**TimestepperTestCases.jl** is a Julia package that provides test cases and diagnostics for evaluating time-stepping schemes in free-surface ocean models. This repository complements the paper "A Low-Storage Runge-Kutta Framework for Non-Linear Free-Surface Ocean Models" by providing:
+## Time-discretization theory
 
-- Three idealized test cases spanning linear to fully turbulent regimes
-- Exact variance budget diagnostics for quantifying numerical mixing
-- Linear stability analysis tools
-- Notebooks for reproducing figures and analysis from the paper
+`TimestepperTheory` implements the amplification factors, averaging filters, modal evolution matrices, and direct and indirect coupling corrections in Sections 2–4. It runs independently of the ocean simulations.
 
-## Overview
+- [Theory overview](theory.md): modal state, normalization, and a first matrix calculation.
+- [Example guide](theory_example.md): execution commands, parameters, and output files.
+- [Manuscript example](generated/time_discretization.md): computations and all nine figures.
+- [Theory API](theory_api.md): algorithm choices and numerical functions.
 
-This package implements test cases designed to highlight differences in performance between time discretization schemes, particularly comparing low-storage Runge-Kutta (RK) methods with Adams-Bashforth (AB2) schemes. The test cases include:
+## Ocean simulations
 
-1. **Internal Tide**: A linear test case isolating temporal discretization effects
-2. **Idealized Coastal Baroclinic Adjustment**: A nonlinear case demonstrating submesoscale variability
-3. **Equilibrated Channel Flow**: A long-term equilibrated configuration showing interaction between numerical and physical mixing
+`TimestepperTestCases` provides Oceananigans simulation setups and diagnostics for numerical mixing. The simulation and theory packages have separate Julia environments.
 
-## Key Features
+- [Getting started](getting_started.md)
+- [Internal tide](experiments/internal_tide.md)
+- [Re-entrant channel](experiments/channel.md)
+- [Variance-budget diagnostics](diagnostics.md)
+- [Simulation API](api_reference.md)
+- [Analysis notebooks](notebooks.md)
 
-- **Exact Variance Budgets**: Diagnostics that are exact locally in both space and time, enabling quantification of numerical mixing from time discretization
-- **Multiple Timesteppers**: Support for `QuasiAdamsBashforth2`, `SplitRungeKutta3`, and `SplitRungeKutta4`
-- **Free Surface Options**: Both implicit and split-explicit free surface formulations
-- **Comprehensive Diagnostics**: Reference potential energy (RPE), available potential energy (APE), kinetic energy, and numerical diffusivity diagnostics
+## Build locally
 
-## Quick Links
+From the repository root, using Julia 1.12:
 
-- [Getting Started](getting_started.md) - Installation and basic usage
-- [Experiments](experiments/internal_tide.md) - Detailed descriptions of the three test cases
-- [Diagnostics](diagnostics.md) - Understanding variance budgets and numerical mixing
-- [Stability Analysis](stability.md) - Linear stability analysis tools
-- [Notebooks](notebooks.md) - Reproducing figures and analysis
-- [API Reference](api_reference.md) - Complete function documentation
-
-## Citation
-
-If you use this package in your research, please cite the associated paper:
-
-```bibtex
-@article{silvestri2025timestepper,
-  title={A Low-Storage Runge-Kutta Framework for Non-Linear Free-Surface Ocean Models},
-  author={Silvestri, Simone and others},
-  journal={Journal of Advances in Modeling Earth Systems},
-  year={2025}
-}
+```sh
+julia --project=docs -e 'using Pkg; Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path="lib/TimestepperTheory")]); Pkg.instantiate()'
+julia --project=docs docs/make.jl
 ```
 
-## Related Packages
-
-This package builds on [Oceananigans.jl](https://github.com/CliMA/Oceananigans.jl), a fast, friendly, flexible ocean-flavored fluid dynamics package for CPUs and GPUs.
+The build executes the theory example and writes the site to `docs/build`. Pass `--reuse-figures` to use the existing figure outputs. The documentation workflow produces a downloadable site artifact; publishing is separate.

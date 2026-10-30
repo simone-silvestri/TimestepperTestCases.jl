@@ -40,16 +40,6 @@ sim = internal_tide(:SplitRungeKutta3)
 sim = internal_tide(:QuasiAdamsBashforth2)
 ```
 
-#### Idealized Coast
-
-```julia
-# Run with RK3
-sim = idealized_coast(:SplitRungeKutta3; forced=true, lowres=false)
-
-# Run without forcing
-sim = idealized_coast(:SplitRungeKutta3; forced=false)
-```
-
 #### Channel Simulation
 
 ```julia

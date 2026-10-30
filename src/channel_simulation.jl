@@ -271,28 +271,16 @@ function default_closure()
 end
 
 """
-    channel_simulation(; momentum_advection, tracer_advection, boundary_scheme, closure, zstar, restart_file, arch, bottom_height, timestepper, grid, initial_file, testcase)
+    channel_simulation(; momentum_advection, tracer_advection, closure, zstar, restart_file, arch, bottom_height, timestepper, grid, initial_file, testcase)
 
 Set up and run the idealized re-entrant channel flow simulation.
 
 $(SIGNATURES)
 
 # Keyword Arguments
-- `momentum_advection`: Vector-invariant momentum advection scheme (`nothing`, the default, builds it from
-  `momentum_boundary_scheme`, reproducing `WENOVectorInvariant()`)
-- `tracer_advection`: Tracer advection scheme (`nothing`, the default, builds it from `tracer_boundary_scheme`)
-- `boundary_scheme`: the reconstruction the WENO buffer chain terminates in, used in the one cell whose stencil
-  no longer fits -- the domain buffer and, where the channel carries a bottom, any cell adjacent to an inactive
-  node. Options:
-   * `:ghost_cells` -- `GhostCells()`, which keeps the full order, completes the stencil with ghost values and
-     limits the reconstructed values next to the boundary, for both the tracers and momentum.
-   * `:upwind` -- first-order upwind, monotone, in exactly those cells while the interior keeps the full order.
-   * `:default` -- `Centered(order=2)` for the tracers and `UpwindBiased(order=1)` for momentum, the
-     Oceananigans defaults.
-  `nothing`, the default, leaves the tracers on `:ghost_cells` and the momentum on `:upwind`.
-- `tracer_boundary_scheme`, `momentum_boundary_scheme`: the same choice made separately for the tracer and the
-  momentum reconstructions, `boundary_scheme` setting both where it is given. Setting one of them alone
-  isolates which of the two the boundary treatment acts through.
+- `momentum_advection`: Vector-invariant momentum advection scheme (`nothing`, the default, builds it with
+  [`split_momentum_advection`](@ref), reproducing `WENOVectorInvariant()`)
+- `tracer_advection`: Tracer advection scheme (`nothing`, the default, uses `TimestepperTestCases.tracer_advection`)
 - `closure`: Turbulence closure (default: `CATKEVerticalDiffusivity`)
 - `zstar`: Whether to use z-star vertical coordinates (default: `true`)
 - `restart_file`: Optional restart file path (default: `nothing`)
@@ -320,9 +308,6 @@ explicit physical mixing in an equilibrated configuration, as shown in the paper
 
 function channel_simulation(; momentum_advection = nothing,
                                 tracer_advection = nothing,
-                                 boundary_scheme = nothing,
-                          tracer_boundary_scheme = something(boundary_scheme, default_tracer_boundary_scheme),
-                        momentum_boundary_scheme = something(boundary_scheme, default_momentum_boundary_scheme),
                                          closure = default_closure(),
                                            zstar = true,
                                     restart_file = nothing,
@@ -341,19 +326,9 @@ function channel_simulation(; momentum_advection = nothing,
     ##### Advection
     #####
 
-    tracer_boundary_scheme   = boundary_scheme_value(tracer_boundary_scheme)
-    momentum_boundary_scheme = boundary_scheme_value(momentum_boundary_scheme)
-
-    momentum_advection = something(momentum_advection,
-                                   split_momentum_advection(nothing, ExplicitTimeDiscretization(),
-                                                            momentum_boundary_scheme))
-
-    tracer_advection = something(tracer_advection,
-                                 tracer_advection_scheme(tracer_boundary_scheme, TimestepperTestCases.tracer_advection))
-
-    # A boundary scheme that departs from the default names the run it produces, so that its output does not
-    # overwrite the default one it is meant to be compared against.
-    testcase = string(testcase) * boundary_scheme_suffix(tracer_boundary_scheme, momentum_boundary_scheme)
+    momentum_advection = something(momentum_advection, split_momentum_advection(nothing, ExplicitTimeDiscretization()))
+    tracer_advection   = something(tracer_advection, TimestepperTestCases.tracer_advection)
+    testcase           = string(testcase)
 
     #####
     ##### Boundary conditions

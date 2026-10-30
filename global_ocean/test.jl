@@ -8,7 +8,6 @@ using Printf
 #
 #   AB2-SE, WRK3-SE-SM05, WRK3-SE, SRK3-SE, MRK4-SE, WRK3-IM
 #
-# Same machinery and the same empirical time steps as `near_global/test.jl`, on the global grid.
 
 arch = GPU()
 
@@ -22,7 +21,7 @@ arch = GPU()
 #####
 
 # only the timings are kept, so that each simulation leaves the GPU before the next one is built
-costs = map(near_global_discretizations()) do d
+costs = map(global_ocean_discretizations()) do d
     result = global_ocean_cost(d; arch)
     cost = (; result.label, Δt = result.nominal_timestep, result.seconds_per_step, result.simulated_years_per_day)
     result = nothing
@@ -43,7 +42,7 @@ flush(stderr)
 ##### 720 days, under the `global_ocean` prefix.
 #####
 
-for d in near_global_discretizations()
+for d in global_ocean_discretizations()
     global_ocean(d; arch)
     GC.gc(true)
 end
