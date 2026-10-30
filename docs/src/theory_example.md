@@ -2,24 +2,18 @@
 
 The [time-discretization example](generated/time_discretization.md) reproduces the amplification, filtering, and coupled modal analyses in Sections 2–4. It is a Julia script written with Literate.jl: prose explains each experiment, the displayed code performs the computations, and the figures show the resulting comparisons.
 
-The source is `lib/TimestepperTheory/examples/time_discretization.jl`. The numerical implementation is in `lib/TimestepperTheory/src/`. Lines marked `#src` perform plotting and file output but are omitted from the rendered page. The shared `save_results` function writes each figure and its numerical data.
+The source is `lib/TimestepperTheory/examples/time_discretization.jl`. The numerical implementation is in `lib/TimestepperTheory/src/`. Lines marked `#src` perform plotting and file output but are omitted from the rendered page. The plotting functions in `time_discretization_figures.jl` format and save each figure and its numerical data.
 
 ## Run and render
 
-From the repository root, install the example dependencies once:
+From the repository root, build the documentation, including the full example:
 
 ```sh
-julia --project=lib/TimestepperTheory/examples -e 'using Pkg; Pkg.develop(path="lib/TimestepperTheory"); Pkg.instantiate()'
+julia --project=docs -e 'using Pkg; Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path="lib/TimestepperTheory")]); Pkg.instantiate()'
+julia --project=docs docs/make.jl
 ```
 
-Execute the computations and render the standalone page:
-
-```sh
-julia --project=lib/TimestepperTheory/examples lib/TimestepperTheory/examples/time_discretization.jl
-julia --project=lib/TimestepperTheory/examples lib/TimestepperTheory/examples/render_time_discretization.jl
-```
-
-Open `lib/TimestepperTheory/output/time_discretization.html`. The rendering command formats the source and links to the generated figures; it does not execute the computations. No simulation data or GPU is required. The first run also compiles Julia plotting dependencies.
+Open `docs/build/generated/time_discretization.html`. No simulation data or GPU is required. The first run also compiles Julia plotting dependencies. To run only the computations, use `julia --project=docs lib/TimestepperTheory/examples/time_discretization.jl`.
 
 For a coarse execution check, append `--quick` to the computation command. This reduces the sampled Courant-number grids in the coupled experiments; the amplification, filter, and stratification calculations retain their grids. Quick and full runs write the same filenames, so run the full example again before using its figures in the manuscript.
 
@@ -43,7 +37,7 @@ Each figure is saved as PDF and PNG, with a CSV containing its numerical values.
 
 ## Parameters and normalization
 
-The [theory overview](theory.md) defines the modal state and its normalization. In the example, `phase` denotes the barotropic Courant number μ₀ = k√(gH)Δt, and `stratification` denotes ε = N²H/g. The modal count Q excludes the barotropic mode.
+The [theory overview](theory.md) defines the modal state and its normalization. In the example, `μ₀` denotes the barotropic Courant number μ₀ = k√(gH)Δt, and `ε` denotes ε = N²H/g. The modal count Q excludes the barotropic mode.
 
 The filtering experiments use 64 nominal substeps; the coupled experiments use 48. Coupling decompositions use 128-bit arithmetic, while forcing and temporal-accuracy experiments use 256 bits. The full-spectrum stability scan starts in Float64 and recomputes growth smaller than 10⁻¹² in magnitude at 128 bits.
 

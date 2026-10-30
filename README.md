@@ -36,10 +36,9 @@ Run these commands from the repository root with Julia 1.12:
 ```sh
 julia --project=lib/TimestepperTheory/examples -e 'using Pkg; Pkg.develop(path="lib/TimestepperTheory"); Pkg.instantiate()'
 julia --project=lib/TimestepperTheory/examples lib/TimestepperTheory/examples/time_discretization.jl
-julia --project=lib/TimestepperTheory/examples lib/TimestepperTheory/examples/render_time_discretization.jl
 ```
 
-Open `lib/TimestepperTheory/output/time_discretization.html`. The example includes the computations and nine figures; plotting details are hidden in the rendered page. PDF, PNG, and CSV outputs are saved beside it.
+The example saves nine figures and their numerical values as PDF, PNG, and CSV files in `lib/TimestepperTheory/output`. The computations appear in the Literate source; plotting helpers live in `time_discretization_figures.jl`. Build the [documentation](#documentation) to read the rendered example at `docs/build/generated/time_discretization.html`.
 
 See the [example guide](docs/src/theory_example.md) for the experiments, parameter choices, and output files. Adding `--quick` to the computation command uses coarse parameter grids and overwrites the same output files; rerun without it to restore the manuscript grids.
 
