@@ -1,6 +1,6 @@
 # TimestepperTestCases.jl
 
-[![Documentation build](https://github.com/simone-silvestri/TimestepperTestCases.jl/actions/workflows/Documenter.yml/badge.svg)](https://github.com/simone-silvestri/TimestepperTestCases.jl/actions/workflows/Documenter.yml)
+[![Documentation](https://img.shields.io/badge/docs-online-blue.svg)](https://simone-silvestri.github.io/TimestepperTestCases.jl/)
 
 Julia implementations of ocean-model test cases, buoyancy-variance diagnostics, and the time-discretization analysis accompanying the manuscript *A conservative Runge–Kutta framework for nonlinear free-surface ocean models*.
 

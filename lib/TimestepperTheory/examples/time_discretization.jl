@@ -282,7 +282,7 @@ end
 # direct correction and the full eigenvalue correction, scaled by θ₁⁴, using RK3 substeps and F3 at ε = 0.05.
 
 setprecision(256) do
-    reference_phase = big"2.0"
+    μ₀ = big"2.0"
     rows   = NamedTuple[]
     panels = NamedTuple[]
     configurations = ((ExactSolver(), NoFilter(), ContinuousSampling()), (RungeKutta3(), F3Filter(), MidpointSampling()),
@@ -294,11 +294,11 @@ setprecision(256) do
         stratifications = [big"0.64" / 4^index for index in 0:10]
         results = map(stratifications) do ε
             modes = vertical_modes(ε, 4)
-            M  = evolution_matrix(reference_phase, modes; forcing, solver, filter)
-            Mᵤ = uncoupled_matrix(reference_phase, modes; solver, filter)
+            M  = evolution_matrix(μ₀, modes; forcing, solver, filter)
+            Mᵤ = uncoupled_matrix(μ₀, modes; solver, filter)
             result = coupling_corrections(M, Mᵤ, modes)
-            prediction = frozen_predictions(reference_phase, modes; solver, filter)
-            push!(rows, (; forcing, response=response_name, phase=reference_phase, stratification=ε,
+            prediction = frozen_predictions(μ₀, modes; solver, filter)
+            push!(rows, (; forcing, response=response_name, phase=μ₀, stratification=ε,
                           direct=result.direct_magnitude, indirect=result.indirect_magnitude, other=result.other_magnitude,
                           coupling=result.coupling, predicted_direct=prediction.direct, predicted_indirect=prediction.indirect))
             return result
@@ -308,7 +308,7 @@ setprecision(256) do
                         [result.indirect_magnitude for result in results], [result.coupling for result in results]]
             predicted = Vector{BigFloat}[]
             if forcing isa FrozenForcing
-                predictions = [frozen_predictions(reference_phase, vertical_modes(ε, 4); solver, filter) for ε in stratifications]
+                predictions = [frozen_predictions(μ₀, vertical_modes(ε, 4); solver, filter) for ε in stratifications]
                 predicted = [[prediction.direct for prediction in predictions],
                              [prediction.indirect for prediction in predictions], [prediction.total for prediction in predictions]]
                 for values in predicted, index in eachindex(stratifications)

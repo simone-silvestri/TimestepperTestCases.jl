@@ -54,7 +54,7 @@ The example starts with outer amplification factors, barotropic damping, and ave
 
 The filtering experiments use 64 nominal substeps; the coupled experiments use 48. Coupling decompositions use 128-bit arithmetic, and forcing and accuracy experiments use 256 bits. Stability scans begin in Float64 and recompute growth below 10⁻¹² in magnitude at 128 bits. A separate `precision.csv` records the weak-stratification check at both precisions.
 
-Two parameter conventions need attention when comparing with the manuscript captions: the forcing-stratification experiment uses μ₀ = 2, while the local caption gives 0.1; the accuracy experiment uses k√(gH)T = 64, while the caption writes kc₀T = 64. Set `reference_phase` to reproduce the first caption, or pass `horizon=64/modes.α[1]` to `global_error` for the second interpretation. The manuscript files are separate from this package.
+Two parameter conventions need attention when comparing with the manuscript captions: the forcing-stratification experiment uses μ₀ = 2, while the local caption gives 0.1; the accuracy experiment uses k√(gH)T = 64, while the caption writes kc₀T = 64. Set `μ₀` in the forcing-reconstruction experiment to reproduce the first caption, or pass `horizon=64/modes.α[1]` to `global_error` for the second interpretation. The manuscript files are separate from this package.
 
 ## Test
 

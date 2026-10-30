@@ -97,7 +97,7 @@ end
 
 function plot_coupling_decomposition(panels, rows, output_directory)
     figure = Figure(size=(576, 331), fontsize=10)
-    for (row, stratification) in enumerate((big"0.0005", big"0.05")), (column, scheme) in enumerate((WickerSkamarock3(), ShuOsher3()))
+    for (row, ε) in enumerate((big"0.0005", big"0.05")), (column, scheme) in enumerate((WickerSkamarock3(), ShuOsher3()))
         (; phases, corrections, complete, retained, predicted) = panels[2(row - 1) + column]
         axis = Axis(figure[row, column], xlabel=L"\mu_0", title=row == 1 ? (scheme isa ShuOsher3 ? "SRK3" : "WRK3") : "")
         lines!(axis, Float64.(phases), Float64.([result.growth / result.damping for result in corrections]); color=:black, label="Full matrix")
@@ -229,7 +229,7 @@ end
 function plot_schemes(panels, rows, output_directory)
     figure = Figure(size=(540, 390), fontsize=10, figure_padding=(12, 16, 10, 14))
     names = ["AB2-SE", "WRK3-SE-F1", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM"]
-    for (column, count) in enumerate((8, 32)), (row, stratification) in enumerate((big"0.05", big"0.15"))
+    for (column, count) in enumerate((8, 32)), (row, ε) in enumerate((big"0.05", big"0.15"))
         (; phases, growth, thresholds) = panels[2(column - 1) + row]
         axis = Axis(figure[row, column], xlabel=row == 2 ? L"\mu_0" : "", ylabel=column == 1 ? L"\max |\lambda| - 1" : "",
                     xticklabelsvisible=row == 2, yticklabelsvisible=column == 1,
@@ -237,13 +237,13 @@ function plot_schemes(panels, rows, output_directory)
                     xgridcolor=(:black, 0.08), ygridcolor=(:black, 0.08),
                     yscale=Makie.Symlog10(1e-13; linscale=0.35 * 10/9),
                     yticks=([-1e-2, -1e-6, -1e-10, 0, 1e-6], [L"-10^{-2}", L"-10^{-6}", L"-10^{-10}", L"0", L"10^{-6}"]),
-                    title=L"\varepsilon=%$(Float64(stratification)),\ N_m=%$count")
+                    title=L"\varepsilon=%$(Float64(ε)),\ N_m=%$count")
         limits!(axis, 0, 44, -6e-2, 3e-4)
         for (index, name) in enumerate(names)
             lines!(axis, Float64.(phases), growth[index]; label=name,
                    color=("#0000ff", "#ff0000", "#ff0000", "#008000", "#800080", "#ff0000")[index],
                    linestyle=(:solid, :dot, :solid, :dash, :solid, :dashdot)[index], linewidth=index == 2 ? 1.1 : 0.9)
-            @info "Stability" scheme=name modes=count stratification=Float64(stratification)
+            @info "Stability" scheme=name modes=count stratification=Float64(ε)
         end
         vlines!(axis, thresholds; color=:gray, linestyle=:dot)
         row == 2 && column == 2 && Legend(figure[3, 1:2], axis; nbanks=2, orientation=:horizontal, labelsize=9, patchsize=(25, 10), rowgap=5, colgap=18, padding=(8, 8, 6, 6))
