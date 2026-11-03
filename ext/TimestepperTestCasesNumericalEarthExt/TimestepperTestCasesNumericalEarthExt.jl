@@ -9,7 +9,7 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
     WideTrigAveragingKernel, OptimizedAsymmetricAveragingKernel,
     LowDissipationAveragingKernel,
     ForwardBackwardScheme, RungeKutta3Scheme, averaging_shape_function,
-    FrozenSlowForcing, StageQuadraticSlowForcing, ProgressiveSlowForcing
+    FrozenSlowForcing, ProgressiveSlowForcing
 using Oceananigans.TimeSteppers: ModifiedRungeKutta4TimeStepper
 using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
@@ -20,7 +20,7 @@ using Printf
 
 using TimestepperTestCases
 using TimestepperTestCases: BuoyancyVarianceDissipation, Discretization, baroclinic_timestep, barotropic_speed, barotropic_substeps,
-                            forwarded_tracer_advection, split_momentum_advection, staggered_wavenumber, weno_tracer_advection,
+                            campaign_timestepper, forwarded_tracer_advection, split_momentum_advection, staggered_wavenumber, weno_tracer_advection,
                             global_ocean_discretizations, global_ocean_simulated_years_per_day
 
 import TimestepperTestCases: global_ocean, global_ocean_grid, global_ocean_vertical_discretization, global_ocean_barotropic_rate,

@@ -8,12 +8,12 @@ From the repository root:
 
 ```sh
 julia --project=examples -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
-julia --project=examples examples/internal_tide.jl /path/to/internal_tide
+julia --project=examples examples/internal_tide.jl /path/to/internal_tide_weno_new
 julia --project=examples examples/channel.jl       /path/to/channel_simulation
 julia --project=examples examples/global_ocean.jl  /path/to/global_ocean
 ```
 
-Omitting the directory uses the corresponding case directory in this checkout. Local data always take precedence over downloads. The global example accepts a list of case labels after the directory for partial timing datasets; include AB2-SE because it defines the relative throughput.
+Omitting the directory uses the corresponding case directory in this checkout: `internal_tide_weno_new/` for the manuscript internal-tide campaign, `channel_simulation/` for the channel, and `global_ocean/` for global timings. Local data always take precedence over downloads. The global example accepts a list of case labels after the directory for partial timing datasets; include AB2-SE because it defines the relative throughput.
 
 ```sh
 julia --project=examples examples/global_ocean.jl /path/to/global_ocean AB2-SE WRK3-SE-SM05
@@ -31,7 +31,7 @@ Computations are shown in the rendered examples. Plotting helpers are in `exampl
 
 When reading the original internal-tide or channel outputs, `examples/compact_data.jl` extracts the required arrays without constructing an Oceananigans grid. This supports the older serialized grid layouts in the campaign files. Halos are removed and face values are interpolated to cell centers before reduction. No original data file is modified.
 
-Compact files are saved in `data/internal_tide/` and `data/channel_simulation/`, with `compact_` prepended to the original filename. To use a compact dataset directly, pass that directory to the example. Channel files contain the final-window zonal means of Abx, Aby, Abz, Gbx, Gby, Gbz, and Dbz, plus y, z, and the output time. Internal-tide files contain centered Abx, Abz, and Gbz on x–z–time coordinates, the wet mask, and vertical cell widths. Global cost records are already small and are used directly.
+Compact files are saved in `data/internal_tide_weno_new/` and `data/channel_simulation/`, with `compact_` prepended to the original filename. To use a compact dataset directly, pass that directory to the example. Channel files contain the final-window zonal means of Abx, Aby, Abz, Gbx, Gby, Gbz, and Dbz, plus y, z, and the output time. Internal-tide files contain centered Abx, Abz, and Gbz on x–z–time coordinates, the wet mask, and vertical cell widths. Global cost records are already small and are used directly.
 
 ## Publication
 
@@ -46,3 +46,9 @@ base_url = "" # Add the version-specific files URL.
 ```
 
 The documentation build renders the example source and includes figures that have been generated locally. It does not download unpublished datasets or run large simulations.
+
+For campaign timings, use the same discretization as the simulation. For example, profile
+`global_ocean_cost(discretization("WRK3-UP"); arch=GPU())` to measure third-order upwind tracer advection;
+`WRK3-SE` uses WENO9. For an implicit-solver sensitivity run, pass
+`free_surface=ImplicitFreeSurface(solver_method=:PreconditionedConjugateGradient; reltol=1e-8, maxiter=1000)`
+to either `global_ocean` or `global_ocean_cost` for `WRK3-IM`. The progress log reports the iteration count and residual.

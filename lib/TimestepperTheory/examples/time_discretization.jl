@@ -142,7 +142,7 @@ continuity_residual = norm(response.W[2, :] - [0, 1] + im * μ₀ * response.W̃
 
 # ## Stage matrices and the complete timestep
 #
-# For WRK3-SE, the final stage uses a quadratic reconstruction of the slow forcing. The returned arrays contain
+# For WRK3-SE, the stages use progressive reconstruction of the slow forcing. The returned arrays contain
 # A[m] = Aₘ, B[m] = Bₘ, and M[m] = Mₘ. The initial matrix M₀ = I is used internally. Contributions from earlier stages enter through Aₘ.
 
 # ```math
@@ -150,7 +150,7 @@ continuity_residual = norm(response.W[2, :] - [0, 1] + im * μ₀ * response.W̃
 # \mathbf M_0 = \mathbf I, \qquad \mathbf M_m = \mathbf A_m + \mathbf B_m\mathbf M_{m-1}.
 # ```
 
-stages = stage_matrices(μ₀, modes; scheme=WickerSkamarock3(), forcing=FinalStageQuadraticForcing(), solver=RungeKutta3(), filter)
+stages = stage_matrices(μ₀, modes; scheme=WickerSkamarock3(), forcing=ProgressiveForcing(), solver=RungeKutta3(), filter)
 Aₘ = stages.A[end]
 Bₘ = stages.B[end]
 Mₘ = stages.M[end]
@@ -277,8 +277,8 @@ end
 # \bar u_{\mathrm{forced}}^\dagger = \sum_p F_p\bar u_p^\dagger.
 # ```
 #
-# The stratification experiment uses μ₀ = 2 and exact, continuously forced barotropic integration. It compares frozen,
-# final-stage quadratic, and progressive forcing with the leading analytical prediction. The MRK4 figure compares the
+# The stratification experiment uses μ₀ = 2 and exact, continuously forced barotropic integration. It compares frozen
+# and progressive forcing with the leading analytical prediction. The MRK4 figure compares the
 # direct correction and the full eigenvalue correction, scaled by θ₁⁴, using RK3 substeps and F3 at ε = 0.05.
 
 setprecision(256) do
@@ -287,7 +287,7 @@ setprecision(256) do
     panels = NamedTuple[]
     configurations = ((ExactSolver(), NoFilter(), ContinuousSampling()), (RungeKutta3(), F3Filter(), MidpointSampling()),
                       (ForwardBackward(), F3Filter(), MidpointSampling()))
-    for reconstruction in (FrozenForcing, FinalStageQuadraticForcing, ProgressiveForcing), (solver, averaging, sampling) in configurations
+    for reconstruction in (FrozenForcing, ProgressiveForcing), (solver, averaging, sampling) in configurations
         forcing = reconstruction === FrozenForcing ? FrozenForcing() : reconstruction(; sampling)
         response_name = sampling isa ContinuousSampling ? "continuous" : solver isa RungeKutta3 ? "RK3_F3" : "FB_F3"
         filter = averaging_filter(averaging; float_type=BigFloat)
@@ -337,7 +337,7 @@ setprecision(256) do
              sort(unique([exp10.(range(big"-2", big"0"; length=18)); range(big"1.2", big"10"; length=45)]))
     predictions = [frozen_predictions(μ₀, modes; scheme=ModifiedRungeKutta4(), filter) for μ₀ in phases]
     scales      = (phases .* modes.α[2]).^4
-    for forcing in (FrozenForcing(), FinalStageQuadraticForcing(), ProgressiveForcing())
+    for forcing in (FrozenForcing(), ProgressiveForcing())
         results = map(phases) do μ₀
             M  = evolution_matrix(μ₀, modes; scheme=ModifiedRungeKutta4(), forcing, solver=RungeKutta3(), filter)
             Mᵤ = uncoupled_matrix(μ₀, modes; scheme=ModifiedRungeKutta4(), solver=RungeKutta3(), filter)

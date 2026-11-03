@@ -12,7 +12,7 @@ include("plotting.jl") #src
 directory = isempty(ARGS) ? nothing : first(ARGS)
 measurements = NamedTuple[]
 
-variants = global_ocean_discretizations()
+variants = discretizations()
 if length(ARGS) > 1
     variants = [variant for variant in variants if variant.label in ARGS[2:end]]
 end

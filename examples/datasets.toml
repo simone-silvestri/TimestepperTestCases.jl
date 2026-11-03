@@ -1,9 +1,9 @@
 # Fill in the versioned record URLs and SHA-256 hashes after uploading the selected output files.
 # Existing local files do not require a download URL.
-[internal_tide]
+[internal_tide_weno_new]
 doi = ""
 base_url = ""
-[internal_tide.sha256]
+[internal_tide_weno_new.sha256]
 
 [channel_simulation]
 doi = ""

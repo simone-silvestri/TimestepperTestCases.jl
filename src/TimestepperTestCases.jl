@@ -20,14 +20,14 @@ using Oceananigans.Models.HydrostaticFreeSurfaceModels.SplitExplicitFreeSurfaces
     WideTrigAveragingKernel, OptimizedAsymmetricAveragingKernel,
     LowDissipationAveragingKernel,
     ForwardBackwardScheme, RungeKutta3Scheme, averaging_shape_function,
-    FrozenSlowForcing, StageQuadraticSlowForcing, ProgressiveSlowForcing
+    FrozenSlowForcing, ProgressiveSlowForcing
 using Oceananigans.TimeSteppers: ModifiedRungeKutta4TimeStepper
 using KernelAbstractions: @kernel, @index
 using Printf
 
 export stability_limit, baroclinic_timestep, barotropic_substeps, barotropic_courant, barotropic_cfl
 export Discretization, discretizations, discretization, timestep_and_free_surface, timestep_ratio, plot_style
-export ModifiedRungeKutta4TimeStepper, ProgressiveSlowForcing, StageQuadraticSlowForcing, FrozenSlowForcing
+export ModifiedRungeKutta4TimeStepper, ProgressiveSlowForcing, FrozenSlowForcing
 export weno_tracer_advection, split_momentum_advection, split_flux_form_momentum_advection
 
 wall_clock = Ref(time_ns())

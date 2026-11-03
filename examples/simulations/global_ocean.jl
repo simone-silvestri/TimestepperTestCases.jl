@@ -6,7 +6,7 @@ using Oceananigans.Units
 using CUDA
 using Printf
 
-# The cases of Table 1 on the eORCA025 tripolar mesh, less `WRK3-UP`, whose tracer advection this case fixes.
+# Time every case, including the third-order tracer-advection comparison. The production suite excludes WRK3-UP.
 #
 #   AB2-SE, WRK3-SE-SM05, WRK3-SE, SRK3-SE, MRK4-SE, WRK3-IM
 #
@@ -23,7 +23,7 @@ arch = GPU()
 #####
 
 # only the timings are kept, so that each simulation leaves the GPU before the next one is built
-costs = map(global_ocean_discretizations()) do d
+costs = map(discretizations()) do d
     result = global_ocean_cost(d; arch)
     cost = (; result.label, Δt = result.nominal_timestep, result.seconds_per_step, result.simulated_years_per_day)
     result = nothing

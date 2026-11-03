@@ -9,7 +9,7 @@ function scheme_configuration(name)
     elseif name == "WRK3-SE-F1"
         return (; scheme=WickerSkamarock3(), forcing=FrozenForcing(), solver=ForwardBackward(), averaging=F1Filter())
     elseif name == "WRK3-SE" || name == "WRK3-UP"
-        return (; scheme=WickerSkamarock3(), forcing=FinalStageQuadraticForcing(), solver=RungeKutta3(), averaging=F3Filter())
+        return (; scheme=WickerSkamarock3(), forcing=ProgressiveForcing(), solver=RungeKutta3(), averaging=F3Filter())
     elseif name == "SRK3-SE"
         return (; scheme=ShuOsher3(), forcing=SSPForcing(), solver=RungeKutta3(), averaging=F3Filter())
     elseif name == "MRK4-SE"

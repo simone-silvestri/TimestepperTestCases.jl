@@ -28,7 +28,7 @@ Each figure is saved as PDF and PNG, with a CSV containing its numerical values.
 | `averaging-weights` | Averaging and continuity-transport weights, and their centered moments |
 | `coupling_decomposition` | Full-matrix growth compared with direct and indirect eigenvalue corrections and the leading analytical prediction |
 | `damping_balance` | Direct correction, barotropic indirect correction, and total growth for the barotropic solvers and filters |
-| `forcing_stratification` | Dependence of coupling corrections on stratification for frozen, final-stage quadratic, and progressive forcing |
+| `forcing_stratification` | Dependence of coupling corrections on stratification for frozen and progressive forcing |
 | `mrk4_forcing` | MRK4 direct and full-matrix magnitude corrections normalized by θ₁⁴ |
 | `schemes` | Maximum growth over the full spectrum for the six manuscript configurations |
 | `order_schemes` | Global temporal error at fixed final time |
@@ -53,6 +53,6 @@ The returned `indirect` correction includes the two barotropic propagation direc
 
 ## Change an experiment
 
-Edit the parameters in the corresponding block of `time_discretization.jl`, then rerun the computation and rendering commands. Scheme, solver, filter, and forcing choices are concrete Julia objects such as `WickerSkamarock3()`, `RungeKutta3()`, `F3Filter()`, and `FinalStageQuadraticForcing()`. Their definitions and numerical outputs are documented in the [theory API](theory_api.md).
+Edit the parameters in the corresponding block of `time_discretization.jl`, then rerun the computation and rendering commands. Scheme, solver, filter, and forcing choices are concrete Julia objects such as `WickerSkamarock3()`, `RungeKutta3()`, `F3Filter()`, and `ProgressiveForcing()`. Their definitions and numerical outputs are documented in the [theory API](theory_api.md).
 
 To build the complete repository documentation, use the commands in the repository README. `docs/make.jl` executes the full example by default; `--reuse-figures` uses the existing PNG files and fails if a required figure is missing.

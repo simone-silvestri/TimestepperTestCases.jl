@@ -262,7 +262,7 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
     time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = 0.5)
 
     momentum_advection = something(momentum_advection, split_momentum_advection(nothing, time_discretization))
-    tracer_advection   = something(tracer_advection, weno_tracer_advection(7, time_discretization))
+    tracer_advection   = something(tracer_advection, weno_tracer_advection(9, time_discretization))
 
     wind_fluxes = if wind_stress
         τˣ, τʸ = global_ocean_wind_stress(grid; latitudes = wind_stress_latitudes,
@@ -282,7 +282,7 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
 
     additional_surface_fluxes = merge(wind_fluxes, restoring_fluxes)
 
-    ocean = ocean_simulation(grid; free_surface, timestepper, Δt = cold_start_Δt, stop_time = cold_start_duration,
+    ocean = ocean_simulation(grid; free_surface, timestepper = campaign_timestepper(timestepper), Δt = cold_start_Δt, stop_time = cold_start_duration,
                              closure, equation_of_state, momentum_advection, tracer_advection,
                              bottom_drag_coefficient, bottom_drag_background_velocity,
                              additional_surface_fluxes)
@@ -444,15 +444,26 @@ function save_global_ocean_cost(prefix, label; kw...)
     return filename
 end
 
+free_surface_report(fs) = ""
+
+function free_surface_report(fs::ImplicitFreeSurface)
+    solver = fs.implicit_step_solver
+    hasproperty(solver, :preconditioned_conjugate_gradient_solver) || return ""
+    cg = solver.preconditioned_conjugate_gradient_solver
+    preconditioner = isnothing(cg.preconditioner) ? "none" : nameof(typeof(cg.preconditioner))
+    return @sprintf(", CG: %d/%d iters, |r|: %.3e, reltol %.1e, preconditioner %s",
+                    cg.iteration, cg.maxiter, cg.residual_norm(cg.residual), cg.reltol, preconditioner)
+end
+
 function global_ocean_progress(sim)
     ocean = sim
     u, v, w = ocean.model.velocities
     T = ocean.model.tracers.T
     step_time = 1e-9 * (time_ns() - TimestepperTestCases.wall_clock[])
-    @info @sprintf("Iter: %d, time: %s, Δt: %s, max|u|: (%.2e, %.2e, %.2e), extrema(T): (%.2f, %.2f), wall: %s",
+    @info @sprintf("Iter: %d, time: %s, Δt: %s, max|u|: (%.2e, %.2e, %.2e), extrema(T): (%.2f, %.2f), wall: %s%s",
                    iteration(sim), prettytime(sim), prettytime(sim.Δt),
                    maximum(abs, interior(u)), maximum(abs, interior(v)), maximum(abs, interior(w)),
-                   maximum(interior(T)), minimum(interior(T)), prettytime(step_time))
+                   maximum(interior(T)), minimum(interior(T)), prettytime(step_time), free_surface_report(ocean.model.free_surface))
 
     # Julia block-buffers stderr when it is a file, so a batch log only appears when the process exits
     flush(stderr)
@@ -474,7 +485,7 @@ Run the global case with the discretization `d` of Table 1.
 """
 function global_ocean(d::Discretization; arch = CPU(), grid = global_ocean_grid(arch), kw...)
     # only a tracer advection that departs from the shared default is forwarded; every other discretization
-    # keeps the vertically implicit WENO7 of this case
+    # keeps the vertically implicit WENO9 of this case
     return global_ocean(d.timestepper; arch, grid,
                        free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
                        averaging_kernel = d.averaging_kernel,

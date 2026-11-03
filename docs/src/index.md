@@ -31,4 +31,4 @@ julia --project=docs -e 'using Pkg; Pkg.develop([PackageSpec(path=pwd()), Packag
 julia --project=docs docs/make.jl
 ```
 
-The build executes the theory example and writes the site to `docs/build`. Pass `--reuse-figures` to use the existing figure outputs. The documentation workflow produces a downloadable site artifact; publishing is separate.
+The build executes the theory example and writes the site to `docs/build`. Pass `--reuse-figures` to use the existing figure outputs. The documentation workflow produces a downloadable site artifact and publishes successful `main` builds to GitHub Pages.

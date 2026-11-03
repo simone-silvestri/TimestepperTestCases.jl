@@ -80,7 +80,7 @@ Open `docs/build/index.html`. The default build executes the full theory example
 julia --project=docs docs/make.jl --reuse-figures
 ```
 
-The documentation workflow builds the site and uploads a `documentation` artifact. It does not publish the site.
+The documentation workflow builds the site for pull requests and publishes successful `main` builds to GitHub Pages. In the repository settings, select **Pages → Build and deployment → Source → GitHub Actions**. Each build also uploads a downloadable `documentation` artifact.
 
 ## Tests
 

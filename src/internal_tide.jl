@@ -262,7 +262,7 @@ function internal_tide(timestepper::Symbol;
                                         momentum_advection,
                                         tracer_advection,
                                         free_surface,
-                                        timestepper,
+                                        timestepper = campaign_timestepper(timestepper),
                                         forcing = (; u = u_forcing),
                                         auxiliary_fields=(; Δtc², c⁻, Δtb², b⁻))
 

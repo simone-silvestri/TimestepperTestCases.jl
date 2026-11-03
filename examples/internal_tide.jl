@@ -3,7 +3,7 @@
 # This example reads the internal-tide outputs and computes the horizontally averaged numerical diffusivity,
 # its spatial and temporal averages, and differences relative to WRK3-SE. The stored dissipation and squared
 # gradient fields include cell volumes and are interpolated to cell centers before reduction.
-# Pass a local directory as the first command-line argument. Without it, the repository's internal_tide/
+# Pass a local directory as the first command-line argument. Without it, the repository's internal_tide_weno_new/
 # directory is checked before the versioned download location in datasets.toml.
 
 using TimestepperTestCases
@@ -25,7 +25,7 @@ profiles = NamedTuple[]
 
 for variant in variants
     filename = "internal_tide_$(variant.timestepper)_$(variant.label).jld2"
-    data = compact_dataset("internal_tide", filename, prepare_internal_tide; directory)
+    data = compact_dataset("internal_tide_weno_new", filename, prepare_internal_tide; directory)
     t, z = data.t, data.z
     P = data.fields["Abx"] + data.fields["Abz"]
     G = data.fields["Gbz"]

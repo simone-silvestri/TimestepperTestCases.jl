@@ -55,7 +55,7 @@ end
     timestep_ratio(d::Discretization)
 
 The time step of `d` relative to the WRK3 reference: the ratio of the imaginary-axis limits,
-`θ★(scheme)/θ★(WRK3)`, which is 0.29 for AB2 and 1.591 for MRK4. Derived rather than stored, so it cannot
+`θ★(scheme)/θ★(WRK3)`, which is 0.29 for AB2 and 1.609 for MRK4. Derived rather than stored, so it cannot
 disagree with the composition it describes.
 """
 timestep_ratio(d::Discretization) = stability_limit(d.timestepper) / stability_limit(:SplitRungeKutta3)
@@ -105,7 +105,7 @@ function discretizations()
                            barotropic_timestepper = fb, averaging_kernel = sm05),
 
             Discretization("WRK3-SE", :SplitRungeKutta3;
-                           slow_forcing = StageQuadraticSlowForcing()),
+                           slow_forcing = ProgressiveSlowForcing()),
 
             Discretization("SRK3-SE", :SSPRungeKutta3),
 
@@ -113,14 +113,14 @@ function discretizations()
             # destroyed by the coupling resonance over 4.9 < μ₀ < 8.9. Run only at 3Δt/2, exercising the
             # extended stable range of the section-4 analysis.
             Discretization("MRK4-SE", :ModifiedRungeKutta4;
-                           slow_forcing = ProgressiveSlowForcing(ModifiedRungeKutta4TimeStepper())),
+                           slow_forcing = ProgressiveSlowForcing(campaign_timestepper(:ModifiedRungeKutta4))),
 
             Discretization("WRK3-IM", :SplitRungeKutta3;
                            barotropic_timestepper = nothing, averaging_kernel = nothing,
                            implicit_free_surface = true),
 
             Discretization("WRK3-UP", :SplitRungeKutta3;
-                           slow_forcing = StageQuadraticSlowForcing(),
+                           slow_forcing = ProgressiveSlowForcing(),
                            tracer_advection = UpwindBiased(order = 3))]
 end
 

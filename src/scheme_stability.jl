@@ -87,10 +87,12 @@ stability_limit(β::Tuple) = imaginary_axis_limit(β)
 stability_limit(ts::SplitRungeKuttaTimeStepper) = imaginary_axis_limit(ts.β)
 stability_limit(::SSPRungeKuttaTimeStepper) = imaginary_axis_limit((3, 2, 1))  # same polynomial as WRK3
 
+campaign_timestepper(scheme) = scheme === :ModifiedRungeKutta4 ? ModifiedRungeKutta4TimeStepper(a = 0.23) : scheme
+
 function stability_limit(scheme::Symbol)
     scheme === :QuasiAdamsBashforth2 && return quasi_ab2_limit(0.1)
     scheme === :SSPRungeKutta3       && return imaginary_axis_limit((3, 2, 1))
-    scheme === :ModifiedRungeKutta4 && return imaginary_axis_limit(ModifiedRungeKutta4TimeStepper().β)
+    scheme === :ModifiedRungeKutta4 && return stability_limit(campaign_timestepper(scheme))
 
     name = string(scheme)
     startswith(name, "SplitRungeKutta") || throw(ArgumentError("Unknown scheme $scheme."))
@@ -199,7 +201,7 @@ scaled by the ratio of the imaginary-axis limits `θ★(scheme) / θ★(referenc
 
 Anchoring on the reference scheme keeps every scheme on one operating point of one configuration, so that a
 comparison between schemes is a comparison of the compositions and not of two independently chosen time steps.
-The four-stage MRK4 composition earns `2.755/√3 = 1.591` over the three-stage schemes, and the two-level
+The four-stage MRK4 composition earns `θ★/√3 ≈ 1.609` over the three-stage schemes, and the two-level
 scheme gives up `0.502/√3 = 0.29`.
 """
 function baroclinic_timestep(scheme; N², H, Δx, U = nothing, horizontal_dimensions = 2,

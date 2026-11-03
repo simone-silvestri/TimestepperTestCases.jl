@@ -280,7 +280,7 @@ $(SIGNATURES)
 # Keyword Arguments
 - `momentum_advection`: Vector-invariant momentum advection scheme (`nothing`, the default, builds it with
   [`split_momentum_advection`](@ref), reproducing `WENOVectorInvariant()`)
-- `tracer_advection`: Tracer advection scheme (`nothing`, the default, uses `TimestepperTestCases.tracer_advection`)
+- `tracer_advection`: Tracer advection scheme (`nothing`, the default, uses seventh-order WENO with stretched reconstruction in z)
 - `closure`: Turbulence closure (default: `CATKEVerticalDiffusivity`)
 - `zstar`: Whether to use z-star vertical coordinates (default: `true`)
 - `restart_file`: Optional restart file path (default: `nothing`)
@@ -327,7 +327,7 @@ function channel_simulation(; momentum_advection = nothing,
     #####
 
     momentum_advection = something(momentum_advection, split_momentum_advection(nothing, ExplicitTimeDiscretization()))
-    tracer_advection   = something(tracer_advection, TimestepperTestCases.tracer_advection)
+    tracer_advection   = something(tracer_advection, weno_tracer_advection(7, ExplicitTimeDiscretization()))
     testcase           = string(testcase)
 
     #####
@@ -411,7 +411,7 @@ function channel_simulation(; momentum_advection = nothing,
                                         coriolis,
                                         closure,
                                         tracers = :b,
-                                        timestepper,
+                                        timestepper = campaign_timestepper(timestepper),
                                         forcing = (; b = buoyancy_restoring), 
                                         boundary_conditions = (; b = b_bcs, u = u_bcs, v = v_bcs))
 

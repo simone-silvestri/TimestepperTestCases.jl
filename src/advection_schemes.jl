@@ -6,7 +6,7 @@
 #####
 
 # A single `WENO`: an adaptive implicit `time_discretization` acts on the vertical flux alone
-weno_tracer_advection(order, time_discretization) = WENO(; order, time_discretization)
+weno_tracer_advection(order, time_discretization) = WENO(; order, time_discretization, stretched=(:z,))
 
 function split_momentum_advection(order, time_discretization)
 
@@ -15,7 +15,7 @@ function split_momentum_advection(order, time_discretization)
     vorticity_scheme               = WENO(order=vorticity_order)
     divergence_scheme              = WENO(order=remaining_order)
     kinetic_energy_gradient_scheme = WENO(order=remaining_order)
-    vertical_advection_scheme      = WENO(; order = remaining_order, time_discretization)
+    vertical_advection_scheme      = WENO(; order = remaining_order, time_discretization, stretched=(:z,))
 
     return VectorInvariant(; vorticity_scheme,
                              vertical_advection_scheme,

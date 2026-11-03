@@ -159,20 +159,18 @@ function plot_forcing_stratification(panels, rows, output_directory)
                    xticks=[1e-3, 1e-1], limits=((1e-3, 1), (0.7, 1.05))) for column in 1:3]
     for (forcing_index, panel) in enumerate(panels)
         (; forcing, stratifications, measured, predicted) = panel
-        color = ("#0072B2", "#D55E00", "#009E73")[forcing_index]
-        label = ("Frozen", "Final-stage quadratic", "Progressive")[forcing_index]
-        marker = (:circle, :rect, :utriangle)[forcing_index]
+        color = ("#0072B2", "#009E73")[forcing_index]
+        label = ("Frozen", "Progressive")[forcing_index]
+        marker = (:circle, :utriangle)[forcing_index]
         for column in 1:3
             scatterlines!(axes[column], Float64.(stratifications), Float64.(abs.(measured[column])); label, color, marker,
                           markercolor=:white, strokecolor=color, strokewidth=0.8, markersize=3, linewidth=0.9)
-            if forcing in (FrozenForcing(), ProgressiveForcing())
-                exponent = forcing == FrozenForcing() ? 2 : 3
-                guide = reverse(stratifications)[3:5]
-                amplitude = abs(reverse(measured[column])[4]) * 8 / guide[2]^exponent
-                lines!(axes[column], Float64.(guide), Float64.(amplitude .* guide.^exponent); color=:gray, linestyle=:dot)
-                text!(axes[column], Float64(guide[end]), Float64(amplitude * guide[end]^exponent);
-                      text=exponent == 2 ? L"\varepsilon^2" : L"\varepsilon^3", align=(:left, :bottom))
-            end
+            exponent = forcing isa FrozenForcing ? 2 : 3
+            guide = reverse(stratifications)[3:5]
+            amplitude = abs(reverse(measured[column])[4]) * 8 / guide[2]^exponent
+            lines!(axes[column], Float64.(guide), Float64.(amplitude .* guide.^exponent); color=:gray, linestyle=:dot)
+            text!(axes[column], Float64(guide[end]), Float64(amplitude * guide[end]^exponent);
+                  text=exponent == 2 ? L"\varepsilon^2" : L"\varepsilon^3", align=(:left, :bottom))
         end
         if forcing == FrozenForcing()
             for column in 1:3
@@ -199,23 +197,21 @@ function plot_mrk4_forcing(panels, rows, output_directory)
         axis.yticks = [-0.02, 0, 0.02]
         limits!(axis, 0, 10, -0.026, 0.034)
         hlines!(axis, [0]; color=:gray, linewidth=0.6)
-        hlines!(axis, [-1 / 48, 1 / 48]; color=:gray, linestyle=:dot, linewidth=0.8)
-        text!(axis, 0.045, 1 / 48; text=L"+1/48", color=:gray, fontsize=8.5, offset=(0, 3), align=(:center, :bottom))
+        hlines!(axis, [-1 / 48]; color=:gray, linestyle=:dot, linewidth=0.8)
         text!(axis, 0.045, -1 / 48; text=L"-1/48", color=:gray, fontsize=8.5, offset=(0, 3), align=(:center, :bottom))
     end
     hlines!(total_axis, [1 / 300]; color=:gray, linestyle=:dashdot, linewidth=0.8)
     text!(total_axis, 0.01, 1 / 300; text=L"1/300", color=:gray, fontsize=8.5, offset=(0, 3), align=(:left, :bottom))
     phases = panels[1].phases
-    for (index, forcing) in enumerate((FrozenForcing(), FinalStageQuadraticForcing(), ProgressiveForcing()))
-        color = ("#0072B2", "#D55E00", "#009E73")[index]
-        label = ("Frozen", "Final-stage quadratic", "Progressive")[index]
-        (; results, limit) = panels[index]
+    for (index, panel) in enumerate(panels)
+        color = ("#0072B2", "#009E73")[index]
+        label = ("Frozen", "Progressive")[index]
+        (; results, limit) = panel
         lines!(direct_axis, Float64.(phases), Float64.(first.(results)); label, color)
         lines!(total_axis, Float64.(phases), Float64.(last.(results)); label, color)
         label = index == 1 ? L"\Gamma_j^{\mathrm{F}} \simeq %$(round(Float64(limit); digits=5))" :
-                index == 2 ? L"\Gamma_j^{\mathrm{Q}} \simeq %$(round(Float64(limit); digits=5))" :
                              L"\Gamma_j^{\mathrm{P}} \simeq %$(round(Float64(limit) * 1e5; digits=2)) \times 10^{-5}"
-        text!(total_axis, (0.40, 0.34, 0.30)[index], (0.14, 0.69, 0.32)[index]; text=label, color, space=:relative, fontsize=8.5)
+        text!(total_axis, (0.40, 0.30)[index], (0.14, 0.32)[index]; text=label, color, space=:relative, fontsize=8.5)
     end
     predictions, scales = panels[1].predictions, panels[1].scales
     scatter!(direct_axis, Float64.(phases[1:3:end]), Float64.([prediction.direct for prediction in predictions][1:3:end] ./ scales[1:3:end]);

@@ -24,12 +24,12 @@ Suppressor = "fd094767-a336-5f1f-9728-57cf17d0bbfb"
 NumericalEarth = "904d977b-046a-4731-8b86-9235c0d1ef02"
 WorldOceanAtlasTools = "04f20302-f1b9-11e8-29d9-7d841cb0a64a"
 
+[sources]
+Oceananigans = {rev = "4d27d1873cb7d41ed16681da825c341b21fccd61", url = "https://github.com/CliMA/Oceananigans.jl.git"}
+OffsetArrays = {rev = "073659e14abc98add86f0362ec33412ee60abcd6", url = "https://github.com/simone-silvestri/OffsetArrays.jl"}
+
 [extensions]
 TimestepperTestCasesNumericalEarthExt = ["NumericalEarth", "WorldOceanAtlasTools"]
-
-[sources]
-Oceananigans = {url = "https://github.com/CliMA/Oceananigans.jl.git", rev = "ss/sm05-weno-ghost-stencil"}
-OffsetArrays = {url = "https://github.com/simone-silvestri/OffsetArrays.jl", rev = "073659e14abc98add86f0362ec33412ee60abcd6"}
 
 [compat]
 Dates = "1.11.0"
@@ -40,7 +40,7 @@ JLD2 = "0.4, 0.5, 0.6"
 KernelAbstractions = "0.9.38"
 LaTeXStrings = "1.4.0"
 NumericalEarth = "0.8"
-Oceananigans = "0.114, 0.116"
+Oceananigans = "0.117.1"
 OffsetArrays = "1.17, 1.18"
 Printf = "1.10, 1.11"
 Random = "1.10, 1.11"
