@@ -125,7 +125,15 @@ stress at the domain center and zero at the boundaries.
     return - p.τ * sin(π * y / p.Ly)
 end
 
-@inline ϕ²(i, j, k, ϕ) = @inbounds ϕ[i, j, k]^2
+@inline ϕ²(i, j, k, grid, ϕ)    = @inbounds ϕ[i, j, k]^2
+@inline spᶠᶜᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.u[i, j, k]^2 + ℑxyᶠᶜᵃ(i, j, k, grid, ϕ², Φ.v))
+@inline spᶜᶠᶜ(i, j, k, grid, Φ) = @inbounds sqrt(Φ.v[i, j, k]^2 + ℑxyᶜᶠᵃ(i, j, k, grid, ϕ², Φ.u))
+
+@inline u_quadratic_bottom_drag(i, j, grid, clock, Φ, μ) = @inbounds - μ * Φ.u[i, j, 1] * spᶠᶜᶜ(i, j, 1, grid, Φ)
+@inline v_quadratic_bottom_drag(i, j, grid, clock, Φ, μ) = @inbounds - μ * Φ.v[i, j, 1] * spᶜᶠᶜ(i, j, 1, grid, Φ)
+
+@inline u_immersed_bottom_drag(i, j, k, grid, clock, fields, μ) = @inbounds - μ * fields.u[i, j, k] * spᶠᶜᶜ(i, j, k, grid, fields)
+@inline v_immersed_bottom_drag(i, j, k, grid, clock, fields, μ) = @inbounds - μ * fields.v[i, j, k] * spᶜᶠᶜ(i, j, k, grid, fields)
 
 default_bottom_height = (x, y) -> y < 1000kilometers ?  5.600000000000001e-15 * y^3 - 8.4e-9 * y^2 - 200 : -3000.0
 
@@ -364,11 +372,11 @@ function channel_simulation(; momentum_advection = nothing,
 
     # Drag is added as a forcing to allow both bottom drag _and_ a no-slip BC
     u_bottom_bc = FluxBoundaryCondition(u_quadratic_bottom_drag; discrete_form = true, parameters = parameters.μ)
-    v_bottom_bc = FluxBoundaryCondition(u_quadratic_bottom_drag; discrete_form = true, parameters = parameters.μ)
+    v_bottom_bc = FluxBoundaryCondition(v_quadratic_bottom_drag; discrete_form = true, parameters = parameters.μ)
 
     if grid isa ImmersedBoundaryGrid
-        u_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(u_immersed_bottom_drag; discrete_form = true, parameters))
-        v_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(v_immersed_bottom_drag; discrete_form = true, parameters))
+        u_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(u_immersed_bottom_drag; discrete_form = true, parameters = parameters.μ))
+        v_ibcs = ImmersedBoundaryCondition(bottom = FluxBoundaryCondition(v_immersed_bottom_drag; discrete_form = true, parameters = parameters.μ))
         
         u_bcs = FieldBoundaryConditions(bottom = u_bottom_bc, immersed = u_ibcs, top = u_stress_bc)
         v_bcs = FieldBoundaryConditions(bottom = v_bottom_bc, immersed = v_ibcs)
@@ -503,7 +511,7 @@ function channel_simulation(; momentum_advection = nothing,
     ##### Diagnostics
     #####
     
-    ϵ = Oceananigans.Models.VarianceDissipation(:b, grid)
+    ϵ = VarianceDissipation(:b, grid)
     simulation.callbacks[:compute_variance] = Callback(ϵ, IterationInterval(1))
 
     @info "added the tracer variance diagnostic"
