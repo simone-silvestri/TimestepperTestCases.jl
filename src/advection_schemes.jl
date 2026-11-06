@@ -15,14 +15,11 @@ function split_momentum_advection(order, time_discretization)
     # Momentum only: against a wall the stencil steps down through its own family and terminates in
     # first-order upwind, which is what `WENOVectorInvariant` applies and what the earlier campaign ran. The
     # tracer reconstruction keeps its own buffer and is deliberately not changed here.
-    momentum_buffer = Oceananigans.Advection.DecreasingOrderAdvectionScheme(
-                          boundary_scheme = Oceananigans.Advection.UpwindBiased(order = 1))
-
-    vorticity_scheme               = WENO(order=vorticity_order, buffer_scheme=momentum_buffer)
-    divergence_scheme              = WENO(order=remaining_order, buffer_scheme=momentum_buffer)
-    kinetic_energy_gradient_scheme = WENO(order=remaining_order, buffer_scheme=momentum_buffer)
+    vorticity_scheme               = WENO(order=vorticity_order, minimum_buffer_upwind_order=1)
+    divergence_scheme              = WENO(order=remaining_order, minimum_buffer_upwind_order=1)
+    kinetic_energy_gradient_scheme = WENO(order=remaining_order, minimum_buffer_upwind_order=1)
     vertical_advection_scheme      = WENO(; order = remaining_order, time_discretization, stretched=(:z,),
-                                            buffer_scheme=momentum_buffer)
+                                            minimum_buffer_upwind_order=1)
 
     return VectorInvariant(; vorticity_scheme,
                              vertical_advection_scheme,
