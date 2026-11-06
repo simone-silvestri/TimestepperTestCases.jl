@@ -248,7 +248,10 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
                      progress_interval = TimeInterval(5days),
                      surface_output_interval = TimeInterval(1days),
                      dissipation_output_interval = AveragedTimeInterval(30days),
-                     statistics_output_interval = AveragedTimeInterval(7days))
+                     statistics_output_interval = AveragedTimeInterval(7days),
+                     checkpoint_interval = 60days,
+                     pickup = false,
+                     dissipation_start_time = cost_stop_time)
 
     if free_surface === nothing
         # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
@@ -259,7 +262,9 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
                                                 slow_forcing)
     end
     
-    time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = 0.5)
+    # the campaign the finished cases belong to ran at cfl 1; a tighter threshold moves more vertical flux
+    # into the implicit solve, which carries its own diffusivity and is the quantity being measured
+    time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = parse(Float64, get(ENV, "M1_VERTICAL_CFL", "1")))
 
     momentum_advection = something(momentum_advection, split_momentum_advection(nothing, time_discretization))
     tracer_advection   = something(tracer_advection, weno_tracer_advection(9, time_discretization))
@@ -318,15 +323,44 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
                                                     array_type = Array{Float32})
     end
 
+    # Without a checkpointer a job that dies at hour ten of a fourteen hour run leaves nothing to resume from,
+    # and this configuration runs long enough for that to be the common failure. `cleanup` keeps only the
+    # newest, so the chain costs one checkpoint of disk rather than one per interval.
+    if !isnothing(checkpoint_interval)
+        ocean.output_writers[:checkpointer] = Checkpointer(ocean.model;
+                                                           schedule = TimeInterval(checkpoint_interval),
+                                                           prefix = filename * "_checkpoint",
+                                                           overwrite_files = true,
+                                                           cleanup = true)
+    end
+
     add_callback!(ocean, global_ocean_progress, progress_interval)
 
-    cold_wall = @elapsed run!(ocean)
+    # A resumed run restores a state that is already past the cold start and past the segment the cost is
+    # measured over, so both phases are skipped and their timings are not reported: `seconds_per_step` belongs
+    # to the run that measured it, not to this one.
+    if pickup
+        ocean.Δt = Δt
+        cold_wall, production_wall, production_steps = 0.0, 0.0, 0
+    else
+        cold_wall = @elapsed run!(ocean)
 
-    ocean.Δt        = Δt
-    ocean.stop_time = cost_stop_time
-    first_production_iteration = iteration(ocean)
-    production_wall  = @elapsed run!(ocean)
-    production_steps = iteration(ocean) - first_production_iteration
+        ocean.Δt        = Δt
+        ocean.stop_time = cost_stop_time
+        first_production_iteration = iteration(ocean)
+        production_wall  = @elapsed run!(ocean)
+        production_steps = iteration(ocean) - first_production_iteration
+    end
+
+    # The budget's averaging windows are phased from the moment its writer is attached, so the join time is
+    # what puts them on a given grid: joining at day 1095 with a 90-day window closes at 1185, 1275 and so on.
+    if time(ocean) < dissipation_start_time
+        ocean.stop_time = dissipation_start_time
+        @info @sprintf("[global_ocean] %s running to the budget join at day %.0f", label,
+                       dissipation_start_time / 86400)
+        flush(stderr)
+        run!(ocean; pickup)
+    end
 
     # the buoyancy-variance budget runs every iteration, so it joins only after the segment `seconds_per_step`
     # is measured over
@@ -343,7 +377,7 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
         ϵb = BuoyancyVarianceDissipation(grid)
         add_callback!(ocean, ϵb, IterationInterval(1))
 
-        diss = merge(BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb), (; Gbx, Gby, Gbz))
+        diss = merge(TimestepperTestCases.BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb), (; Gbx, Gby, Gbz))
         ocean.output_writers[:dissipation] = JLD2Writer(ocean.model, diss;
                                                         schedule = dissipation_output_interval,
                                                         filename = filename * "_dissipation",
@@ -363,6 +397,8 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
 
     # `run!` takes one step even when the stop time is already reached
     ocean.stop_time = stop_time
+    # `pickup = true` hands the newest checkpoint of this prefix to `run!`, which restores the model and the
+    # clock before stepping; the writers above were built first so the budget is attached from the restart on.
     dissipation_wall = stop_time > cost_stop_time ? @elapsed(run!(ocean)) : 0.0
 
     wall_time  = cold_wall + production_wall + dissipation_wall

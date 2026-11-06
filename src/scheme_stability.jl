@@ -87,7 +87,10 @@ stability_limit(β::Tuple) = imaginary_axis_limit(β)
 stability_limit(ts::SplitRungeKuttaTimeStepper) = imaginary_axis_limit(ts.β)
 stability_limit(::SSPRungeKuttaTimeStepper) = imaginary_axis_limit((3, 2, 1))  # same polynomial as WRK3
 
-campaign_timestepper(scheme) = scheme === :ModifiedRungeKutta4 ? ModifiedRungeKutta4TimeStepper(a = 0.23) : scheme
+# The coefficient is read once here so that the model's stepper, the slow-forcing reconstruction and the
+# stability limit cannot disagree about which composition is running.
+campaign_timestepper(scheme) = scheme === :ModifiedRungeKutta4 ?
+    ModifiedRungeKutta4TimeStepper(a = parse(Float64, get(ENV, "MRK4_A", "0.23"))) : scheme
 
 function stability_limit(scheme::Symbol)
     scheme === :QuasiAdamsBashforth2 && return quasi_ab2_limit(0.1)
