@@ -72,6 +72,21 @@ using Oceananigans.TimeSteppers: SSPRungeKuttaTimeStepper
 prognostic_state(::SSPRungeKuttaTimeStepper) = nothing
 restore_prognostic_state!(restored::SSPRungeKuttaTimeStepper, ::Nothing) = restored
 
+# The channel's spin-up restarts predate the model checkpointing its Coriolis and biogeochemistry state, neither of
+# which the channel has, so an absent entry is restored as `nothing`.
+function restore_prognostic_state!(restored::HydrostaticFreeSurfaceModel, from::NamedTuple{names}) where names
+    :coriolis in names || (from = merge(from, (; coriolis = nothing)))
+    :biogeochemistry in names || (from = merge(from, (; biogeochemistry = nothing)))
+    return invoke(restore_prognostic_state!, Tuple{HydrostaticFreeSurfaceModel, Any}, restored, from)
+end
+
+# They also predate callbacks checkpointing their function, so only the schedule of an old callback is restored.
+function restore_prognostic_state!(restored::Callback, from::NamedTuple{names}) where names
+    :func in names && return invoke(restore_prognostic_state!, Tuple{Callback, Any}, restored, from)
+    restore_prognostic_state!(restored.schedule, from.schedule)
+    return restored
+end
+
 # For all test cases
 const tracer_advection = WENO(order=7)
 
