@@ -278,8 +278,8 @@ end
 # ```
 #
 # The stratification experiment uses μ₀ = 2 and exact, continuously forced barotropic integration. It compares frozen
-# and progressive forcing with the leading analytical prediction. The MRK4 figure compares the
-# direct correction and the full eigenvalue correction, scaled by θ₁⁴, using RK3 substeps and F3 at ε = 0.05.
+# and progressive forcing. Open circles show the frozen-forcing analytical prediction; the lower panels compare the
+# computed frozen correction with this prediction. The dotted guides show ε² and ε³ scaling.
 
 setprecision(256) do
     μ₀ = big"2.0"
@@ -297,7 +297,8 @@ setprecision(256) do
             M  = evolution_matrix(μ₀, modes; forcing, solver, filter)
             Mᵤ = uncoupled_matrix(μ₀, modes; solver, filter)
             result = coupling_corrections(M, Mᵤ, modes)
-            prediction = frozen_predictions(μ₀, modes; solver, filter)
+            prediction = forcing isa FrozenForcing ? frozen_predictions(μ₀, modes; solver, filter) :
+                         (; direct=BigFloat(NaN), indirect=BigFloat(NaN))
             push!(rows, (; forcing, response=response_name, phase=μ₀, stratification=ε,
                           direct=result.direct_magnitude, indirect=result.indirect_magnitude, other=result.other_magnitude,
                           coupling=result.coupling, predicted_direct=prediction.direct, predicted_indirect=prediction.indirect))
@@ -326,38 +327,11 @@ end
 
 # ### MRK4 coupling
 #
-# We normalize the corrections by θ₁⁴ and estimate the small-phase limit from two successively halved phases.
+# We compare frozen and progressive forcing at a=1/4, retaining 24 baroclinic modes. The insets resolve the small-step
+# residual with 192-bit arithmetic. Both this example and the standalone figure use the same experiment.
 
-setprecision(256) do
-    modes = vertical_modes(big"0.05", 2)
-    filter = averaging_filter(F3Filter(); float_type=BigFloat)
-    rows   = NamedTuple[]
-    panels = NamedTuple[]
-    phases = samples == 9 ? exp10.(range(big"-2", big"1"; length=9)) :
-             sort(unique([exp10.(range(big"-2", big"0"; length=18)); range(big"1.2", big"10"; length=45)]))
-    predictions = [frozen_predictions(μ₀, modes; scheme=ModifiedRungeKutta4(), filter) for μ₀ in phases]
-    scales      = (phases .* modes.α[2]).^4
-    for forcing in (FrozenForcing(), ProgressiveForcing())
-        results = map(phases) do μ₀
-            M  = evolution_matrix(μ₀, modes; scheme=ModifiedRungeKutta4(), forcing, solver=RungeKutta3(), filter)
-            Mᵤ = uncoupled_matrix(μ₀, modes; scheme=ModifiedRungeKutta4(), solver=RungeKutta3(), filter)
-            result = coupling_corrections(M, Mᵤ, modes)
-            scale = (μ₀ * modes.α[2])^4
-            push!(rows, (; forcing, phase=μ₀, direct=result.direct_magnitude / scale, indirect=result.indirect_magnitude / scale,
-                          retained=(result.direct_magnitude + result.indirect_magnitude) / scale, net=result.coupling / scale, growth=result.growth / scale))
-            return (result.direct_magnitude / scale, result.coupling / scale)
-        end
-        limits = map((big"0.02", big"0.01")) do μ₀
-            M  = evolution_matrix(μ₀, modes; scheme=ModifiedRungeKutta4(), forcing, filter)
-            Mᵤ = uncoupled_matrix(μ₀, modes; scheme=ModifiedRungeKutta4(), filter)
-            result = coupling_corrections(M, Mᵤ, modes)
-            return result.coupling / (μ₀ * modes.α[2])^4
-        end
-        limit = (4limits[2] - limits[1]) / 3
-        push!(panels, (; phases, results, limit, predictions, scales))
-    end
-    plot_mrk4_forcing(panels, rows, output_directory)
-end
+include("mrk4_forcing_prediction.jl")
+mrk4_forcing_experiment(output_directory; samples)
 
 #md # ![](mrk4_forcing.png)
 

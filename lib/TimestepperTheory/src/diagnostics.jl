@@ -101,7 +101,12 @@ $(TYPEDSIGNATURES)
 
 Evaluate the leading weak-stratification frozen-forcing predictions for WRK3, MRK4, or SRK3, including the exact modal weight χ².
 """
-function frozen_predictions(μ₀, modes; scheme=WickerSkamarock3(), selected_mode=1, solver=RungeKutta3(), filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))))
+function frozen_predictions(μ₀, modes; 
+                            scheme=WickerSkamarock3(), 
+                            selected_mode=1, 
+                            solver=RungeKutta3(), 
+                            filter=averaging_filter(F3Filter(); float_type=typeof(float(μ₀))))
+                            
     W  = barotropic_window(μ₀, solver; filter)
     W½ = barotropic_window(μ₀ / 2, solver; filter)
     δλ, δλ¹, δλ² = frozen_corrections(μ₀, scheme, W, W½)

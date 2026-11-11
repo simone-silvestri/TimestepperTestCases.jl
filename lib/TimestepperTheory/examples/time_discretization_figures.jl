@@ -151,20 +151,29 @@ function plot_damping_balance(panels, rows, output_directory)
 end
 
 function plot_forcing_stratification(panels, rows, output_directory)
-    figure = Figure(size=(518, 191), fontsize=8)
-    axes = [Axis(figure[1, column], xscale=log10, yscale=log10, xlabel=L"\varepsilon",
-                 ylabel=column == 1 ? "Absolute magnitude correction" : "", title=("Direct", "Barotropic indirect", "Combined correction")[column]) for column in 1:3]
-    insets = [Axis(figure[1, column], width=Relative(0.36), height=Relative(0.27), halign=0.95, valign=0.08,
-                   xscale=log10, title="Frozen / prediction", titlesize=6.5, xticklabelsize=6.5, yticklabelsize=6.5,
-                   xticks=[1e-3, 1e-1], limits=((1e-3, 1), (0.7, 1.05))) for column in 1:3]
-    for (forcing_index, panel) in enumerate(panels)
+    figure = Figure(size=(950, 460), fontsize=15)
+    ticks = (10.0 .^ (-6:2:0), [L"10^{-6}", L"10^{-4}", L"10^{-2}", L"1"])
+    axes = [Axis(figure[1, column], xscale=log10, yscale=log10, xticks=ticks, xticksvisible=false, xticklabelsvisible=false,
+                 ylabel=column == 1 ? "Absolute magnitude\ncorrection" : "", title=("Direct", "Barotropic indirect", "Combined correction")[column]) for column in 1:3]
+    ratios = [Axis(figure[2, column], xlabel=column == 2 ? L"\varepsilon" : "", ylabel=column == 1 ? "Computed /\npredicted" : "",
+                   xscale=log10, yticks=WilkinsonTicks(3), xticks=ticks) for column in 1:3]
+    linkyaxes!(axes...)
+    for column in 1:3
+        linkxaxes!(axes[column], ratios[column])
+        xlims!(axes[column], 4e-7, 1)
+        hlines!(ratios[column], [1]; color=:gray, linestyle=:dot)
+    end
+    for (index, panel) in enumerate(panels)
         (; forcing, stratifications, measured, predicted) = panel
-        color = ("#0072B2", "#009E73")[forcing_index]
-        label = ("Frozen", "Progressive")[forcing_index]
-        marker = (:circle, :utriangle)[forcing_index]
+        color = ("#0072B2", "#009E73")[index]
+        label = ("Frozen", "Progressive")[index]
         for column in 1:3
-            scatterlines!(axes[column], Float64.(stratifications), Float64.(abs.(measured[column])); label, color, marker,
-                          markercolor=:white, strokecolor=color, strokewidth=0.8, markersize=3, linewidth=0.9)
+            lines!(axes[column], Float64.(stratifications), Float64.(abs.(measured[column])); label, color, linewidth=1.4)
+            if forcing isa FrozenForcing
+                scatter!(axes[column], Float64.(stratifications), Float64.(abs.(predicted[column])); marker=:circle,
+                         color=:white, strokecolor=color, strokewidth=1.1, markersize=6)
+                lines!(ratios[column], Float64.(stratifications), Float64.(measured[column] ./ predicted[column]); color, linewidth=1.4)
+            end
             exponent = forcing isa FrozenForcing ? 2 : 3
             guide = reverse(stratifications)[3:5]
             amplitude = abs(reverse(measured[column])[4]) * 8 / guide[2]^exponent
@@ -172,53 +181,53 @@ function plot_forcing_stratification(panels, rows, output_directory)
             text!(axes[column], Float64(guide[end]), Float64(amplitude * guide[end]^exponent);
                   text=exponent == 2 ? L"\varepsilon^2" : L"\varepsilon^3", align=(:left, :bottom))
         end
-        if forcing == FrozenForcing()
-            for column in 1:3
-                lines!(axes[column], Float64.(stratifications), Float64.(abs.(predicted[column])); color=:black, linestyle=:dash)
-                scatterlines!(insets[column], Float64.(stratifications), Float64.(measured[column] ./ predicted[column]); color="#0072B2", markercolor=:white, strokecolor="#0072B2", strokewidth=0.6, markersize=3)
-                hlines!(insets[column], [1]; color=:gray, linestyle=:dot)
-            end
-        end
     end
-    lines!(axes[1], [NaN], [NaN]; color=:black, linestyle=:dash, label="Analytical prediction (frozen)")
-    Legend(figure[2, 1:3], axes[1]; orientation=:horizontal, nbanks=2, labelsize=7.5, patchsize=(20, 8), rowgap=2, padding=(4, 4, 4, 4))
+    scatter!(axes[1], [NaN], [NaN]; marker=:circle, color=:white, strokecolor=:black, strokewidth=1.1,
+             markersize=6, label="Frozen prediction")
+    rowgap!(figure.layout, 1, 12)
+    rowsize!(figure.layout, 2, Relative(0.23))
+    Legend(figure[3, 1:3], axes[1]; orientation=:horizontal, labelsize=14, patchsize=(26, 10),
+           rowgap=2, padding=(7, 7, 7, 7))
     return save_results(output_directory, "forcing_stratification", figure, rows)
 end
 
 function plot_mrk4_forcing(panels, rows, output_directory)
-    figure = Figure(size=(518, 230), fontsize=10)
-    direct_axis = Axis(figure; bbox=BBox(62.2, 252.1, 69, 211.6), xlabel=L"\mu_0",
-                       ylabel=L"\mathrm{Re}(\overline{\lambda_j}V_{jj}) / (|\lambda_j|\theta_1^4)", title="Direct", ylabelsize=11)
-    total_axis = Axis(figure; bbox=BBox(320.4, 510.2, 69, 211.6), xlabel=L"\mu_0",
-                      ylabel=L"(|\lambda_j^{\mathrm{full}}|-|\lambda_j|)/\theta_1^4", title="Combined correction", ylabelsize=11)
-    for axis in (direct_axis, total_axis)
-        axis.xscale = Makie.Symlog10(0.1; linscale=10/9)
-        axis.xticks = ([0, 0.1, 1, 5, 10], ["0", "0.1", "1", "5", "10"])
-        axis.yticks = [-0.02, 0, 0.02]
-        limits!(axis, 0, 10, -0.026, 0.034)
-        hlines!(axis, [0]; color=:gray, linewidth=0.6)
-        hlines!(axis, [-1 / 48]; color=:gray, linestyle=:dot, linewidth=0.8)
-        text!(axis, 0.045, -1 / 48; text=L"-1/48", color=:gray, fontsize=8.5, offset=(0, 3), align=(:center, :bottom))
+    figure = Figure(size=(1100, 500), fontsize=17)
+    axes = Axis[]
+    for (column, panel) in enumerate(panels)
+        (; ε, phases, results, prediction_phases, predictions, damping) = panel
+        title = column == 1 ? L"\varepsilon=5\cdot10^{-4},\quad a=1/4" : L"\varepsilon=0.05,\quad a=1/4"
+        axis = Axis(figure[1, column]; title, xlabel=L"\mu_0", xscale=Makie.Symlog10(5; linscale=0.6),
+                    xticks=[0, 2, 5, 10, 20, 30], xgridcolor=(:black, 0.12), ygridcolor=(:black, 0.12))
+        column == 1 && (axis.ylabel = L"\mathrm{Coupling\ correction}\,/\,\theta_1^4")
+        push!(axes, axis)
+        for (index, label, color) in ((1, "Frozen", "#0072B2"), (2, "Progressive", "#009E73"))
+            lines!(axis, Float64.(phases), getindex.(results, index); label, color, linewidth=2)
+        end
+        scatter!(axis, Float64.(prediction_phases), predictions; label="Frozen prediction",
+                 marker=:circle, color=:transparent, strokecolor="#0072B2", strokewidth=1.2, markersize=6)
+        lines!(axis, Float64.(phases), getindex.(results, 3); color=:black, linestyle=:dash, linewidth=2, label="Damping (a = 1/4)")
+        for (index, color, linestyle, label) in ((1, :black, :dot, "Damping (a = 0)"), (2, :darkorange3, :dashdot, "Damping (a = 0.23)"))
+            lines!(axis, Float64.(phases), Float64.(damping[index]); color, linestyle, label, linewidth=2)
+        end
+        xlims!(axis, 0, 30)
+
+        inset = Axis(figure[1, column], width=Relative(0.29), height=Relative(0.23), halign=0.16, valign=0.72,
+                     title="Small-step limit", titlesize=12, xlabel=L"\mu_0", xlabelsize=12, xticklabelsize=11, yticklabelsize=11,
+                     xticks=[0, 0.5, 1], backgroundcolor=:white, xgridcolor=(:black, 0.08), ygridcolor=(:black, 0.08))
+        translate!(inset.blockscene, 0, 0, 100)
+        selected = findall(<=(1), phases)
+        lines!(inset, Float64.(phases[selected]), getindex.(results[selected], 2); color="#009E73", linewidth=1.5)
+        lines!(inset, Float64.(phases[selected]), getindex.(results[selected], 3); color=:black, linestyle=:dash, linewidth=1.2)
+        hlines!(inset, [0]; color=(:gray, 0.5), linewidth=0.6)
+        xlims!(inset, -0.05, 1.05)
+        ylims!(inset, column == 1 ? (-7e-5, 1.5e-5) : (-1.5e-5, 1e-4))
+        inset.yticks = column == 1 ? ([-6e-5, -3e-5, 0], [L"-6\cdot10^{-5}", L"-3\cdot10^{-5}", L"0"]) :
+                                    ([0, 4e-5, 8e-5], [L"0", L"4\cdot10^{-5}", L"8\cdot10^{-5}"])
     end
-    hlines!(total_axis, [1 / 300]; color=:gray, linestyle=:dashdot, linewidth=0.8)
-    text!(total_axis, 0.01, 1 / 300; text=L"1/300", color=:gray, fontsize=8.5, offset=(0, 3), align=(:left, :bottom))
-    phases = panels[1].phases
-    for (index, panel) in enumerate(panels)
-        color = ("#0072B2", "#009E73")[index]
-        label = ("Frozen", "Progressive")[index]
-        (; results, limit) = panel
-        lines!(direct_axis, Float64.(phases), Float64.(first.(results)); label, color)
-        lines!(total_axis, Float64.(phases), Float64.(last.(results)); label, color)
-        label = index == 1 ? L"\Gamma_j^{\mathrm{F}} \simeq %$(round(Float64(limit); digits=5))" :
-                             L"\Gamma_j^{\mathrm{P}} \simeq %$(round(Float64(limit) * 1e5; digits=2)) \times 10^{-5}"
-        text!(total_axis, (0.40, 0.30)[index], (0.14, 0.32)[index]; text=label, color, space=:relative, fontsize=8.5)
-    end
-    predictions, scales = panels[1].predictions, panels[1].scales
-    scatter!(direct_axis, Float64.(phases[1:3:end]), Float64.([prediction.direct for prediction in predictions][1:3:end] ./ scales[1:3:end]);
-             color=:white, strokecolor="#0072B2", strokewidth=0.8, markersize=3.5, label="Frozen prediction")
-    scatter!(total_axis, Float64.(phases[1:3:end]), Float64.([prediction.total for prediction in predictions][1:3:end] ./ scales[1:3:end]);
-             color=:white, strokecolor="#0072B2", strokewidth=0.8, markersize=3.5)
-    Legend(figure, direct_axis; bbox=BBox(60, 458, 3, 41), orientation=:horizontal, nbanks=2, labelsize=9, rowgap=2, colgap=15, patchsize=(20, 10), padding=(4, 4, 4, 4))
+    linkyaxes!(axes...)
+    Legend(figure[2, 1:2], axes[1]; orientation=:horizontal, nbanks=2, labelsize=14,
+           rowgap=3, colgap=16, patchsize=(28, 10), padding=(8, 8, 5, 5))
     return save_results(output_directory, "mrk4_forcing", figure, rows)
 end
 
@@ -244,7 +253,7 @@ function plot_schemes(panels, rows, output_directory)
         vlines!(axis, thresholds; color=:gray, linestyle=:dot)
         row == 2 && column == 2 && Legend(figure[3, 1:2], axis; nbanks=2, orientation=:horizontal, labelsize=9, patchsize=(25, 10), rowgap=5, colgap=18, padding=(8, 8, 6, 6))
     end
-    rowgap!(figure.layout, 1, 22)
+    rowgap!(figure.layout, 1, 6)
     rowgap!(figure.layout, 2, 14)
     colgap!(figure.layout, 12)
     return save_results(output_directory, "schemes", figure, rows)

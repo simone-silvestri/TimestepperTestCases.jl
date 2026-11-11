@@ -37,3 +37,5 @@ implementation-plan*.md
 /examples/Manifest.toml
 Manifest.toml
 Manifest-v*.toml
+!/run_env/Manifest.toml
+!/docs/figures/*.png

@@ -12,7 +12,7 @@ include("compact_data.jl") #src
 include("plotting.jl") #src
 
 directory = isempty(ARGS) ? nothing : first(ARGS)
-labels = ("AB2-SE", "WRK3-SE", "MRK4-SE", "WRK3-UP")
+labels = ("AB2-SE", "WRK3-SE-SM05", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM", "WRK3-UP")
 profiles = NamedTuple[]
 sections = NamedTuple[]
 
@@ -21,6 +21,7 @@ sections = NamedTuple[]
 
 for label in labels
     data = compact_dataset("channel_simulation", "averages_$label.jld2", prepare_channel; directory)
+    @info "Channel averaging window" case=label final_year=data.time / (360 * 86400)
     Pₕ = data.fields["Abx"] + data.fields["Aby"]
     Pz = data.fields["Abz"]
     Gₕ = data.fields["Gbx"] + data.fields["Gby"]
@@ -34,7 +35,7 @@ end
 
 # The section differences retain the sign of the variance tendency and use WRK3-SE as the reference.
 reference = only(filter(section -> section.label == "WRK3-SE", sections))
-differences = [(; section..., ΔPₕ=section.Pₕ - reference.Pₕ, ΔPz=section.Pz - reference.Pz) for section in sections if section.label != reference.label]
+differences = [(; section..., ΔPₕ=section.Pₕ - reference.Pₕ, ΔPz=section.Pz - reference.Pz) for section in sections if section.label in ("AB2-SE", "MRK4-SE", "WRK3-UP")]
 
 plot_channel(profiles, reference, differences) #src
 # ![Channel numerical diffusivity](channel_diffusivity.png)

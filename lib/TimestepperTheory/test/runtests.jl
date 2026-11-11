@@ -174,3 +174,28 @@ end
         end
     end
 end
+@testset "Explicit progressive transfers" begin
+    setprecision(256) do
+        for scheme in (WickerSkamarock3(), ModifiedRungeKutta4(a=23//100), ModifiedRungeKutta4(a=1//4)),
+            μ₀ in BigFloat.((2, 6)), propagation in (-1, 1),
+            (solver, averaging, sampling) in ((ExactSolver(), NoFilter(), ContinuousSampling()),
+                                             (RungeKutta3(), F3Filter(), MidpointSampling()))
+            filter = averaging_filter(averaging; float_type=BigFloat)
+            errors = map((big"0.0001", big"0.00001")) do ε
+                modes = vertical_modes(ε, 4)
+                M = evolution_matrix(μ₀, modes; scheme, solver, filter, forcing=ProgressiveForcing(; sampling))
+                Mᵤ = uncoupled_matrix(μ₀, modes; scheme, solver, filter)
+                result = coupling_corrections(M, Mᵤ, modes; propagation)
+                prediction = progressive_predictions(μ₀, modes; scheme, solver, filter, sampling, propagation)
+                return max(abs(prediction.direct - result.direct_magnitude),
+                           abs(prediction.indirect - result.indirect_magnitude)) / ε^3
+            end
+            @test errors[2] < errors[1] / 5
+        end
+        modes = vertical_modes(big"0.01", 4)
+        wrk3 = progressive_predictions(big"2.0", modes; scheme=WickerSkamarock3())
+        mrk4 = progressive_predictions(big"2.0", modes; scheme=ModifiedRungeKutta4(a=0))
+        @test wrk3.direct ≈ mrk4.direct
+        @test wrk3.indirect ≈ mrk4.indirect
+    end
+end

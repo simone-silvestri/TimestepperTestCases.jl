@@ -1,7 +1,7 @@
 module TimestepperTheory
 
 export vertical_modes, averaging_filter, barotropic_response, stage_matrices, evolution_matrix,
-       exact_evolution, uncoupled_matrix, coupling_corrections, frozen_predictions, global_error,
+       exact_evolution, uncoupled_matrix, coupling_corrections, frozen_predictions, progressive_predictions, global_error,
        scheme_configuration, stability_polynomial, amplification_factor
 
 export NoFilter, F1Filter, F2Filter, F3Filter,
@@ -21,5 +21,6 @@ include("barotropic_response.jl")
 include("stage_matrices.jl")
 include("amplification_factors.jl")
 include("diagnostics.jl")
+include("progressive_predictions.jl")
 
 end

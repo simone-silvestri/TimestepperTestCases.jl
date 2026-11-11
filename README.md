@@ -22,6 +22,7 @@ TimestepperTestCases.jl/
 │   ├── internal_tide.jl         # Internal-tide diagnostics
 │   ├── channel.jl               # Channel diagnostics
 │   ├── global_ocean.jl          # Global throughput comparison
+│   ├── global_ocean_results.jl  # Global kinetic energy, tracers, spectra, and diffusivity
 │   └── datasets.toml            # Dataset download locations and checksums
 ├── docs/                        # Documenter sources and build script
 └── test/                        # Simulation-package tests
@@ -61,9 +62,10 @@ julia --project=examples -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()
 julia --project=examples examples/internal_tide.jl /path/to/internal_tide
 julia --project=examples examples/channel.jl /path/to/channel_simulation
 julia --project=examples examples/global_ocean.jl /path/to/global_ocean
+julia --project=examples examples/global_ocean_results.jl /path/to/global_ocean
 ```
 
-Without a directory argument, each example looks in the corresponding case directory in this checkout. Internal-tide and channel outputs are reduced to compact plain-array JLD2 files for publication. Dataset URLs and checksums in `examples/datasets.toml` are placeholders pending upload. See the [data guide](docs/src/data_examples.md) for the covered diagnostics, compact formats, and publication steps. Locally retained notebooks are ignored and excluded from the published tree.
+Without a directory argument, each example looks in the corresponding case directory in this checkout. Internal-tide, channel, and global outputs are reduced to compact plain-array JLD2 files for publication. Dataset URLs and checksums in `examples/datasets.toml` are placeholders pending upload. See the [data guide](docs/src/data_examples.md) for the covered diagnostics, compact formats, and publication steps. Locally retained notebooks are ignored and excluded from the published tree.
 
 ## Documentation
 

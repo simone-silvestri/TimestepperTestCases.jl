@@ -21,16 +21,20 @@ for image in eachmatch(r"!\[.*?\]\(([^)]+)\)", read(page, String))
     cp(joinpath(results, image.captures[1]), joinpath(generated, image.captures[1]); force=true)
 end
 
-for name in ("internal_tide", "channel", "global_ocean")
+figure_directories = (joinpath(@__DIR__, "..", "examples", "output"),
+                      joinpath(@__DIR__, "..", "internal_tide", "figures"), joinpath(@__DIR__, "figures"))
+
+for name in ("internal_tide", "internal_tide_figures", "channel", "global_ocean", "global_ocean_results", "global_surface_averages")
     source = joinpath(@__DIR__, "..", "examples", name * ".jl")
     local page = Literate.markdown(source, generated; execute=false, flavor=Literate.CommonMarkFlavor(), credit=false)
     content = read(page, String)
     for image in eachmatch(r"!\[.*?\]\(([^)]+)\)", content)
-        path = joinpath(@__DIR__, "..", "examples", "output", image.captures[1])
-        if isfile(path)
-            cp(path, joinpath(generated, image.captures[1]); force=true)
-        else
+        paths = [joinpath(directory, image.captures[1]) for directory in figure_directories]
+        found = findfirst(isfile, paths)
+        if isnothing(found)
             content = replace(content, image.match => "Run this example with local or published data to generate the figure.")
+        else
+            cp(paths[found], joinpath(generated, image.captures[1]); force=true)
         end
     end
     write(page, content)
@@ -56,8 +60,11 @@ pages = [
     "Data-driven examples" => [
         "Data and execution" => "data_examples.md",
         "Internal tide" => "generated/internal_tide.md",
+        "Internal tide: campaign figures" => "generated/internal_tide_figures.md",
         "Channel" => "generated/channel.md",
         "Global cost" => "generated/global_ocean.md",
+        "Global diffusivity" => "generated/global_ocean_results.md",
+        "Global surface averages" => "generated/global_surface_averages.md",
     ],
     "API Reference" => "api_reference.md",
 ]
