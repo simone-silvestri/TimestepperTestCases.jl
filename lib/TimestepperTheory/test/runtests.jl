@@ -110,7 +110,7 @@ end
             errors = BigFloat[]
             for stratification in (big"0.0001", big"0.000025")
                 modes = vertical_modes(stratification, 4)
-                forcing = scheme == ShuOsher3() ? SSPForcing() : FrozenForcing()
+                forcing = FrozenForcing()
                 matrix = evolution_matrix(big"0.7", modes; scheme, forcing, solver=ExactSolver(), filter)
                 reference = uncoupled_matrix(big"0.7", modes; scheme, solver=ExactSolver(), filter)
                 result = coupling_corrections(matrix, reference, modes)
@@ -199,3 +199,5 @@ end
         @test wrk3.indirect ≈ mrk4.indirect
     end
 end
+
+include("rotation.jl")

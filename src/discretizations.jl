@@ -19,7 +19,7 @@ it, plus the tracer advection scheme.
 
 Fields
 ======
-- `label`: the case name, used for output filenames and for the labels in the Results notebooks
+- `label`: the case name, used for output filenames and for the labels in the figures
 - `timestepper`: the baroclinic composition, as the symbol `HydrostaticFreeSurfaceModel` takes
 - `barotropic_timestepper`: the substep integrator, or `nothing` for an implicit free surface
 - `averaging_kernel`: the barotropic averaging filter, or `nothing` for an implicit free surface
@@ -78,22 +78,13 @@ Base.show(io::IO, d::Discretization) = print(io, summary(d))
 """
     discretizations()
 
-The cases of Table 1, plus the SM05 reference and the four-stage composition of section 4.
-
-Every split-explicit case but `WRK3-SE-SM05` shares the same barotropic treatment — the three-stage substep
-with the μ₂ = μ₃ = 0 optimized kernel — so that differences between them are differences between the outer
-compositions. `WRK3-SE-SM05` then holds the outer composition fixed and swaps the barotropic treatment for the
-one most split-explicit ocean models use: the forward-backward substep with the Shchepetkin & McWilliams
-(2005) filter, which is dissipative (μ₂ = +4.8e-2 against ~1e-17 for the optimized kernel). Between them the
-two directions of the comparison are separated.
-
-`WRK3-UP` differs from `WRK3-SE` only in tracer advection, which is what isolates the mixing due to the time
-discretization from that due to the spatial one.
+Return the seven campaign configurations. AB2-SE and WRK3-SE-SM05 use forward-backward substeps with the
+Shchepetkin–McWilliams filter. WRK3-SE, SRK3-SE, MRK4-SE, and WRK3-UP use RK3 substeps with the optimized
+averaging filter; WRK3-IM uses an implicit free surface. WRK3-SE, MRK4-SE, and WRK3-UP reconstruct the slow
+forcing progressively. WRK3-UP uses third-order upwind tracer advection.
 """
 function discretizations()
     fb      = ForwardBackwardScheme()
-    rk3     = RungeKutta3Scheme()
-    optasym = OptimizedAsymmetricAveragingKernel()
     sm05    = averaging_shape_function
 
     # Ordered as the ladder of Table 3, which changes one ingredient at a time: the AB2 incumbent, then the
@@ -109,9 +100,6 @@ function discretizations()
 
             Discretization("SRK3-SE", :SSPRungeKutta3),
 
-            # The four-stage composition needs the progressive reconstruction: with the forcing frozen it is
-            # destroyed by the coupling resonance over 4.9 < μ₀ < 8.9. Run only at 3Δt/2, exercising the
-            # extended stable range of the section-4 analysis.
             Discretization("MRK4-SE", :ModifiedRungeKutta4;
                            slow_forcing = ProgressiveSlowForcing(campaign_timestepper(:ModifiedRungeKutta4))),
 
@@ -130,9 +118,10 @@ end
 The [`Discretization`](@ref) of `discretizations()` with the given label.
 """
 function discretization(label)
-    i = findfirst(d -> d.label == label, discretizations())
-    isnothing(i) && throw(ArgumentError("No discretization labelled $label. Available: " * string([d.label for d in discretizations()])))
-    return discretizations()[i]
+    cases = discretizations()
+    index = findfirst(d -> d.label == label, cases)
+    isnothing(index) && throw(ArgumentError("Unknown discretization $label."))
+    return cases[index]
 end
 
 """

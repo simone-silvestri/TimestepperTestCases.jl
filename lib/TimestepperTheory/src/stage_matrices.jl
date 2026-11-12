@@ -58,7 +58,6 @@ function stage_matrices(solver::Union{ForwardBackward, RungeKutta3, ExactSolver}
     O  = zeros(Complex{T}, N, N)
     M₀ = Matrix{Complex{T}}(I, 2N, 2N)
     
-    # Modal weights
     χ,  ψ,  Π  = modes.χ, modes.ψ, modes.Π
     χᵀ, ψᵀ, Πᵀ = transpose(χ), transpose(ψ), transpose(Π)
     𝒫 = I - χ * χᵀ
@@ -73,22 +72,18 @@ function stage_matrices(solver::Union{ForwardBackward, RungeKutta3, ExactSolver}
         μₘ = γ[m] * μ₀
         W, W̃, ūₚ, ūₚ⁺ = barotropic_response(μₘ; solver, filter, sampling=forcing_sampling(forcing))
         
-        # Stage A matrix
         Aₘ = [𝒫 + W[1, 1] * χ * χᵀ             W[1, 2] * χ * ψᵀ;
               -im * μₘ * W̃[1] * D * χ * χᵀ     I - im * μₘ * W̃[2] * D * χ * ψᵀ]
 
-        # Stage B matrix
         Bₘ = [O                    -im * μₘ * 𝒫 + W[1, 2] * χ * Πᵀ;
               -im * μₘ * D * 𝒫     -im * μₘ * W̃[2] * D * χ * Πᵀ]
 
-        # Possibly add the forcing reconstruction or blend the stage
         Aₘ, Bₘ = reconstruct_forcing(forcing, m, γ, M; Aₘ, Bₘ, μₘ, χ, D, 𝒫, Πᵀ, W, W̃, ūₚ, ūₚ⁺)
         Aₘ, Bₘ = blend_stage(scheme, m, Aₘ, Bₘ)
 
         push!(A, Aₘ)
         push!(B, Bₘ)
 
-        # The final stage matric
         Mₘ = Aₘ + Bₘ * M[end]
         push!(M, Mₘ)
     end

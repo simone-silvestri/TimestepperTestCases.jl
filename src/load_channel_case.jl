@@ -27,8 +27,7 @@ This function loads channel simulation snapshots and computes kinetic energy, me
 energy, and potential energy diagnostics for equilibrated channel flow analysis.
 """
 function load_channel(folder, case_number; arch = CPU())
-    path = folder * "snapshots_$(case_number).jld2"
-    @show path
+    path = joinpath(folder, "snapshots_$(case_number).jld2")
     case = Dict()
 
     case[:u] = FieldTimeSeries(path, "u"; architecture=arch, backend=OnDisk())
@@ -63,14 +62,8 @@ function load_channel(folder, case_number; arch = CPU())
     GC.gc()
 
     @info "Computing Kinetic Energy"
-    case[:KE]  = [sum(KineticEnergy(case, 1)) / sum(case[:VCCC][1])]
-    case[:MKE] = [sum(MeanKineticEnergy(case, 1)) / sum(mean(case[:VCCC][1], dims=1))]
-
-    for t in 2:Nt
-        @info "computing index $t"
-        push!(case[:KE] , KineticEnergy(case, t))
-        push!(case[:MKE], MeanKineticEnergy(case, t))
-    end
+    case[:KE]  = [KineticEnergy(case, t) for t in 1:Nt]
+    case[:MKE] = [MeanKineticEnergy(case, t) for t in 1:Nt]
     
     case[:η2]  = [mean(case[:η][i]^2) for i in 1:Nt]
     GC.gc()
