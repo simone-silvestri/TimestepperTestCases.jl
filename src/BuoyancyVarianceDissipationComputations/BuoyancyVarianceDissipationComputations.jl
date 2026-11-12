@@ -101,8 +101,8 @@ function BuoyancyVarianceDissipation(grid;
                                      Uⁿ⁻¹ = VelocityFields(grid),
                                      Uⁿ   = VelocityFields(grid))
 
-    P    = c_grid_vector(grid)
-    Fⁿ   = c_grid_vector(grid)
+    P  = c_grid_vector(grid)
+    Fⁿ = c_grid_vector(grid)
     Fⁿ⁻¹ = c_grid_vector(grid)
     cⁿ⁻¹ = CenterField(grid)
     Tᵐ⁻¹ = CenterField(grid)
@@ -162,7 +162,7 @@ import Oceananigans.Simulations: Callback, validate_schedule
 # Also, the `VarianceDissipation` object needs to be called on `UpdateStateStepCallsite` to be correct.
 function Callback(func::BuoyancyVarianceDissipation, schedule=IterationInterval(1);
                   parameters = nothing,
-                  callsite = UpdateStateCallsite())
+                  callsite   = UpdateStateCallsite())
 
     if !(callsite isa UpdateStateCallsite)
         @warn "BuoyancyVarianceDissipation callback must be called on UpdateStateCallsite. Changing `callsite` to `UpdateStateCallsite()`."

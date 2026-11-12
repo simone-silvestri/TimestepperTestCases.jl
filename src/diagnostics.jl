@@ -48,8 +48,8 @@ function compute_rpe_density(case::Dict)
 
     for t in 1:length(case[:b])
         @info "time $t of $(length(case[:b]))"
-        energies = compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t])
-        volume = on_architecture(CPU(), case[:VCCC][t])
+        energies     = compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t])
+        volume       = on_architecture(CPU(), case[:VCCC][t])
         total_volume = sum(volume)
         push!(rpe, sum(energies.εe * volume) / total_volume)
         push!(ape, sum(energies.αe * volume) / total_volume)
@@ -81,8 +81,8 @@ function compute_rpe_density_two(case::Dict)
 
     for t in 1:length(case[:b])
         @info "time $t of $(length(case[:b]))"
-        energies = compute_rpe_density(case[:b][t], case[:VCCC][t])
-        volume = on_architecture(CPU(), case[:VCCC][t])
+        energies     = compute_rpe_density(case[:b][t], case[:VCCC][t])
+        volume       = on_architecture(CPU(), case[:VCCC][t])
         total_volume = sum(volume)
         push!(rpe, sum(energies.εe * volume) / total_volume)
         push!(ape, sum(energies.αe * volume) / total_volume)
@@ -112,12 +112,12 @@ volume distribution. RPE density is `ρ * z★` and APE density is `ρ * (z - z�
 computed from buoyancy using the linear equation of state.
 """
 function compute_rpe_density(b::Field, vol)
-    bcpu = on_architecture(CPU(), b)
+    bcpu   = on_architecture(CPU(), b)
     volcpu = on_architecture(CPU(), vol)
-    ze = calculate_z★_diagnostics(bcpu, volcpu)
-    εe = CenterField(bcpu.grid) 
-    αe = CenterField(bcpu.grid) 
-    zh = HeightField(ze.grid)
+    ze     = calculate_z★_diagnostics(bcpu, volcpu)
+    εe     = CenterField(bcpu.grid)
+    αe     = CenterField(bcpu.grid)
+    zh     = HeightField(ze.grid)
 
     ρ = DensityOperation(bcpu)
     set!(εe, ze * ρ)
@@ -198,7 +198,7 @@ function calculate_z★!(z★::Field, b::Field, vol)
     # gives every member of a block of equal buoyancy the volume of the whole block, which biases z★ high and
     # makes the reference potential energy fall as the ties break up
     sorted_volume = v_arr[cells][perm]
-    midpoint = cumsum(sorted_volume) .- sorted_volume ./ 2
+    midpoint      = cumsum(sorted_volume) .- sorted_volume ./ 2
 
     sorted = zeros(eltype(z★), length(b_arr))
     sorted[cells[perm]] .= sorted_height.(Ref(volume_below), Ref(zf), midpoint)
@@ -250,8 +250,8 @@ end
          
     z_local  = znode(Center(), k, grid) + grid.Lz
     z★_local = z★[i, j, k] 
-    Δz       = - (z_local - z★_local) / Nint
-    zrange   = z_local:Δz:z★_local
+    Δz     = - (z_local - z★_local) / Nint
+    zrange = z_local:Δz:z★_local
 
     for z in zrange
         Γ²[i, j, k] += Δz * linear_interpolate(z★_arr, ρ_arr, z)

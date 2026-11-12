@@ -127,9 +127,9 @@ advective dissipation rates and `Gz` is the vertical gradient squared. This prov
 local measure of numerical mixing, as described in the paper.
 """
 function Diffusivity(case, t, var) 
-    Ax = case[Symbol(:A, var, :x)][t]
-    Az = case[Symbol(:A, var, :z)][t]
-    Gz = case[Symbol(:G, var, :z)][t]
+    Ax   = case[Symbol(:A, var, :x)][t]
+    Az   = case[Symbol(:A, var, :z)][t]
+    Gz   = case[Symbol(:G, var, :z)][t]
     grid = case[:u].grid
     return KernelFunctionOperation{Center, Center, Center}(_diffusivity, grid, Ax, Az, Gz)
 end

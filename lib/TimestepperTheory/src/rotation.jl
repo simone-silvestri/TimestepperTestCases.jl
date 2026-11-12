@@ -14,7 +14,7 @@ rotation_reconstruction(m, c, ::Union{ProgressivePressure, ProgressiveRotation})
 
 function rotation_outputs(μ, c, filter)
     W, U = forced_response(c * μ, RungeKutta3(), filter, MidpointSampling())
-    J = zeros(3)
+    J  = zeros(3)
     Jˢ = zeros(3)
     for (s, w) in enumerate(filter.w)
         τ = (s - 1/2) * filter.Δτ
@@ -43,10 +43,10 @@ function rotating_evolution_matrix(μ, ρ, modes, coupling; scheme=WickerSkamaro
     M = [E]
     for m in eachindex(c)
         W, B, J = isnothing(outputs) ? rotation_outputs(μ, c[m], filter) : outputs[m]
-        C = rotation_reconstruction(m, c, coupling)
+        C  = rotation_reconstruction(m, c, coupling)
         Cᶠ = coupling isa ProgressivePressure ? rotation_reconstruction(m, c, FrozenRotation()) : C
-        F = zeros(ComplexF64, 3, 3N)
-        G = zero(F)
+        F  = zeros(ComplexF64, 3, 3N)
+        G  = zero(F)
         for j in 1:m
             F += C[:, j] * transpose(Π) * H * M[j]
             F += im * ρ / μ * Cᶠ[:, j] * transpose(χ) * V * M[j]

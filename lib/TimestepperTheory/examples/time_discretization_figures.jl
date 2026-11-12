@@ -19,12 +19,12 @@ function save_results(directory, name, figure, rows)
 end
 
 function plot_amplification_factor(panels, rows, output_directory)
-    figure = Figure(size=(650, 260), fontsize=11)
+    figure    = Figure(size=(650, 260), fontsize=11)
     transform = ReversibleScale(value -> sign(value) * log10(1 + abs(value) / 1e-10),
                                 value -> sign(value) * 1e-10 * (10^abs(value) - 1))
-    ticks = [-1e-1, -1e-4, -1e-7, 0, 1e-7, 1e-4, 1e-1]
+    ticks  = [-1e-1, -1e-4, -1e-7, 0, 1e-7, 1e-4, 1e-1]
     labels = [L"-10^{-1}", L"-10^{-4}", L"-10^{-7}", L"0", L"10^{-7}", L"10^{-4}", L"10^{-1}"]
-    axis = Axis(figure[1, 1], xlabel=L"\theta", ylabel=L"|\lambda|-1", yscale=transform,
+    axis   = Axis(figure[1, 1], xlabel=L"\theta", ylabel=L"|\lambda|-1", yscale=transform,
                 xticks=0:0.5:3, yticks=(ticks, labels), xgridcolor=(:black, 0.1), ygridcolor=(:black, 0.1))
     for (index, panel) in enumerate(panels)
         phases, growth = panel.phases, panel.growth
@@ -40,8 +40,8 @@ function plot_amplification_factor(panels, rows, output_directory)
 end
 
 function plot_barotropic_filter_damping(panels, rows, output_directory)
-    figure = Figure(size=(600, 270), fontsize=10)
-    phases = panels[1].phases
+    figure          = Figure(size=(600, 270), fontsize=10)
+    phases          = panels[1].phases
     implicit_growth = panels[end].growth
     for (column, solver) in enumerate((ExactSolver(), ForwardBackward(), RungeKutta3()))
         axis = Axis(figure[1, column], title=("(a) Exact", "(b) FB", "(c) RK3")[column], xlabel=L"\mu_m",
@@ -83,9 +83,9 @@ function plot_averaging_weights(panels, rows, output_directory)
             if abs(moment) < 1e-12
                 label = L"M_{%$order}=0"
             else
-                exponent = floor(Int, log10(abs(moment)))
+                exponent    = floor(Int, log10(abs(moment)))
                 coefficient = round(moment / 10.0^exponent; digits=2)
-                label = L"M_{%$order}=%$coefficient\cdot10^{%$exponent}"
+                label       = L"M_{%$order}=%$coefficient\cdot10^{%$exponent}"
             end
             text!(lower, 0.97, 0.94 - 0.19 * (order - 2); text=label, space=:relative, align=(:right, :top), fontsize=9)
         end
@@ -122,8 +122,8 @@ function plot_damping_balance(panels, rows, output_directory)
                           (ForwardBackward(), F3Filter()), (ForwardBackward(), F1Filter()))
         for (index, (solver, averaging)) in enumerate(configurations)
             (; phases, measured, predicted) = panels[5(column - 1) + index]
-            color = ("#666666", "#AA4499", "#0072B2", "#D55E00", "#009E73")[index]
-            label = ("Exact, unfiltered", "Exact + F3", "RK3 + F3", "FB + F3", "FB + F1")[index]
+            color     = ("#666666", "#AA4499", "#0072B2", "#D55E00", "#009E73")[index]
+            label     = ("Exact, unfiltered", "Exact + F3", "RK3 + F3", "FB + F3", "FB + F1")[index]
             linestyle = (:solid, :dash, :solid, :dash, :dashdot)[index]
             for row in 1:3
                 lines!(axes[row], Float64.(phases), Float64.(measured[row]); label, color=(color, 0.72), linestyle, linewidth=1.1)
@@ -154,8 +154,8 @@ end
 
 function plot_forcing_stratification(panels, rows, output_directory)
     figure = Figure(size=(950, 460), fontsize=15)
-    ticks = (10.0 .^ (-6:2:0), [L"10^{-6}", L"10^{-4}", L"10^{-2}", L"1"])
-    axes = [Axis(figure[1, column], xscale=log10, yscale=log10, xticks=ticks, xticksvisible=false, xticklabelsvisible=false,
+    ticks  = (10.0 .^ (-6:2:0), [L"10^{-6}", L"10^{-4}", L"10^{-2}", L"1"])
+    axes   = [Axis(figure[1, column], xscale=log10, yscale=log10, xticks=ticks, xticksvisible=false, xticklabelsvisible=false,
                  ylabel=column == 1 ? "Absolute magnitude\ncorrection" : "", title=("Direct", "Barotropic indirect", "Combined correction")[column]) for column in 1:3]
     ratios = [Axis(figure[2, column], xlabel=column == 2 ? L"\varepsilon" : "", ylabel=column == 1 ? "Computed /\npredicted" : "",
                    xscale=log10, yticks=WilkinsonTicks(3), xticks=ticks) for column in 1:3]
@@ -176,8 +176,8 @@ function plot_forcing_stratification(panels, rows, output_directory)
                          color=:white, strokecolor=color, strokewidth=1.1, markersize=6)
                 lines!(ratios[column], Float64.(stratifications), Float64.(measured[column] ./ predicted[column]); color, linewidth=1.4)
             end
-            exponent = forcing isa FrozenForcing ? 2 : 3
-            guide = reverse(stratifications)[3:5]
+            exponent  = forcing isa FrozenForcing ? 2 : 3
+            guide     = reverse(stratifications)[3:5]
             amplitude = abs(reverse(measured[column])[4]) * 8 / guide[2]^exponent
             lines!(axes[column], Float64.(guide), Float64.(amplitude .* guide.^exponent); color=:gray, linestyle=:dot)
             text!(axes[column], Float64(guide[end]), Float64(amplitude * guide[end]^exponent);
@@ -195,11 +195,11 @@ end
 
 function plot_mrk4_forcing(panels, rows, output_directory)
     figure = Figure(size=(1100, 500), fontsize=20)
-    axes = Axis[]
+    axes   = Axis[]
     for (column, panel) in enumerate(panels)
         (; ε, phases, results, prediction_phases, predictions, damping) = panel
         title = column == 1 ? L"\varepsilon=5\cdot10^{-4},\quad a=1/4" : L"\varepsilon=0.05,\quad a=1/4"
-        axis = Axis(figure[1, column]; title, xlabel=L"\mu_0", xscale=Makie.Symlog10(5; linscale=0.6),
+        axis  = Axis(figure[1, column]; title, xlabel=L"\mu_0", xscale=Makie.Symlog10(5; linscale=0.6),
                     xticks=[0, 2, 5, 10, 20, 30], xgridcolor=(:black, 0.12), ygridcolor=(:black, 0.12))
         column == 1 && (axis.ylabel = L"\mathrm{Coupling\ correction}\,/\,\theta_1^4")
         push!(axes, axis)
@@ -235,7 +235,7 @@ end
 
 function plot_schemes(panels, rows, output_directory)
     figure = Figure(size=(540, 390), fontsize=10, figure_padding=(12, 16, 10, 14))
-    names = ["AB2-SE", "WRK3-SE-F1", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM"]
+    names  = ["AB2-SE", "WRK3-SE-F1", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM"]
     for (column, count) in enumerate((8, 32)), (row, ε) in enumerate((big"0.05", big"0.15"))
         (; phases, growth, thresholds) = panels[2(column - 1) + row]
         axis = Axis(figure[row, column], xlabel=row == 2 ? L"\mu_0" : "", ylabel=column == 1 ? L"\max |\lambda| - 1" : "",
@@ -263,13 +263,13 @@ end
 
 function plot_order_schemes(panels, rows, output_directory)
     figure = Figure(size=(461, 220), fontsize=9)
-    axis = Axis(figure; bbox=BBox(50.7, 336.5, 39.6, 213.4), xlabel=L"\mu_0", ylabel="Global error", xscale=log10, yscale=log10, xlabelsize=10, ylabelsize=10)
+    axis   = Axis(figure; bbox=BBox(50.7, 336.5, 39.6, 213.4), xlabel=L"\mu_0", ylabel="Global error", xscale=log10, yscale=log10, xlabelsize=10, ylabelsize=10)
     limits!(axis, 8e-4, 0.6, 1e-10, 4)
     axis.yticks = (10.0 .^ (-10:2:0), [L"10^{%$exponent}" for exponent in -10:2:0])
     axis.xgridvisible = false
     for (index, name) in enumerate(["AB2-SE", "WRK3-SE-F1", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM"])
         results = panels[index]
-        color = ("#0000ff", "#ff0000", "#ff0000", "#008000", "#800080", "#ff0000")[index]
+        color   = ("#0000ff", "#ff0000", "#ff0000", "#008000", "#800080", "#ff0000")[index]
         lines!(axis, Float64.([result.phase for result in results]), [result.error for result in results]; label=name, color,
                linestyle=(:solid, :dot, :solid, :dash, :solid, :dashdot)[index])
         if index in (2, 5)
@@ -278,7 +278,7 @@ function plot_order_schemes(panels, rows, output_directory)
         end
     end
     for exponent in 1:2
-        guide = [exponent == 1 ? 0.0015 : 0.004, 0.025]
+        guide     = [exponent == 1 ? 0.0015 : 0.004, 0.025]
         reference = (exponent == 1 ? 0.18 : 1e-5) .* guide.^exponent
         lines!(axis, guide, reference; color=:gray, linestyle=:dash, linewidth=0.8)
         text!(axis, guide[end], reference[end]; offset=(3, 4), align=(:left, :bottom), fontsize=8, color=:gray,

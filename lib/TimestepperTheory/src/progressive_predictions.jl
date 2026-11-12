@@ -16,13 +16,13 @@ function progressive_predictions(μ₀, modes;
     q = selected_mode + 1
     α, χ, ψ, Π = modes.α[q], modes.χ[q], modes.ψ[q], modes.Π[q]
     χ₀, ψ₀, Π₀ = modes.χ[1], modes.ψ[1], modes.Π[1]
-    σ = propagation
-    a = scheme isa ModifiedRungeKutta4 ? T(scheme.a) : zero(T)
-    γ = [γₘ for γₘ in stage_fractions(scheme, T) if !iszero(γₘ)]
-    M = length(γ)
-    μ = μ₀ .* γ
+    σ       = propagation
+    a       = scheme isa ModifiedRungeKutta4 ? T(scheme.a) : zero(T)
+    γ       = [γₘ for γₘ in stage_fractions(scheme, T) if !iszero(γₘ)]
+    M       = length(γ)
+    μ       = μ₀ .* γ
     outputs = [barotropic_response(μₘ; solver, filter, sampling) for μₘ in μ]
-    W   = getproperty.(outputs, :W)
+    W       = getproperty.(outputs, :W)
     W̃   = getproperty.(outputs, :W̃)
     ūₚ  = getproperty.(outputs, :ūₚ)
     ūₚ⁺ = getproperty.(outputs, :ūₚ⁺)
@@ -51,12 +51,12 @@ function progressive_predictions(μ₀, modes;
     δu₀ = (ūᵐ[M] - ū + im * μ₀ * χ * h + μ₀^2 / 2 * α^2 * ū) / χ₀
     δh₀ = (-im * μ₀ * (ū⁺[M] - ū) + μ₀^2 / 2 * χ * h - im * μ₀^3 / 6 * α^2 * ū) / ψ₀
     λᵦ, R = eigen(W[M])
-    L = inv(R)
+    L   = inv(R)
     Vⱼᵦ = zeros(Complex{T}, 2)
     Vᵦⱼ = similar(Vⱼᵦ)
-    Wₐ = barotropic_response(a * μ₀; solver, filter, sampling).W
-    W⅓ = W[M-2]
-    λⱼ = stability_polynomial(-im * σ * μ₀ * α; scheme)
+    Wₐ  = barotropic_response(a * μ₀; solver, filter, sampling).W
+    W⅓  = W[M-2]
+    λⱼ  = stability_polynomial(-im * σ * μ₀ * α; scheme)
 
     for b in 1:2
         ūᵦ = χ₀ * R[1, b]

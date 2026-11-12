@@ -53,7 +53,7 @@ function print_progress(sim)
     model = sim.model
     u, v, w = model.velocities
     progress = 100 * (time(sim) / sim.stop_time)
-    elapsed = (time_ns() - TimestepperTestCases.wall_clock[]) / 1e9
+    elapsed  = (time_ns() - TimestepperTestCases.wall_clock[]) / 1e9
 
     @printf("[%05.2f%%] i: %d, t: %s, wall time: %s, max(u): (%6.3e, %6.3e, %6.3e) m/s, next Δt: %s\n",
             progress, iteration(sim), prettytime(sim), prettytime(elapsed),

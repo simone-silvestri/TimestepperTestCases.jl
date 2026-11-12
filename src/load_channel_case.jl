@@ -69,9 +69,9 @@ function KineticEnergy(case, i)
     Vfcc = case[:VFCC][i]
     Vcfc = case[:VCFC][i]
     Vccf = case[:VCCF][i]
-    u = case[:u][i]
-    v = case[:v][i]
-    w = case[:w][i]
+    u    = case[:u][i]
+    v    = case[:v][i]
+    w    = case[:w][i]
     grid = u.grid
 
     u2 = KernelFunctionOperation{Face, Center, Center}(volume_weighted_square, grid, u, Vfcc)
@@ -91,9 +91,9 @@ function MeanKineticEnergy(case, i)
     Vfcc = mean(case[:VFCC][i], dims=1)
     Vcfc = mean(case[:VCFC][i], dims=1)
     Vccf = mean(case[:VCCF][i], dims=1)
-    u = mean(case[:u][i], dims=1) 
-    v = mean(case[:v][i], dims=1) 
-    w = mean(case[:w][i], dims=1) 
+    u    = mean(case[:u][i], dims=1)
+    v    = mean(case[:v][i], dims=1)
+    w    = mean(case[:w][i], dims=1)
     grid = u.grid
 
     u2 = KernelFunctionOperation{Nothing, Center, Center}(volume_weighted_square, grid, u, Vfcc)

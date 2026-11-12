@@ -50,8 +50,8 @@ end
 let
     phases          = sort(unique([0; exp10.(range(-2, 0; length=180)); range(1, 16; length=901)]))
     implicit_growth = @. inv(sqrt(1 + phases^2)) - 1
-    rows   = NamedTuple[]
-    panels = NamedTuple[]
+    rows            = NamedTuple[]
+    panels          = NamedTuple[]
     for (column, solver) in enumerate((ExactSolver(), ForwardBackward(), RungeKutta3()))
         for (index, averaging) in enumerate((F1Filter(), F2Filter(), F3Filter()))
             filter = averaging_filter(averaging, 64)
@@ -165,8 +165,8 @@ configurations = ("AB2-SE", "WRK3-SE-F1", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3
 
 for name in configurations
     configuration = scheme_configuration(name)
-    averaging = averaging_filter(configuration.averaging; float_type=BigFloat)
-    M = evolution_matrix(μ₀, modes; configuration.scheme, configuration.forcing, configuration.solver, filter=averaging)
+    averaging     = averaging_filter(configuration.averaging; float_type=BigFloat)
+    M             = evolution_matrix(μ₀, modes; configuration.scheme, configuration.forcing, configuration.solver, filter=averaging)
     println(name, ": matrix size ", size(M), ", maximum growth ", Float64(maximum(abs, eigvals(M)) - 1))
 end
 
@@ -204,12 +204,12 @@ setprecision(128) do
     rows   = NamedTuple[]
     panels = NamedTuple[]
     for ε in (big"0.0005", big"0.05"), scheme in (WickerSkamarock3(), ShuOsher3())
-        forcing = FrozenForcing()
-        modes   = vertical_modes(ε, 8)
+        forcing     = FrozenForcing()
+        modes       = vertical_modes(ε, 8)
         corrections = [coupling_corrections(evolution_matrix(μ₀, modes; scheme, forcing, filter),
                                             uncoupled_matrix(μ₀, modes; scheme, filter), modes) for μ₀ in phases]
         predictions = [frozen_predictions(μ₀, modes; scheme, filter) for μ₀ in phases]
-        complete  = [-1 + (result.direct_magnitude + result.indirect_magnitude + result.other_magnitude) / result.damping
+        complete    = [-1 + (result.direct_magnitude + result.indirect_magnitude + result.other_magnitude) / result.damping
                      for result in corrections]
         retained  = [-1 + (result.direct_magnitude + result.indirect_magnitude) / result.damping for result in corrections]
         predicted = [-1 + real(result.reference_eigenvalue) / abs(result.reference_eigenvalue) * prediction.total / result.damping
@@ -234,14 +234,14 @@ setprecision(128) do
     rows   = NamedTuple[]
     panels = NamedTuple[]
     for scheme in (WickerSkamarock3(), ShuOsher3())
-        forcing = FrozenForcing()
+        forcing        = FrozenForcing()
         configurations = ((ExactSolver(), NoFilter()), (ExactSolver(), F3Filter()), (RungeKutta3(), F3Filter()),
                           (ForwardBackward(), F3Filter()), (ForwardBackward(), F1Filter()))
         for (index, (solver, averaging)) in enumerate(configurations)
             response_name = ("exact", "exact_F3", "RK3_F3", "FB_F3", "FB_F1")[index]
-            averaging = averaging_filter(averaging; float_type=BigFloat)
-            modes = vertical_modes(big"0.01", 8)
-            phases = samples == 9 ? BigFloat.(range(0.05, 20; length=9)) : BigFloat.(sort(unique([collect(0.05:0.025:1); collect(1:0.1:20)])))
+            averaging     = averaging_filter(averaging; float_type=BigFloat)
+            modes         = vertical_modes(big"0.01", 8)
+            phases        = samples == 9 ? BigFloat.(range(0.05, 20; length=9)) : BigFloat.(sort(unique([collect(0.05:0.025:1); collect(1:0.1:20)])))
             if response_name == "exact" && samples != 9
                 append!(phases, [2BigFloat(π)*resonance + BigFloat(offset)/500 for resonance in 1:3 for offset in -50:50 if offset != 0])
                 sort!(phases)
@@ -249,7 +249,7 @@ setprecision(128) do
             results = [coupling_corrections(evolution_matrix(μ₀, modes; scheme, forcing, solver, filter=averaging),
                                            uncoupled_matrix(μ₀, modes; scheme, solver, filter=averaging), modes) for μ₀ in phases]
             predictions = [frozen_predictions(μ₀, modes; scheme, solver, filter=averaging) for μ₀ in phases]
-            measured = [[result.direct_magnitude / result.damping for result in results],
+            measured    = [[result.direct_magnitude / result.damping for result in results],
                         [result.indirect_magnitude / result.damping for result in results],
                         [result.growth / result.damping for result in results]]
             predicted = [[prediction.direct * 48 / (μ₀^4 * modes.χ[2]^2) for (μ₀, prediction) in zip(phases, predictions)],
@@ -282,21 +282,21 @@ end
 # computed frozen correction with this prediction. The dotted guides show ε² and ε³ scaling.
 
 setprecision(256) do
-    μ₀ = big"2.0"
-    rows   = NamedTuple[]
-    panels = NamedTuple[]
+    μ₀             = big"2.0"
+    rows           = NamedTuple[]
+    panels         = NamedTuple[]
     configurations = ((ExactSolver(), NoFilter(), ContinuousSampling()), (RungeKutta3(), F3Filter(), MidpointSampling()),
                       (ForwardBackward(), F3Filter(), MidpointSampling()))
     for reconstruction in (FrozenForcing, ProgressiveForcing), (solver, averaging, sampling) in configurations
-        forcing = reconstruction === FrozenForcing ? FrozenForcing() : reconstruction(; sampling)
-        response_name = sampling isa ContinuousSampling ? "continuous" : solver isa RungeKutta3 ? "RK3_F3" : "FB_F3"
-        filter = averaging_filter(averaging; float_type=BigFloat)
+        forcing         = reconstruction === FrozenForcing ? FrozenForcing() : reconstruction(; sampling)
+        response_name   = sampling isa ContinuousSampling ? "continuous" : solver isa RungeKutta3 ? "RK3_F3" : "FB_F3"
+        filter          = averaging_filter(averaging; float_type=BigFloat)
         stratifications = [big"0.64" / 4^index for index in 0:10]
-        results = map(stratifications) do ε
-            modes = vertical_modes(ε, 4)
-            M  = evolution_matrix(μ₀, modes; forcing, solver, filter)
-            Mᵤ = uncoupled_matrix(μ₀, modes; solver, filter)
-            result = coupling_corrections(M, Mᵤ, modes)
+        results         = map(stratifications) do ε
+            modes      = vertical_modes(ε, 4)
+            M          = evolution_matrix(μ₀, modes; forcing, solver, filter)
+            Mᵤ         = uncoupled_matrix(μ₀, modes; solver, filter)
+            result     = coupling_corrections(M, Mᵤ, modes)
             prediction = forcing isa FrozenForcing ? frozen_predictions(μ₀, modes; solver, filter) :
                          (; direct=BigFloat(NaN), indirect=BigFloat(NaN))
             push!(rows, (; forcing, response=response_name, phase=μ₀, stratification=ε,
@@ -310,7 +310,7 @@ setprecision(256) do
             predicted = Vector{BigFloat}[]
             if forcing isa FrozenForcing
                 predictions = [frozen_predictions(μ₀, vertical_modes(ε, 4); solver, filter) for ε in stratifications]
-                predicted = [[prediction.direct for prediction in predictions],
+                predicted   = [[prediction.direct for prediction in predictions],
                              [prediction.indirect for prediction in predictions], [prediction.total for prediction in predictions]]
                 for values in predicted, index in eachindex(stratifications)
                     modes = vertical_modes(stratifications[index], 4)
@@ -344,25 +344,25 @@ mrk4_forcing_experiment(output_directory; samples)
 setprecision(128) do
     rows   = NamedTuple[]
     panels = NamedTuple[]
-    names = ["AB2-SE", "WRK3-SE-F1", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM"]
+    names  = ["AB2-SE", "WRK3-SE-F1", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM"]
     for count in (8, 32), ε in (big"0.05", big"0.15")
         modes          = vertical_modes(ε, count)
         floating_modes = vertical_modes(Float64(ε), count)
-        phases = samples == 9 ? range(big"0.25", big"44"; length=9) : big"0.25":big"0.25":big"44"
-        curves = Vector{Float64}[]
+        phases         = samples == 9 ? range(big"0.25", big"44"; length=9) : big"0.25":big"0.25":big"44"
+        curves         = Vector{Float64}[]
         for name in names
-            configuration = scheme_configuration(name)
+            configuration   = scheme_configuration(name)
             filter          = averaging_filter(configuration.averaging; float_type=BigFloat)
             floating_filter = averaging_filter(configuration.averaging)
-            growth = map(phases) do μ₀
+            growth          = map(phases) do μ₀
                 M = evolution_matrix(Float64(μ₀), floating_modes; configuration.scheme, configuration.forcing,
                                           configuration.solver, filter=floating_filter)
                 value = maximum(abs, eigvals(M)) - 1
-                bits = 53
+                bits  = 53
                 if abs(value) < 1e-12
-                    M = evolution_matrix(μ₀, modes; configuration.scheme, configuration.forcing, configuration.solver, filter)
+                    M     = evolution_matrix(μ₀, modes; configuration.scheme, configuration.forcing, configuration.solver, filter)
                     value = maximum(abs, eigvals(M)) - 1
-                    bits = precision(BigFloat)
+                    bits  = precision(BigFloat)
                 end
                 push!(rows, (; scheme=name, phase=μ₀, stratification=ε, modes=count, growth=value, precision=bits))
                 return Float64(value)
@@ -379,12 +379,12 @@ let
     rows = NamedTuple[]
     for bits in (128, 256), count in (8, 32)
         setprecision(bits) do
-            modes = vertical_modes(big"0.00002", count)
+            modes  = vertical_modes(big"0.00002", count)
             filter = averaging_filter(F3Filter(); float_type=BigFloat)
             for scheme in (WickerSkamarock3(), ShuOsher3())
-                μ₀ = scheme == WickerSkamarock3() ? big"0.4" : big"0.35"
+                μ₀      = scheme == WickerSkamarock3() ? big"0.4" : big"0.35"
                 forcing = FrozenForcing()
-                M  = evolution_matrix(μ₀, modes; scheme, forcing, solver=ForwardBackward(), filter)
+                M       = evolution_matrix(μ₀, modes; scheme, forcing, solver=ForwardBackward(), filter)
                 push!(rows, (; precision=bits, modes=count, scheme, phase=μ₀, growth=maximum(abs, eigvals(M)) - 1))
             end
         end
@@ -407,12 +407,12 @@ end
 setprecision(256) do
     rows   = NamedTuple[]
     panels = Vector{NamedTuple}[]
-    modes = vertical_modes(big"0.05", 2)
+    modes  = vertical_modes(big"0.05", 2)
     phases = exp10.(range(big"-3", log10(big"0.5"); length=min(samples, 25)))
     for name in ("AB2-SE", "WRK3-SE-F1", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM")
         configuration = scheme_configuration(name)
-        filter = averaging_filter(configuration.averaging; float_type=BigFloat)
-        results = [global_error(μ₀, modes; configuration.scheme, configuration.forcing, configuration.solver, filter) for μ₀ in phases]
+        filter        = averaging_filter(configuration.averaging; float_type=BigFloat)
+        results       = [global_error(μ₀, modes; configuration.scheme, configuration.forcing, configuration.solver, filter) for μ₀ in phases]
         push!(panels, results)
         for result in results
             push!(rows, (; scheme=name, phase=result.phase, error=result.error))

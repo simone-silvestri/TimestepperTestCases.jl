@@ -57,9 +57,9 @@ end
 # companion quadratic of Ψⁿ⁺¹ = Ψⁿ + Δt[(3/2 + χ) Gⁿ - (1/2 + χ) Gⁿ⁻¹], namely λ² - b λ + c = 0.
 function quasi_ab2_limit(χ; tolerance = 1e-6)
     function amplifies(θ)
-        z = im * θ
-        b = 1 + (3/2 + χ) * z
-        c = (1/2 + χ) * z
+        z            = im * θ
+        b            = 1 + (3/2 + χ) * z
+        c            = (1/2 + χ) * z
         discriminant = sqrt(b^2 - 4c)
         return max(abs((b + discriminant) / 2), abs((b - discriminant) / 2)) > 1 + 1e-12
     end
@@ -210,7 +210,7 @@ scheme gives up `0.502/√3 = 0.29`.
 function baroclinic_timestep(scheme; N², H, Δx, U = nothing, horizontal_dimensions = 2,
                              safety = 0.7, reference_scheme = :SplitRungeKutta3)
 
-    ratio = stability_limit(scheme) / stability_limit(reference_scheme)
+    ratio   = stability_limit(scheme) / stability_limit(reference_scheme)
     Δt_wave = safety * ratio * baroclinic_stability_limit(reference_scheme; N², H, Δx)
 
     isnothing(U) && return Δt_wave
@@ -262,9 +262,9 @@ Courant number is evaluated on the step the sub-cycle actually takes. Rounding u
 the count compatible with the kernels that require `substeps % 8 == 0`.
 """
 function barotropic_substeps(barotropic_scheme; Δt, averaging_kernel, H = nothing, Δx = nothing,
-                             cfl = barotropic_cfl(barotropic_scheme),
+                             cfl         = barotropic_cfl(barotropic_scheme),
                              granularity = 8, maximum_substeps = 4096,
-                             wavenumber = nothing, rate = nothing)
+                             wavenumber  = nothing, rate = nothing)
 
     courant_rate = barotropic_courant_rate(rate, H, Δx, wavenumber)
 

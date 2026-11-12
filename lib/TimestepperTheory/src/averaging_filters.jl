@@ -1,7 +1,7 @@
 function polynomial_filter(Nₛ, r, T)
-    τ = collect(1:Nₛ) .* (T(2) / Nₛ)
+    τ  = collect(1:Nₛ) .* (T(2) / Nₛ)
     τ₀ = T(4 * 8) / (3 * 7)
-    w = @. (τ / τ₀)^2 * (1 - (τ / τ₀)^4) - r * τ / τ₀
+    w  = @. (τ / τ₀)^2 * (1 - (τ / τ₀)^4) - r * τ / τ₀
     resize!(w, findlast(>(0), w))
     w ./= sum(w)
     Δτ = inv(sum(j * wⱼ for (j, wⱼ) in enumerate(w)))
@@ -34,9 +34,9 @@ averaging_filter(float_type, ::F1Filter, Nₛ) = polynomial_filter(Nₛ, float_t
 function averaging_filter(float_type, ::F2Filter, Nₛ)
     r₋, r₊ = float_type(18927 // 100000), float_type(3 // 10)
     for n in 1:precision(float_type)+8
-        r = (r₋ + r₊) / 2
+        r      = (r₋ + r₊) / 2
         filter = polynomial_filter(Nₛ, r, float_type)
-        M₂ = sum(wⱼ * (j * filter.Δτ - 1)^2 for (j, wⱼ) in enumerate(filter.w))
+        M₂     = sum(wⱼ * (j * filter.Δτ - 1)^2 for (j, wⱼ) in enumerate(filter.w))
         if M₂ > 0
             r₋ = r
         else

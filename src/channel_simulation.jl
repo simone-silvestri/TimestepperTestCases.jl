@@ -65,8 +65,8 @@ with strength controlled by `mask(y, p) / λt` where `λt` is the relaxation tim
 """
 @inline function buoyancy_relaxation(i, j, k, grid, clock, model_fields, p)
     timescale = p.λt
-    z = znode(i, j, k, grid, Center(), Center(), Center())
-    y = ynode(i, j, k, grid, Center(), Center(), Center())
+    z         = znode(i, j, k, grid, Center(), Center(), Center())
+    y         = ynode(i, j, k, grid, Center(), Center(), Center())
 
     b★ = initial_buoyancy(z, p)
     bᵢ = @inbounds model_fields.b[i, grid.Ny, k]
@@ -178,11 +178,11 @@ function default_grid(arch, zstar, bottom_height)
 
     grid = RectilinearGrid(arch,
                         topology = (Periodic, Bounded, Bounded),
-                        size = (Nx, Ny, Nz),
-                        halo = (6, 6, 6),
-                        x = (0, Lx),
-                        y = (0, Ly),
-                        z = z_faces)
+                        size     = (Nx, Ny, Nz),
+                        halo     = (6, 6, 6),
+                        x        = (0, Lx),
+                        y        = (0, Ly),
+                        z        = z_faces)
 
     @info "Built a grid: $grid."
 
@@ -237,9 +237,9 @@ surface value as if it were uniform would overstate `c₁` by more than a factor
 """
 function channel_stability_parameters()
     α, g = 2e-4, 9.8061
-    ΔB   = 8 * α * g
-    Lz   = 3000.0
-    h    = 1000.0
+    ΔB = 8 * α * g
+    Lz = 3000.0
+    h  = 1000.0
 
     N²(z) = ΔB * exp(z / h) / (h * (1 - exp(-Lz / h)))
 
@@ -348,19 +348,19 @@ function channel_simulation(; momentum_advection = nothing,
     ρ  = 999.8    # [kg/m³] reference density
 
     parameters = (
-        Ly  = grid.Ly,
-        Lz  = grid.Lz,
-        Δy  = grid.Δyᵃᶜᵃ,
-        Qᵇ  = 10 / (ρ * cᵖ) * α * g, # buoyancy flux magnitude [m² s⁻³]    
+        Ly        = grid.Ly,
+        Lz        = grid.Lz,
+        Δy        = grid.Δyᵃᶜᵃ,
+        Qᵇ        = 10 / (ρ * cᵖ) * α * g, # buoyancy flux magnitude [m² s⁻³]
         y_shutoff = 5 / 6 * grid.Ly, # shutoff location for buoyancy flux [m] 
-        τ  = 0.1 / ρ,                # surface kinematic wind stress [m² s⁻²]
-        μ  = 1.1e-3,                 # bottom drag damping time-scale [-]
-        Lsponge = 9 / 10 * Ly,       # sponge region for buoyancy restoring [m]
-        ν  = 3e-4,                   # viscosity for "no-slip" lateral boundary conditions
-        ΔB = 8 * α * g,              # surface vertical buoyancy gradient [s⁻²]
-        H  =  grid.Lz,               # domain depth [m]
-        h  = 1000.0,                 # exponential decay scale of stable stratification [m]
-        λt = 7.0days                 # relaxation time scale [s]
+        τ         = 0.1 / ρ,                # surface kinematic wind stress [m² s⁻²]
+        μ         = 1.1e-3,                 # bottom drag damping time-scale [-]
+        Lsponge   = 9 / 10 * Ly,       # sponge region for buoyancy restoring [m]
+        ν         = 3e-4,                   # viscosity for "no-slip" lateral boundary conditions
+        ΔB        = 8 * α * g,              # surface vertical buoyancy gradient [s⁻²]
+        H         = grid.Lz,               # domain depth [m]
+        h         = 1000.0,                 # exponential decay scale of stable stratification [m]
+        λt        = 7.0days                 # relaxation time scale [s]
     )
 
     # Buoyancy restoring
@@ -398,7 +398,7 @@ function channel_simulation(; momentum_advection = nothing,
     if isnothing(free_surface)
         # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
         # target, so that the barotropic Courant number is a stated property of the run.
-        substeps = channel_substeps(barotropic_timestepper, timestepper; averaging_kernel)
+        substeps     = channel_substeps(barotropic_timestepper, timestepper; averaging_kernel)
         free_surface = SplitExplicitFreeSurface(grid; substeps, averaging_kernel,
                                                 timestepper=barotropic_timestepper, slow_forcing)
     end
@@ -417,9 +417,9 @@ function channel_simulation(; momentum_advection = nothing,
                                         buoyancy = BuoyancyTracer(),
                                         coriolis,
                                         closure,
-                                        tracers = :b,
-                                        timestepper = campaign_timestepper(timestepper),
-                                        forcing = (; b = buoyancy_restoring), 
+                                        tracers             = :b,
+                                        timestepper         = campaign_timestepper(timestepper),
+                                        forcing             = (; b = buoyancy_restoring),
                                         boundary_conditions = (; b = b_bcs, u = u_bcs, v = v_bcs))
 
     @info "Built $model."
@@ -486,8 +486,8 @@ function channel_simulation(; momentum_advection = nothing,
 
         simulation.Δt = Δt₀
         simulation.output_writers[:first_checkpointer] = Checkpointer(model,
-                                                                      schedule = TimeInterval(100days),
-                                                                      prefix = "restart" * string(testcase),
+                                                                      schedule        = TimeInterval(100days),
+                                                                      prefix          = "restart" * string(testcase),
                                                                       overwrite_files = true)
         run!(simulation)
 
@@ -503,8 +503,8 @@ function channel_simulation(; momentum_advection = nothing,
     simulation.Δt = actual_Δt
 
     simulation.output_writers[:checkpointer] = Checkpointer(model,
-                                                            schedule = TimeInterval(1800days),
-                                                            prefix = "channel_checkpoint_" * string(testcase),
+                                                            schedule        = TimeInterval(1800days),
+                                                            prefix          = "channel_checkpoint_" * string(testcase),
                                                             overwrite_files = true)
     #####
     ##### Diagnostics
@@ -589,9 +589,9 @@ Run the channel case with the discretization `d` of Table 1.
 function channel_simulation(d::Discretization; kw...)
     return channel_simulation(; timestepper = d.timestepper,
                                 barotropic_timestepper = d.barotropic_timestepper,
-                                averaging_kernel = d.averaging_kernel,
-                                slow_forcing = d.slow_forcing,
-                                free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
-                                tracer_advection = forwarded_tracer_advection(d),
-                                testcase = d.label, kw...)
+                                averaging_kernel       = d.averaging_kernel,
+                                slow_forcing           = d.slow_forcing,
+                                free_surface           = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
+                                tracer_advection       = forwarded_tracer_advection(d),
+                                testcase               = d.label, kw...)
 end

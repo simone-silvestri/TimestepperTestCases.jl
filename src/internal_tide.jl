@@ -184,7 +184,7 @@ function internal_tide_grid(; mutable=true)
     z = mutable ? MutableVerticalDiscretization((-H, 0)) : (-H, 0)
 
     underlying_grid = RectilinearGrid(size = (Nx, Nz), halo = (6, 6),
-                                    x = (-L, L), z = z,
+                                    x        = (-L, L), z = z,
                                     topology = (Periodic, Flat, Bounded))
 
     hill(x)   =   h₀ * exp(-x^2 / 2width^2)
@@ -258,12 +258,12 @@ function internal_tide(timestepper::Symbol;
     model = HydrostaticFreeSurfaceModel(grid; 
                                         coriolis,
                                         buoyancy = BuoyancyTracer(),
-                                        tracers = (:b, :c),
+                                        tracers  = (:b, :c),
                                         momentum_advection,
                                         tracer_advection,
                                         free_surface,
                                         timestepper = campaign_timestepper(timestepper),
-                                        forcing = (; u = u_forcing),
+                                        forcing     = (; u = u_forcing),
                                         auxiliary_fields=(; Δtc², c⁻, Δtb², b⁻))
 
     bᵢ(x, z) = param.Nᵢ² * z
@@ -271,7 +271,7 @@ function internal_tide(timestepper::Symbol;
     set!(model, u=param.U₂, b=bᵢ)
 
     # `Δt` arrives as a keyword argument, defaulting to the criterion of `internal_tide_timestep`.
-    stop_time = 40days
+    stop_time  = 40days
     simulation = Simulation(model; Δt, stop_time)
 
     ϵb = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:b, grid)
@@ -287,10 +287,10 @@ function internal_tide(timestepper::Symbol;
     add_callback!(simulation, print_progress, IterationInterval(200))
 
     u, v, w = model.velocities
-    b  = model.tracers.b
-    c  = model.tracers.c
-    η  = model.free_surface.displacement
-    U  = Field(Average(u))
+    b = model.tracers.b
+    c = model.tracers.c
+    η = model.free_surface.displacement
+    U = Field(Average(u))
     u′ = u - U
     N² = ∂z(b)
 
@@ -309,7 +309,7 @@ function internal_tide(timestepper::Symbol;
         fsname *= "_$(typeof(tracer_advection).name.name)"
     end
 
-    filename = "internal_tide_$(string(timestepper))_$(fsname)"
+    filename             = "internal_tide_$(string(timestepper))_$(fsname)"
     save_fields_interval = 1hours
     
     f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
@@ -323,24 +323,24 @@ function internal_tide(timestepper::Symbol;
     Δ² = (; Δtc² = model.auxiliary_fields.Δtc², Δtb² = model.auxiliary_fields.Δtb²)
 
     outputs = ( u = u * VFC,
-                w = w * VCF,
-                b = b * VCC,
-                c = c * VCC,
-                η = η,
+                w    = w * VCF,
+                b    = b * VCC,
+                c    = c * VCC,
+                η    = η,
                 Δtc² = Δ².Δtc²,
                 Δtb² = Δ².Δtb²,
-                Gbx = Gbx * VFC,
-                Gbz = Gbz * VCF,
-                Gcx = Gcx * VFC,
-                Gcz = Gcz * VCF,
-                Abx = f.Abx,
-                Abz = f.Abz,
-                Acx = f.Acx,
-                Acz = f.Acz)
+                Gbx  = Gbx * VFC,
+                Gbz  = Gbz * VCF,
+                Gcx  = Gcx * VFC,
+                Gcz  = Gcz * VCF,
+                Abx  = f.Abx,
+                Abz  = f.Abz,
+                Acx  = f.Acx,
+                Acz  = f.Acz)
 
     simulation.output_writers[:fields] = JLD2Writer(model, outputs; 
                                                     filename,
-                                                    schedule = TimeInterval(save_fields_interval),
+                                                    schedule        = TimeInterval(save_fields_interval),
                                                     overwrite_files = true)
     
     run!(simulation)
@@ -366,13 +366,13 @@ function internal_tide(d::Discretization; grid = internal_tide_grid(),
     Δt, free_surface = timestep_and_free_surface(d, grid, parameters)
 
     if timestep_factor != 1
-        Δt = Δt * timestep_factor
+        Δt       = Δt * timestep_factor
         substeps = barotropic_substeps(d.barotropic_timestepper; parameters.H, parameters.Δx, Δt,
                                        d.averaging_kernel)
         free_surface = SplitExplicitFreeSurface(grid; substeps,
                                                 averaging_kernel = d.averaging_kernel,
-                                                timestepper = d.barotropic_timestepper,
-                                                slow_forcing = d.slow_forcing)
+                                                timestepper      = d.barotropic_timestepper,
+                                                slow_forcing     = d.slow_forcing)
     end
 
     return internal_tide(d.timestepper; grid, free_surface, free_surface_name = label,

@@ -57,7 +57,7 @@ function forced_response(μₘ, solver::ExactSolver, filter, ::ContinuousSamplin
 
     for p in 1:2
         if abs(μₘ) <= 1
-            term = L[:, 2] / (p + 1)
+            term       = L[:, 2] / (p + 1)
             series_sum = copy(term)
             for q in 0:precision(T)
                 term = L * term / (q + p + 2)
@@ -75,13 +75,13 @@ end
 function forced_response(μₘ, solver, filter, ::MidpointSampling)
     T     = typeof(float(μₘ))
     Wₛ, F = substep_response(μₘ * filter.Δτ, solver)
-    Wˢ    = Matrix{Complex{T}}(I, 2, 2)
-    Uˢ    = zeros(Complex{T}, 2, 3)
-    W     = zeros(Complex{T}, 2, 2)
-    U     = zeros(Complex{T}, 2, 3)
+    Wˢ = Matrix{Complex{T}}(I, 2, 2)
+    Uˢ = zeros(Complex{T}, 2, 3)
+    W  = zeros(Complex{T}, 2, 2)
+    U  = zeros(Complex{T}, 2, 3)
 
     for (s, w) in enumerate(filter.w)
-        τ = (s - T(1 // 2)) * filter.Δτ
+        τ  = (s - T(1 // 2)) * filter.Δτ
         Uˢ = Wₛ * Uˢ + F * transpose(T[1, τ, τ^2])
         Wˢ = Wₛ * Wˢ
         W += w * Wˢ

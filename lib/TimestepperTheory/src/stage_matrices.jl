@@ -194,22 +194,22 @@ function evolution_matrix(::AdamsBashforth2, μ₀, modes; forcing, solver, filt
     T = typeof(float(μ₀))
     N = length(modes.α)
     W, W̃, ūₚ, ūₚ⁺ = barotropic_response(μ₀; solver, filter)
-    χ = modes.χ
+    χ  = modes.χ
     χᵀ = transpose(χ)
     ψᵀ = transpose(modes.ψ)
     Πᵀ = transpose(modes.Π)
-    𝒫 = I - χ * χᵀ
-    D = Diagonal(modes.α.^2)
+    𝒫  = I - χ * χᵀ
+    D  = Diagonal(modes.α.^2)
 
     Aᵤ = [𝒫 + W[1, 1] * χ * χᵀ  W[1, 2] * χ * ψᵀ]
     Aₕ = [W̃[1] * (-im * μ₀ * D * χ) * χᵀ  I + W̃[2] * (-im * μ₀ * D * χ) * ψᵀ]
-    A = [Aᵤ; Aₕ]
+    A  = [Aᵤ; Aₕ]
 
     Bᵤ = [zeros(Complex{T}, N, N)  -im * μ₀ * 𝒫 + ūₚ[1] * χ * Πᵀ]
     Bₕ = [(-im * μ₀ * D) * 𝒫  ūₚ⁺[1] * (-im * μ₀ * D * χ) * Πᵀ]
-    B = [Bᵤ; Bₕ]
+    B  = [Bᵤ; Bₕ]
 
-    ξ = T(ξ)
+    ξ  = T(ξ)
     Mⁿ = A + (3 // 2 + ξ) * B
     M⁻ = -(1 // 2 + ξ) * B
     M₀ = Matrix{Complex{T}}(I, 2N, 2N)

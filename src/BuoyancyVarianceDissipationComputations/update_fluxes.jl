@@ -19,9 +19,9 @@ flux of the step with the one of the previous step, the split Runge-Kutta scheme
 and the strong-stability-preserving scheme the quadrature `Σₘ βₘ Fᵐ` over the stages.
 """
 function cache_fluxes!(dissipation, model)
-    grid = model.grid
+    grid        = model.grid
     timestepper = model.timestepper
-    weights = stage_weights(timestepper, model.clock.stage, eltype(grid))
+    weights     = stage_weights(timestepper, model.clock.stage, eltype(grid))
     isnothing(weights) && return nothing
 
     weight, keep = weights
@@ -29,12 +29,12 @@ function cache_fluxes!(dissipation, model)
 
     state  = dissipation.previous_state
     params = flux_parameters(grid)
-    U = model.transport_velocities
+    U      = model.transport_velocities
 
     launch!(architecture(grid), grid, params, _accumulate_transport!, state.Uⁿ, grid, U, state.σᵐ⁻¹, weight, keep)
 
-    Fⁿ = dissipation.advective_fluxes.Fⁿ
-    tracers = (T = state.Tᵐ⁻¹, S = state.Sᵐ⁻¹)
+    Fⁿ           = dissipation.advective_fluxes.Fⁿ
+    tracers      = (T = state.Tᵐ⁻¹, S = state.Sᵐ⁻¹)
     coefficients = buoyancy_coefficients(model.buoyancy)
 
     for name in (:T, :S)

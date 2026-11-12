@@ -42,10 +42,10 @@ end
 
 function Discretization(label, timestepper;
                         barotropic_timestepper = RungeKutta3Scheme(),
-                        averaging_kernel = OptimizedAsymmetricAveragingKernel(),
-                        slow_forcing = FrozenSlowForcing(),
-                        tracer_advection = TimestepperTestCases.tracer_advection,
-                        implicit_free_surface = false)
+                        averaging_kernel       = OptimizedAsymmetricAveragingKernel(),
+                        slow_forcing           = FrozenSlowForcing(),
+                        tracer_advection       = TimestepperTestCases.tracer_advection,
+                        implicit_free_surface  = false)
 
     return Discretization(label, timestepper, barotropic_timestepper, averaging_kernel,
                           slow_forcing, tracer_advection, implicit_free_surface)
@@ -84,8 +84,8 @@ averaging filter; WRK3-IM uses an implicit free surface. WRK3-SE, MRK4-SE, and W
 forcing progressively. WRK3-UP uses third-order upwind tracer advection.
 """
 function discretizations()
-    fb      = ForwardBackwardScheme()
-    sm05    = averaging_shape_function
+    fb   = ForwardBackwardScheme()
+    sm05 = averaging_shape_function
 
     # Ordered as the ladder of Table 3, which changes one ingredient at a time: the AB2 incumbent, then the
     # outer-stepper swap at fixed barotropic treatment, then the barotropic treatment at fixed outer stepper.
@@ -105,10 +105,10 @@ function discretizations()
 
             Discretization("WRK3-IM", :SplitRungeKutta3;
                            barotropic_timestepper = nothing, averaging_kernel = nothing,
-                           implicit_free_surface = true),
+                           implicit_free_surface  = true),
 
             Discretization("WRK3-UP", :SplitRungeKutta3;
-                           slow_forcing = ProgressiveSlowForcing(),
+                           slow_forcing     = ProgressiveSlowForcing(),
                            tracer_advection = UpwindBiased(order = 3))]
 end
 
@@ -147,8 +147,8 @@ function timestep_and_free_surface(d::Discretization, grid, stability_parameters
 
     free_surface = SplitExplicitFreeSurface(grid; substeps,
                                             averaging_kernel = d.averaging_kernel,
-                                            timestepper = d.barotropic_timestepper,
-                                            slow_forcing = d.slow_forcing)
+                                            timestepper      = d.barotropic_timestepper,
+                                            slow_forcing     = d.slow_forcing)
 
     return Δt, free_surface
 end

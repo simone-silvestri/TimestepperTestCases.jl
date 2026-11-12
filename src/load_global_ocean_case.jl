@@ -68,8 +68,8 @@ function load_global_ocean(folder, label; architecture = CPU(), prefix = "global
     end
 
     if statistics
-        path = global_ocean_path(folder, label, "statistics", prefix)
-        names = (:u, :v, :T, :S, :e, :η, :b)
+        path    = global_ocean_path(folder, label, "statistics", prefix)
+        names   = (:u, :v, :T, :S, :e, :η, :b)
         squares = map(name -> Symbol(name, "²"), names)
         case[:statistics] = Dict(name => FieldTimeSeries(path, string(name); architecture, backend = OnDisk())
                                  for name in (names..., squares..., :χᴷ))
@@ -88,7 +88,7 @@ Open every global run present in `folder`, skipping the labels for which one of 
 is missing, so that a notebook can be run while the remaining variants are still integrating.
 """
 function load_global_ocean_cases(folder; labels = [d.label for d in global_ocean_discretizations()],
-                                prefix = "global_ocean", dissipation = true, surface = true, average = true,
+                                prefix     = "global_ocean", dissipation = true, surface = true, average = true,
                                 statistics = false, kw...)
 
     requested = [kind for (kind, wanted) in (("dissipation", dissipation), ("surface", surface), ("average", average),
@@ -142,16 +142,16 @@ function global_ocean_cost_table(cases; reference = "AB2-SE")
     nominal_timestep(c) = get(c[:cost], :nominal_timestep, c[:cost].Δt)
     throughput(c) = global_ocean_simulated_years_per_day(nominal_timestep(c), c[:cost].seconds_per_step)
 
-    reference_case = findfirst(c -> c[:label] == reference, timed)
+    reference_case       = findfirst(c -> c[:label] == reference, timed)
     reference_throughput = isnothing(reference_case) ? NaN : throughput(timed[reference_case])
 
     return [(; label = c[:label],
-               Δt = nominal_timestep(c),
-               substeps = c[:cost].substeps,
-               seconds_per_step = c[:cost].seconds_per_step,
-               simulated_days_per_day = 365 * throughput(c),
+               Δt                      = nominal_timestep(c),
+               substeps                = c[:cost].substeps,
+               seconds_per_step        = c[:cost].seconds_per_step,
+               simulated_days_per_day  = 365 * throughput(c),
                simulated_years_per_day = throughput(c),
-               speedup = throughput(c) / reference_throughput) for c in timed]
+               speedup                 = throughput(c) / reference_throughput) for c in timed]
 end
 
 #####
@@ -208,7 +208,7 @@ function global_ocean_diffusivity_map(case, time_index = length(case[:times]))
         vertical_sum(case[:Gbz][time_index])
 
     grid = case[:Abx].grid
-    κ = @. - A / (2G)
+    κ    = @. - A / (2G)
 
     return κ, global_ocean_corner_coordinates(grid)...
 end
@@ -258,7 +258,7 @@ series is long.
 """
 function global_ocean_diffusivity_hovmoller(case; time_indices = eachindex(case[:times]))
     profiles = [global_ocean_diffusivity_profile(case, t)[1] for t in time_indices]
-    z = Array(znodes(case[:Abx].grid, Center()))
+    z        = Array(znodes(case[:Abx].grid, Center()))
 
     return reduce(hcat, profiles), z, case[:times][time_indices]
 end
@@ -289,7 +289,7 @@ function global_ocean_surface_speed(case, time_index = length(case[:surface_time
     u = interpolate_to_center_x(Array(interior(case[:u][time_index], :, :, 1)))
     v = interpolate_to_center_y_from_surface(case, time_index)
 
-    grid = case[:u].grid
+    grid  = case[:u].grid
     speed = @. sqrt(u^2 + v^2)
     mask_land!(speed, case, time_index)
 
@@ -330,7 +330,7 @@ function global_ocean_eddy_kinetic_energy(case; time_indices = eachindex(case[:s
         u² .+= u .^ 2; v² .+= v .^ 2
     end
 
-    n = length(time_indices)
+    n                   = length(time_indices)
     eddy_kinetic_energy = @. ((u² - ū^2 / n) + (v² - v̄^2 / n)) / (2n)
     mask_land!(eddy_kinetic_energy, case, first(time_indices))
 
@@ -361,11 +361,11 @@ function global_ocean_surface_kinetic_energy_history(case; time_indices = eachin
 
     grid = case[:u].grid
     _, φ = center_coordinates(grid)
-    Az = center_areas(grid)
+    Az  = center_areas(grid)
     wet = Array(interior(case[:T][first(time_indices)], :, :, 1)) .!= 0
 
     in_band(i, j) = isnothing(latitude_band) || latitude_band[1] ≤ φ[i, j] ≤ latitude_band[2]
-    weight = [wet[i, j] && in_band(i, j) ? Az[i, j] : 0.0 for i in axes(wet, 1), j in axes(wet, 2)]
+    weight       = [wet[i, j] && in_band(i, j) ? Az[i, j] : 0.0 for i in axes(wet, 1), j in axes(wet, 2)]
     total_weight = sum(weight)
 
     kinetic_energy = map(time_indices) do t
@@ -380,7 +380,7 @@ end
 # v lives at (Center, Face, Center) and the meridional topology is face-extended, so the surface slice carries
 # Ny+1 rows against the Ny of a centered field
 function interpolate_to_center_y_from_surface(case, time_index)
-    v = Array(interior(case[:v][time_index], :, :, 1))
+    v  = Array(interior(case[:v][time_index], :, :, 1))
     Ny = size(case[:u].grid, 2)
     return size(v, 2) == Ny + 1 ? interpolate_to_center_y(v) : v
 end
@@ -433,12 +433,12 @@ are interpolated onto the wavenumber axis of the band's central latitude before 
 poleward rows are not silently plotted against the equatorward axis.
 """
 function global_ocean_zonal_spectrum(case, name = :u;
-                                    time_indices = length(case[:surface_times]),
-                                    latitude_band = (-60, -56),
+                                    time_indices         = length(case[:surface_times]),
+                                    latitude_band        = (-60, -56),
                                     minimum_wet_fraction = 1)
 
     grid = case[:u].grid
-    Nx = size(grid, 1)
+    Nx   = size(grid, 1)
 
     # One latitude and one spacing per row: within the band a row is a line of constant latitude along which
     # the spacing is constant, so the row means are those values and not an approximation of them
