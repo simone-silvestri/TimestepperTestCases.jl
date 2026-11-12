@@ -12,6 +12,7 @@ function mrk4_forcing_experiment(output_directory; samples=61)
         phases = sort(unique([exp10.(range(big"-3", big"0"; length=25)); phases]))
         prediction_phases = BigFloat.(["0.001", "0.01", "0.05", "0.15", "0.3", "0.5", "0.8", "1.5", "2.4", "3.2",
                                      "4", "4.6", "5", "5.4", "5.8", "6.2", "6.7", "7.4", "8.3", "9.5", "11", "13", "16", "20", "25", "29.5"])
+        prediction_phases = sort([prediction_phases; (prediction_phases[1:end-1] + prediction_phases[2:end]) / 2])
         for ε in (big"0.0005", big"0.05")
             modes  = vertical_modes(ε, 24)
             filter = averaging_filter(F3Filter(); float_type=BigFloat)

@@ -96,7 +96,7 @@ function plot_averaging_weights(panels, rows, output_directory)
 end
 
 function plot_coupling_decomposition(panels, rows, output_directory)
-    figure = Figure(size=(576, 331), fontsize=10)
+    figure = Figure(size=(576, 331), fontsize=12)
     for (row, ε) in enumerate((big"0.0005", big"0.05")), (column, scheme) in enumerate((WickerSkamarock3(), ShuOsher3()))
         (; phases, corrections, complete, retained, predicted) = panels[2(row - 1) + column]
         axis = Axis(figure[row, column], xlabel=L"\mu_0", title=row == 1 ? (scheme isa ShuOsher3 ? "SRK3" : "WRK3") : "")
@@ -107,14 +107,14 @@ function plot_coupling_decomposition(panels, rows, output_directory)
         lines!(axis, Float64.(phases), Float64.(predicted); color="#D55E00", linestyle=:dashdot, label="Leading analytical prediction")
         text!(axis, 0.03, 0.96; space=:relative, align=(:left, :top), text=row == 1 ? L"\varepsilon=5\times10^{-4}" : L"\varepsilon=0.05")
         xlims!(axis, 0, 16)
-        row == 2 && column == 2 && Legend(figure[3, 1:2], axis; orientation=:horizontal, nbanks=2, labelsize=8.5, patchsize=(20, 10), rowgap=3, padding=(5, 5, 5, 5))
+        row == 2 && column == 2 && Legend(figure[3, 1:2], axis; orientation=:horizontal, nbanks=2, labelsize=10.5, patchsize=(20, 10), rowgap=3, padding=(5, 5, 5, 5))
     end
     Label(figure[1:2, 0], L"\mathrm{Growth}/(1-|\lambda_j|)"; rotation=π/2)
     return save_results(output_directory, "coupling_decomposition", figure, rows)
 end
 
 function plot_damping_balance(panels, rows, output_directory)
-    figure = Figure(size=(626, 468), fontsize=9)
+    figure = Figure(size=(626, 468), fontsize=12)
     for (column, scheme) in enumerate((WickerSkamarock3(), ShuOsher3()))
         axes = [Axis(figure[row, column], xlabel=L"\mu_0", title=row == 1 ? (scheme isa ShuOsher3 ? "SRK3" : "WRK3") : "",
                      ylabel=column == 1 ? ("Direct", "Barotropic indirect", "Total growth")[row] : "") for row in 1:3]
@@ -136,6 +136,8 @@ function plot_damping_balance(panels, rows, output_directory)
         end
         for row in 1:3
             limits = ((-1.08, 0.22), (-0.55, 0.7), (-2.5, 0.5))[row]
+            row == 1 && (axes[row].yticks = -1:0.25:0)
+            row == 2 && (axes[row].yticks = -0.5:0.25:0.5)
             limits!(axes[row], 0, 20, limits...)
             hlines!(axes[row], [0]; color=:gray, linewidth=0.6)
             row == 3 && hlines!(axes[row], [-1]; color=:gray, linestyle=:dot, linewidth=0.7)
@@ -143,7 +145,7 @@ function plot_damping_balance(panels, rows, output_directory)
         if column == 2
             lines!(axes[3], [NaN], [NaN]; color=(:gray, 0.72), label=L"\mathrm{Matrix},\ \varepsilon=0.01")
             scatter!(axes[3], [NaN], [NaN]; color=:white, strokecolor=:black, strokewidth=0.7, markersize=4, label="Leading approximation")
-            Legend(figure[4, 1:2], axes[3]; orientation=:horizontal, nbanks=3, labelsize=8, patchsize=(20, 8), rowgap=4, padding=(5, 5, 5, 5))
+            Legend(figure[4, 1:2], axes[3]; orientation=:horizontal, nbanks=3, labelsize=10.5, patchsize=(20, 8), rowgap=4, padding=(5, 5, 5, 5))
         end
     end
     Label(figure[1:3, 0], L"\mathrm{Contribution}/(1-|\lambda_j|)"; rotation=π/2)
@@ -192,7 +194,7 @@ function plot_forcing_stratification(panels, rows, output_directory)
 end
 
 function plot_mrk4_forcing(panels, rows, output_directory)
-    figure = Figure(size=(1100, 500), fontsize=17)
+    figure = Figure(size=(1100, 500), fontsize=20)
     axes = Axis[]
     for (column, panel) in enumerate(panels)
         (; ε, phases, results, prediction_phases, predictions, damping) = panel
@@ -205,7 +207,7 @@ function plot_mrk4_forcing(panels, rows, output_directory)
             lines!(axis, Float64.(phases), getindex.(results, index); label, color, linewidth=2)
         end
         scatter!(axis, Float64.(prediction_phases), predictions; label="Frozen prediction",
-                 marker=:circle, color=:transparent, strokecolor="#0072B2", strokewidth=1.2, markersize=6)
+                 marker=:circle, color=:transparent, strokecolor="#0072B2", strokewidth=1.2, markersize=7)
         lines!(axis, Float64.(phases), getindex.(results, 3); color=:black, linestyle=:dash, linewidth=2, label="Damping (a = 1/4)")
         for (index, color, linestyle, label) in ((1, :black, :dot, "Damping (a = 0)"), (2, :darkorange3, :dashdot, "Damping (a = 0.23)"))
             lines!(axis, Float64.(phases), Float64.(damping[index]); color, linestyle, label, linewidth=2)
@@ -213,7 +215,7 @@ function plot_mrk4_forcing(panels, rows, output_directory)
         xlims!(axis, 0, 30)
 
         inset = Axis(figure[1, column], width=Relative(0.29), height=Relative(0.23), halign=0.16, valign=0.72,
-                     title="Small-step limit", titlesize=12, xlabel=L"\mu_0", xlabelsize=12, xticklabelsize=11, yticklabelsize=11,
+                     title="Small-step limit", titlesize=14, xlabel=L"\mu_0", xlabelsize=17, xticklabelsize=13, yticklabelsize=13,
                      xticks=[0, 0.5, 1], backgroundcolor=:white, xgridcolor=(:black, 0.08), ygridcolor=(:black, 0.08))
         translate!(inset.blockscene, 0, 0, 100)
         selected = findall(<=(1), phases)
@@ -226,7 +228,7 @@ function plot_mrk4_forcing(panels, rows, output_directory)
                                     ([0, 4e-5, 8e-5], [L"0", L"4\cdot10^{-5}", L"8\cdot10^{-5}"])
     end
     linkyaxes!(axes...)
-    Legend(figure[2, 1:2], axes[1]; orientation=:horizontal, nbanks=2, labelsize=14,
+    Legend(figure[2, 1:2], axes[1]; orientation=:horizontal, nbanks=2, labelsize=17,
            rowgap=3, colgap=16, patchsize=(28, 10), padding=(8, 8, 5, 5))
     return save_results(output_directory, "mrk4_forcing", figure, rows)
 end
