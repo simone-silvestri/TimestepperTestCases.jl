@@ -9,11 +9,11 @@ using CairoMakie
 using LaTeXStrings
 
 function write_rotation_results(directory)
-    couplings = (FrozenRotation(), ProgressivePressure(), ProgressiveRotation(), SSPRotation(), SSPSubstepRotation())
+    couplings = (FrozenRotation(), ProgressivePressure(), ProgressiveRotation(), SSPRotation())
     labels = ("WRK3: frozen", "WRK3: progressive pressure, frozen Coriolis", "WRK3: progressive pressure and Coriolis",
-              "SRK3: frozen pressure and Coriolis", "SRK3: substepped Coriolis")
-    colors = (:black, :dodgerblue3, :seagreen3, :darkorange2, :purple)
-    styles = (:solid, :dash, :dot, :dashdot, :solid)
+              "SRK3: frozen pressure and Coriolis")
+    colors = (:black, :dodgerblue3, :seagreen3, :darkorange2)
+    styles = (:solid, :dash, :dot, :dashdot)
     μ = collect(range(0.05, 6., length=240))
     ρ = collect(range(0., 2., length=161))
     filter = averaging_filter(F3Filter(), 96)
@@ -32,7 +32,7 @@ function write_rotation_results(directory)
         for (index, coupling) in enumerate(couplings)
             scheme = WickerSkamarock3()
             filter = averaging_filter(F3Filter(), 96)
-            c = coupling isa Union{SSPRotation, SSPSubstepRotation} ? (1., 1., 1.) : stage_fractions(scheme, Float64)
+            c = coupling isa SSPRotation ? (1., 1., 1.) : stage_fractions(scheme, Float64)
             outputs = [[rotation_outputs(μᵢ, cᵢ, filter) for cᵢ in c] for μᵢ in μ]
             growth = zeros(length(ρ))
             locations = similar(growth)
