@@ -26,7 +26,7 @@ NumericalEarth = "904d977b-046a-4731-8b86-9235c0d1ef02"
 WorldOceanAtlasTools = "04f20302-f1b9-11e8-29d9-7d841cb0a64a"
 
 [sources]
-Oceananigans = {rev = "2858a43c0", url = "https://github.com/CliMA/Oceananigans.jl.git"}
+Oceananigans = {rev = "2fcd021af", url = "https://github.com/CliMA/Oceananigans.jl.git"}
 OffsetArrays = {rev = "073659e14abc98add86f0362ec33412ee60abcd6", url = "https://github.com/simone-silvestri/OffsetArrays.jl"}
 
 [extensions]

@@ -1,24 +1,24 @@
 [deps]
-OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
-TimestepperTestCases = "8d628e06-8e8e-46bb-a074-537775fcc231"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Oceananigans = "9e8cae18-63c1-5223-a75c-80ca9d6e9a09"
-JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
-Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
+OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
-TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+TimestepperTestCases = "8d628e06-8e8e-46bb-a074-537775fcc231"
 
 [sources]
-TimestepperTestCases = {path = ".."}
-Oceananigans = {rev = "2858a43c0e9c62563306518391a9ad221dfcb180", url = "https://github.com/CliMA/Oceananigans.jl.git"}
+Oceananigans = {rev = "2fcd021afeb842f6c2e2f582886a3ac591218933", url = "https://github.com/CliMA/Oceananigans.jl.git"}
 OffsetArrays = {rev = "073659e14abc98add86f0362ec33412ee60abcd6", url = "https://github.com/simone-silvestri/OffsetArrays.jl"}
+TimestepperTestCases = {path = ".."}
 
 [compat]
 CairoMakie = "0.15"
-Literate = "2"
 LaTeXStrings = "1"
+Literate = "2"
 julia = "1.12"
