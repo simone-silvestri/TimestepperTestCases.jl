@@ -19,10 +19,10 @@ end
 
 HeightField(grid) = Field(KernelFunctionOperation{Center, Center, Center}(Oceananigans.Grids.znode, grid, Center(), Center(), Center()))
 
-@inline _density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
+@inline density_operation(i, j, k, grid, b, ρ₀, g) = ρ₀ * (1 - b[i, j, k] / g)
 
-DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = KernelFunctionOperation{Center, Center, Center}(_density_operation, b.grid, b, ρ₀, g)
-DensityField(b::Field; ρ₀ = 1000.0, g = 9.80655) = compute!(Field(DensityOperation(b; ρₒ, g)))
+DensityOperation(b; ρ₀ = 1000.0, g = 9.80655) = KernelFunctionOperation{Center, Center, Center}(density_operation, b.grid, b, ρ₀, g)
+DensityField(b::Field; ρ₀ = 1000.0, g = 9.80655) = compute!(Field(DensityOperation(b; ρ₀, g)))
 
 """
     compute_rpe_density(case::Dict)
@@ -48,8 +48,11 @@ function compute_rpe_density(case::Dict)
 
     for t in 1:length(case[:b])
         @info "time $t of $(length(case[:b]))"
-        push!(rpe, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).εe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
-        push!(ape, sum(compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t]).αe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
+        energies = compute_rpe_density(case[:b][t] / case[:VCCC][t], case[:VCCC][t])
+        volume = on_architecture(CPU(), case[:VCCC][t])
+        total_volume = sum(volume)
+        push!(rpe, sum(energies.εe * volume) / total_volume)
+        push!(ape, sum(energies.αe * volume) / total_volume)
     end
 
     return (; rpe, ape)
@@ -78,8 +81,11 @@ function compute_rpe_density_two(case::Dict)
 
     for t in 1:length(case[:b])
         @info "time $t of $(length(case[:b]))"
-        push!(rpe, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).εe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
-        push!(ape, sum(compute_rpe_density(case[:b][t], case[:VCCC][t]).αe * on_architecture(CPU(), case[:VCCC][t])) / sum(case[:VCCC][t]))
+        energies = compute_rpe_density(case[:b][t], case[:VCCC][t])
+        volume = on_architecture(CPU(), case[:VCCC][t])
+        total_volume = sum(volume)
+        push!(rpe, sum(energies.εe * volume) / total_volume)
+        push!(ape, sum(energies.αe * volume) / total_volume)
     end
 
     return (; rpe, ape)

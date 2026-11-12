@@ -6,8 +6,10 @@
 using Oceananigans, CairoMakie, TimestepperTestCases, Statistics, LaTeXStrings, JLD2
 include("plotting.jl") #src
 folder = abspath(isempty(ARGS) ? joinpath(@__DIR__, "..", "internal_tide") : first(ARGS)) * "/"
+production_only = "--production-only" in ARGS
 files = filter(name -> endswith(name, ".jld2"), readdir(folder; join=true))
-@assert length(files) == 13 "Expected thirteen completed internal-tide simulations"
+production_only && filter!(name -> !occursin(r"-dt[48]\.jld2$", name), files)
+@assert length(files) == (production_only ? 7 : 13) "Unexpected number of internal-tide simulations"
 for file in files
     jldopen(file) do output
         times = output["timeseries/t"]
@@ -266,6 +268,8 @@ for extension in ("pdf", "png")
     CairoMakie.save(path * "energetics-internal-tide." * extension, fig)
 end
 # ![Energy histories](energetics-internal-tide.png)
+
+production_only && exit()
 
 
 # ══ Temporal-resolution test: the rectified bottom flow (section 5.1) ═════════════════════════════

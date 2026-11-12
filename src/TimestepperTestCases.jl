@@ -103,7 +103,6 @@ include("channel_simulation.jl")
 
 include("global_ocean_interface.jl")
 
-using Oceananigans
 using Oceananigans.AbstractOperations: grid_metric_operation
 using Oceananigans.Operators
 using Oceananigans.BoundaryConditions
@@ -117,8 +116,6 @@ using Oceananigans.ImmersedBoundaries: column_depthᶜᶜᵃ,
 using Oceananigans.Operators: volume
 using Oceananigans.Utils
 using Statistics
-
-using KernelAbstractions: @kernel, @index
 
 # Diagnostics!
 include("diagnostics.jl")

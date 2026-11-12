@@ -12,9 +12,6 @@ function split_momentum_advection(order, time_discretization)
 
     vorticity_order, remaining_order = isnothing(order) ? (9, 5) : (order, order)
 
-    # Momentum only: against a wall the stencil steps down through its own family and terminates in
-    # first-order upwind, which is what `WENOVectorInvariant` applies and what the earlier campaign ran. The
-    # tracer reconstruction keeps its own buffer and is deliberately not changed here.
     vorticity_scheme               = WENO(order=vorticity_order, minimum_buffer_upwind_order=1)
     divergence_scheme              = WENO(order=remaining_order, minimum_buffer_upwind_order=1)
     kinetic_energy_gradient_scheme = WENO(order=remaining_order, minimum_buffer_upwind_order=1)

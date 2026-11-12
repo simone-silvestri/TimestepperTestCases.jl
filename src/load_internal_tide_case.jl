@@ -27,10 +27,9 @@ This function loads simulation output, computes volume fields accounting for fre
 variations, and calculates various diagnostics used for analyzing numerical mixing.
 """
 function load_internal_tide(folder, timestepper, free_surface)
-    path = folder * "internal_tide_" * timestepper * "_" * free_surface * ".jld2"
+    path = joinpath(folder, "internal_tide_$(timestepper)_$(free_surface).jld2")
     case = Dict()
 
-    grid = internal_tide_grid()
     case[:u] = FieldTimeSeries(path, "u"; backend=OnDisk())
     case[:w] = FieldTimeSeries(path, "w"; backend=OnDisk())
     case[:b] = FieldTimeSeries(path, "b"; backend=OnDisk())

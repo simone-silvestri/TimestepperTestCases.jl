@@ -392,8 +392,7 @@ function channel_simulation(; momentum_advection = nothing,
     #####
     
     actual_Δt = simulation_Δt(Val(timestepper))
-    @info actual_Δt
-    @show actual_Δt
+    @info "Channel time step" timestep=actual_Δt
 
     coriolis = BetaPlane(f₀ = -1e-4, β = 1e-11)
     if isnothing(free_surface)
