@@ -157,7 +157,7 @@ Mₘ = stages.M[end]
 
 Mₘ
 
-# SRK3 uses its blended stage update and SSP-weighted forcing. MRK4 uses progressive reconstruction, including a
+# SRK3 uses its blended stage update with frozen forcing. MRK4 uses progressive reconstruction, including a
 # least-squares quadratic at the fourth stage. The implicit WRK3 scheme uses an implicit surface solve. AB2 uses an
 # augmented state [yⁿ; yⁿ⁻¹], so its complete matrix has twice the dimension of a Runge–Kutta timestep matrix.
 
@@ -204,7 +204,7 @@ setprecision(128) do
     rows   = NamedTuple[]
     panels = NamedTuple[]
     for ε in (big"0.0005", big"0.05"), scheme in (WickerSkamarock3(), ShuOsher3())
-        forcing = scheme == ShuOsher3() ? SSPForcing() : FrozenForcing()
+        forcing = FrozenForcing()
         modes   = vertical_modes(ε, 8)
         corrections = [coupling_corrections(evolution_matrix(μ₀, modes; scheme, forcing, filter),
                                             uncoupled_matrix(μ₀, modes; scheme, filter), modes) for μ₀ in phases]
@@ -234,7 +234,7 @@ setprecision(128) do
     rows   = NamedTuple[]
     panels = NamedTuple[]
     for scheme in (WickerSkamarock3(), ShuOsher3())
-        forcing = scheme == ShuOsher3() ? SSPForcing() : FrozenForcing()
+        forcing = FrozenForcing()
         configurations = ((ExactSolver(), NoFilter()), (ExactSolver(), F3Filter()), (RungeKutta3(), F3Filter()),
                           (ForwardBackward(), F3Filter()), (ForwardBackward(), F1Filter()))
         for (index, (solver, averaging)) in enumerate(configurations)
@@ -383,7 +383,7 @@ let
             filter = averaging_filter(F3Filter(); float_type=BigFloat)
             for scheme in (WickerSkamarock3(), ShuOsher3())
                 μ₀ = scheme == WickerSkamarock3() ? big"0.4" : big"0.35"
-                forcing = scheme == ShuOsher3() ? SSPForcing() : FrozenForcing()
+                forcing = FrozenForcing()
                 M  = evolution_matrix(μ₀, modes; scheme, forcing, solver=ForwardBackward(), filter)
                 push!(rows, (; precision=bits, modes=count, scheme, phase=μ₀, growth=maximum(abs, eigvals(M)) - 1))
             end

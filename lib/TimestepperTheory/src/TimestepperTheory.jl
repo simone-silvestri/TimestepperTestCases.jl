@@ -22,5 +22,8 @@ include("stage_matrices.jl")
 include("amplification_factors.jl")
 include("diagnostics.jl")
 include("progressive_predictions.jl")
+include("rotation.jl")
+
+export rotating_evolution_matrix, FrozenRotation, ProgressivePressure, ProgressiveRotation, SSPRotation, SSPSubstepRotation
 
 end
