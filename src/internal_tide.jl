@@ -238,6 +238,9 @@ function internal_tide(timestepper::Symbol;
                        free_surface_name=default_free_surface_name(free_surface),
                        tracer_advection=nothing,
                        momentum_advection=nothing,
+                       stop_time=40days,
+                       output_schedule=TimeInterval(1hours),
+                       run_simulation=true,
                        Δt=internal_tide_timestep(Val(timestepper)))
 
     param = internal_tide_parameters()
@@ -271,7 +274,6 @@ function internal_tide(timestepper::Symbol;
     set!(model, u=param.U₂, b=bᵢ)
 
     # `Δt` arrives as a keyword argument, defaulting to the criterion of `internal_tide_timestep`.
-    stop_time  = 40days
     simulation = Simulation(model; Δt, stop_time)
 
     ϵb = Oceananigans.Models.VarianceDissipationComputations.VarianceDissipation(:b, grid)
@@ -310,7 +312,6 @@ function internal_tide(timestepper::Symbol;
     end
 
     filename             = "internal_tide_$(string(timestepper))_$(fsname)"
-    save_fields_interval = 1hours
     
     f = merge(Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵb),
               Oceananigans.Models.VarianceDissipationComputations.flatten_dissipation_fields(ϵc))
@@ -340,10 +341,10 @@ function internal_tide(timestepper::Symbol;
 
     simulation.output_writers[:fields] = JLD2Writer(model, outputs; 
                                                     filename,
-                                                    schedule        = TimeInterval(save_fields_interval),
+                                                    schedule        = output_schedule,
                                                     overwrite_files = true)
     
-    run!(simulation)
+    run_simulation && run!(simulation)
 
     return simulation
 end

@@ -25,12 +25,12 @@ profiles = NamedTuple[]
 
 for variant in variants
     filename = "internal_tide_$(variant.timestepper)_$(variant.label).jld2"
-    data = compact_dataset("internal_tide_weno_new", filename, prepare_internal_tide; directory)
+    data     = compact_dataset("internal_tide_weno_new", filename, prepare_internal_tide; directory)
     t, z = data.t, data.z
-    P = data.fields["Abx"] + data.fields["Abz"]
-    G = data.fields["Gbz"]
-    κ = abs.(dropdims(mean(P; dims=1); dims=1) ./ (2 .* (dropdims(mean(G; dims=1); dims=1) .+ ϵκ)))
-    κ = [mean(@view κ[max(1,k-4):min(end,k+4), max(1,n-6):min(end,n+6)]) for k in axes(κ, 1), n in axes(κ, 2)]
+    P  = data.fields["Abx"] + data.fields["Abz"]
+    G  = data.fields["Gbz"]
+    κ  = abs.(dropdims(mean(P; dims=1); dims=1) ./ (2 .* (dropdims(mean(G; dims=1); dims=1) .+ ϵκ)))
+    κ  = [mean(@view κ[max(1,k-4):min(end,k+4), max(1,n-6):min(end,n+6)]) for k in axes(κ, 1), n in axes(κ, 2)]
     κᵗ = vec(sum((κ[:, 1:end-1] + κ[:, 2:end]) .* reshape(diff(t), 1, :) / 2; dims=2)) / (t[end] - t[1])
     κᶻ = vec(sum(κ .* data.Δz; dims=1)) / sum(data.Δz)
     push!(profiles, (; label=variant.label, t, z, κ, κᵗ, κᶻ))

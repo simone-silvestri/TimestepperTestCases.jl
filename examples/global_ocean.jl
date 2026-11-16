@@ -18,12 +18,12 @@ if length(ARGS) > 1
 end
 
 for variant in variants
-    filename = "global_ocean_cost_$(variant.label)_cost.jld2"
-    path = dataset_file("global_ocean", filename; directory)
-    record = JLD2.load(path)
-    Δt = record["nominal_timestep"]
+    filename         = "global_ocean_cost_$(variant.label)_cost.jld2"
+    path             = dataset_file("global_ocean", filename; directory)
+    record           = JLD2.load(path)
+    Δt               = record["nominal_timestep"]
     seconds_per_step = record["seconds_per_step"]
-    years_per_day = Δt / seconds_per_step / 365
+    years_per_day    = Δt / seconds_per_step / 365
     push!(measurements, (; label=variant.label, Δt, seconds_per_step, years_per_day))
 end
 

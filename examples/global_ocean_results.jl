@@ -48,7 +48,7 @@ plot_global_diffusivity_wall_distance(profiles) #src
 
 sections = map(labels, budgets) do label, budget
     latitudes = (budget.latitude_edges[1:end-1] + budget.latitude_edges[2:end]) / 2
-    κ = numerical_diffusivity(window_sum(budget.section_tendency), window_sum(budget.section_gradient))
+    κ         = numerical_diffusivity(window_sum(budget.section_tendency), window_sum(budget.section_gradient))
     return (; label, budget.z, latitudes, κ)
 end
 

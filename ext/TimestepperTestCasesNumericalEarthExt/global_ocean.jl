@@ -10,14 +10,14 @@ zonal direction is periodic. Columns shallower than `minimum_depth` are land.
 $(SIGNATURES)
 """
 function global_ocean_grid(arch = CPU();
-                           Nz = 100,
-                           depth = 5000meters,
+                           Nz              = 100,
+                           depth           = 5000meters,
                            surface_spacing = 5meters,
-                           z = global_ocean_vertical_discretization(Nz, depth, surface_spacing),
-                           dataset = ORCAQuarter(),
-                           major_basins = 1,
-                           minimum_depth = 30meters,
-                           halo = (7, 7, 7))
+                           z               = global_ocean_vertical_discretization(Nz, depth, surface_spacing),
+                           dataset         = ORCAQuarter(),
+                           major_basins    = 1,
+                           minimum_depth   = 30meters,
+                           halo            = (7, 7, 7))
 
     grid = ORCAGrid(arch, Oceananigans.defaults.FloatType;
                     dataset, z, Nz, halo, major_basins, active_cells_map = true)
@@ -49,7 +49,7 @@ function fill_degenerate_metrics!(grid)
 
     for name in horizontal_metric_names
         metric = parent(getproperty(underlying_grid, name))
-        host = Array(metric)
+        host   = Array(metric)
         filled = fill_degenerate_rows!(host)
         filled > 0 && @info "fill_degenerate_metrics!: $filled nonpositive entries of $name replaced"
         copyto!(metric, host)
@@ -59,11 +59,11 @@ function fill_degenerate_metrics!(grid)
 end
 
 function fill_degenerate_rows!(metric)
-    filled = 0
+    filled     = 0
     valid_rows = Int[]
 
     for j in axes(metric, 2)
-        row = view(metric, :, j)
+        row   = view(metric, :, j)
         valid = findall(>(0), row)
         isempty(valid) && continue
         push!(valid_rows, j)
@@ -104,7 +104,7 @@ No output is written and the buoyancy-variance budget is off. The record goes to
 function global_ocean_cost(discretization = :SplitRungeKutta3; arch = CPU(), grid = global_ocean_grid(arch),
                            warmup_steps = 200, measured_steps = 1000, kw...)
 
-    timestepper = discretization isa Discretization ? discretization.timestepper : discretization
+    timestepper           = discretization isa Discretization ? discretization.timestepper : discretization
     implicit_free_surface = discretization isa Discretization && discretization.implicit_free_surface
 
     nominal_timestep  = global_ocean_timestep(Val(timestepper))
@@ -112,7 +112,7 @@ function global_ocean_cost(discretization = :SplitRungeKutta3; arch = CPU(), gri
     measured_timestep = implicit_free_surface ? nominal_timestep : warmup_timestep
 
     cold_start_duration = warmup_steps * warmup_timestep
-    stop_time = cold_start_duration + measured_steps * measured_timestep
+    stop_time           = cold_start_duration + measured_steps * measured_timestep
 
     return global_ocean(discretization; arch, grid, prefix = "global_ocean_cost",
                         Δt = measured_timestep, nominal_timestep, cold_start_Δt = warmup_timestep,

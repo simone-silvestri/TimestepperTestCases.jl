@@ -27,7 +27,7 @@ for label in labels
     Gₕ = data.fields["Gbx"] + data.fields["Gby"]
     Gz = data.fields["Gbz"]
     κₕ = vec(-sum(Pₕ; dims=1) ./ (2sum(Gₕ; dims=1)))
-    κ = vec(-sum(Pₕ + Pz; dims=1) ./ (2sum(Gₕ + Gz; dims=1)))
+    κ  = vec(-sum(Pₕ + Pz; dims=1) ./ (2sum(Gₕ + Gz; dims=1)))
     κᵖ = vec(-sum(data.fields["Dbz"]; dims=1) ./ (2sum(Gz; dims=1)))
     push!(profiles, (; label, data.z, κₕ, κ, ratio=κᵖ ./ κ, data.time))
     push!(sections, (; label, data.y, data.z, Pₕ, Pz))

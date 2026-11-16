@@ -11,7 +11,7 @@ arch = GPU()
 # Retain timing records and release each simulation before constructing the next case.
 costs = map(discretizations()) do d
     result = global_ocean_cost(d; arch)
-    cost = (; result.label, Δt = result.nominal_timestep, result.seconds_per_step, result.simulated_years_per_day)
+    cost   = (; result.label, Δt = result.nominal_timestep, result.seconds_per_step, result.simulated_years_per_day)
     result = nothing
     GC.gc(true)
     return cost

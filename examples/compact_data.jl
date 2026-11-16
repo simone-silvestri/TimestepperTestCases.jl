@@ -3,15 +3,15 @@ using Statistics
 using TimestepperTestCases: power_spectrum_x
 
 function centered_output(file, name, iteration, grid)
-    A = file["timeseries/$name/$iteration"]
+    A        = file["timeseries/$name/$iteration"]
     location = file["timeseries/$name/serialized/location"]
-    N = (grid.Nx, grid.Ny, grid.Nz)
-    H = (grid.Hx, grid.Hy, grid.Hz)
+    N        = (grid.Nx, grid.Ny, grid.Nz)
+    H        = (grid.Hx, grid.Hy, grid.Hz)
     for d in 1:3
         indices = ntuple(q -> q == d ? (H[d]+1:H[d]+N[d]) : Colon(), 3)
         if location[d] == Face && N[d] > 1
             neighbors = ntuple(q -> q == d ? (H[d]+2:H[d]+N[d]+1) : Colon(), 3)
-            A = (A[indices...] + A[neighbors...]) / 2
+            A         = (A[indices...] + A[neighbors...]) / 2
         else
             A = A[indices...]
         end
@@ -21,10 +21,10 @@ end
 
 function prepare_channel(path)
     return jldopen(path) do file
-        grid = file["serialized/grid"]
+        grid       = file["serialized/grid"]
         iterations = sort(parse.(Int, keys(file["timeseries/t"])))
-        iteration = last(iterations)
-        fields = Dict(name => dropdims(mean(centered_output(file, name, iteration, grid); dims=1); dims=1)
+        iteration  = last(iterations)
+        fields     = Dict(name => dropdims(mean(centered_output(file, name, iteration, grid); dims=1); dims=1)
                       for name in ("Abx", "Aby", "Abz", "Gbx", "Gby", "Gbz", "Dbz"))
         return (; y=collect(grid.yᵃᶜᵃ[1:grid.Ny]), z=collect(grid.z.cᵃᵃᶜ[1:grid.Nz]),
                   time=file["timeseries/t/$iteration"], fields)
@@ -34,14 +34,14 @@ end
 function prepare_internal_tide(path)
     return jldopen(path) do file
         saved_grid = file["serialized/grid"]
-        grid = saved_grid.underlying_grid
+        grid       = saved_grid.underlying_grid
         iterations = sort(parse.(Int, keys(file["timeseries/t"])))
-        t = [file["timeseries/t/$iteration"] for iteration in iterations]
-        z = collect(grid.z.cᵃᵃᶜ[1:grid.Nz])
-        x = collect(grid.xᶜᵃᵃ[1:grid.Nx])
-        bottom = vec(Array(saved_grid.immersed_boundary.bottom_height[1:grid.Nx, 1, 1]))
-        wet = [depth > floor for floor in bottom, depth in z]
-        fields = Dict(name => cat([dropdims(centered_output(file, name, iteration, grid); dims=2)
+        t          = [file["timeseries/t/$iteration"] for iteration in iterations]
+        z          = collect(grid.z.cᵃᵃᶜ[1:grid.Nz])
+        x          = collect(grid.xᶜᵃᵃ[1:grid.Nx])
+        bottom     = vec(Array(saved_grid.immersed_boundary.bottom_height[1:grid.Nx, 1, 1]))
+        wet        = [depth > floor for floor in bottom, depth in z]
+        fields     = Dict(name => cat([dropdims(centered_output(file, name, iteration, grid); dims=2)
                                   for iteration in iterations]...; dims=3) for name in ("Abx", "Abz", "Gbz"))
         return (; x, z, Δz=diff(collect(grid.z.cᵃᵃᶠ[1:grid.Nz+1])), t, wet, fields)
     end
@@ -53,7 +53,7 @@ end
 
 function global_ocean_geometry(path)
     saved_grid = jldopen(file -> file["serialized/grid"], path)
-    grid = saved_grid.underlying_grid
+    grid       = saved_grid.underlying_grid
     (; Nx, Ny, Nz, Hx, Hy, Hz) = grid
     centers(name) = Array(getproperty(grid, name)[1:Nx, 1:Ny])
     corners(name) = Array(getproperty(grid, name)[1:Nx+1, 1:Ny+1])
@@ -76,14 +76,14 @@ latitude_bands(φ, latitude_edges) = [clamp(searchsortedlast(latitude_edges, val
 # Restarts leave extra records shortly after a whole day, so each day keeps only its closest record.
 function daily_records(file)
     iterations = sort(parse.(Int, keys(file["timeseries/t"])))
-    days = [file["timeseries/t/$iteration"] / 86400 for iteration in iterations]
-    closest = [argmin(abs.(days .- day)) for day in round(Int, first(days)):round(Int, last(days))]
+    days       = [file["timeseries/t/$iteration"] / 86400 for iteration in iterations]
+    closest    = [argmin(abs.(days .- day)) for day in round(Int, first(days)):round(Int, last(days))]
     return iterations[closest], days[closest]
 end
 
 function prepare_global_energy(path)
     (; wet, Az, zᶠ) = global_ocean_geometry(path)
-    Δz = diff(zᶠ)
+    Δz     = diff(zᶠ)
     volume = sum(sum(Az .* view(wet, :, :, k)) * Δz[k] for k in axes(wet, 3))
     return jldopen(path) do file
         iterations, days = daily_records(file)
@@ -116,7 +116,7 @@ function surface_divergence_variance(u, v, geometry)
     for j in 2:Ny-1, i in 1:Nx
         open_water(i, j) || continue
         east = mod1(i + 1, Nx)
-        δ = (Δyᶠᶜ[east, j] * u[Hx+east, Hy+j, 1] - Δyᶠᶜ[i, j] * u[Hx+i, Hy+j, 1] +
+        δ    = (Δyᶠᶜ[east, j] * u[Hx+east, Hy+j, 1] - Δyᶠᶜ[i, j] * u[Hx+i, Hy+j, 1] +
              Δxᶜᶠ[i, j+1] * v[Hx+i, Hy+j+1, 1] - Δxᶜᶠ[i, j] * v[Hx+i, Hy+j, 1]) / Az[i, j]
         total += Az[i, j] * δ^2
         area += Az[i, j]
@@ -162,10 +162,10 @@ end
 # Spectral density of a non-periodic segment: the linear trend is removed and the Hann window has a unit mean square, so that
 # the wavenumber integral returns the variance of the detrended signal.
 function tapered_spectrum(values, Δx)
-    L = length(values)
-    n = eachindex(values) .- (L + 1) / 2
+    L         = length(values)
+    n         = eachindex(values) .- (L + 1) / 2
     detrended = values .- mean(values) .- n * sum(n .* values) / sum(abs2, n)
-    taper = @. sqrt(8 / 3) * cos(π * n / L)^2
+    taper     = @. sqrt(8 / 3) * cos(π * n / L)^2
     return real.(first(power_spectrum_x(taper .* detrended, (0:L-1) .* Δx))) .* (L * Δx / 2π)
 end
 
@@ -184,19 +184,19 @@ function prepare_global_surface(path; regions, latitude_edges=-90:1:90, spectra_
     geometry = global_ocean_geometry(path)
     (; Nx, Ny, Nz, Hx, Hy, wet, φ, Az, λᶠᶠ, φᶠᶠ) = geometry
     number_of_bands = length(latitude_edges) - 1
-    bands = latitude_bands(φ, latitude_edges)
-    weights = Az .* view(wet, :, :, Nz)
-    band_areas = zonal_mean(ones(size(weights)), weights, bands, number_of_bands)
+    bands           = latitude_bands(φ, latitude_edges)
+    weights         = Az .* view(wet, :, :, Nz)
+    band_areas      = zonal_mean(ones(size(weights)), weights, bands, number_of_bands)
     band_mean(field) = zonal_mean(view(field, Hx+1:Hx+Nx, Hy+1:Hy+Ny, 1), weights, bands, number_of_bands) ./ band_areas
 
     return jldopen(path) do file
         iterations, days = daily_records(file)
-        temperature = stack(band_mean(file["timeseries/T/$iteration"]) for iteration in iterations)
-        salinity = stack(band_mean(file["timeseries/S/$iteration"]) for iteration in iterations)
+        temperature         = stack(band_mean(file["timeseries/T/$iteration"]) for iteration in iterations)
+        salinity            = stack(band_mean(file["timeseries/S/$iteration"]) for iteration in iterations)
         divergence_variance = [surface_divergence_variance(file["timeseries/u/$iteration"], file["timeseries/v/$iteration"], geometry)
                                for iteration in iterations]
-        last_iteration = last(iterations)
-        kinetic_energy = surface_kinetic_energy(file["timeseries/u/$last_iteration"], file["timeseries/v/$last_iteration"], geometry)
+        last_iteration     = last(iterations)
+        kinetic_energy     = surface_kinetic_energy(file["timeseries/u/$last_iteration"], file["timeseries/v/$last_iteration"], geometry)
         spectra_iterations = iterations[days .≥ spectra_start_day][1:spectra_interval:end]
         return (; days, latitude_edges=collect(latitude_edges), temperature, salinity, divergence_variance, kinetic_energy,
                   snapshot_day=last(days), λ=λᶠᶠ, φ=φᶠᶠ, spectra=surface_spectra(file, spectra_iterations, geometry),
@@ -252,10 +252,10 @@ end
 function prepare_global_budget(path; latitude_edges=-80:0.25:90, minimum_day=1170)
     geometry = global_ocean_geometry(path)
     (; wet, φ, zᶜ) = geometry
-    distance = wall_distance(wet)
-    bands = latitude_bands(φ, latitude_edges)
+    distance            = wall_distance(wet)
+    bands               = latitude_bands(φ, latitude_edges)
     number_of_distances = Int(maximum(distance))
-    number_of_bands = length(latitude_edges) - 1
+    number_of_bands     = length(latitude_edges) - 1
     distance_bin(i, j, k) = distance[i, j, k]
     band_bin(i, j, k) = bands[i, j]
 
@@ -263,9 +263,9 @@ function prepare_global_budget(path; latitude_edges=-80:0.25:90, minimum_day=117
         iterations = sort(parse.(Int, keys(file["timeseries/t"])))
         filter!(iteration -> file["timeseries/t/$iteration"] / 86400 ≥ minimum_day, iterations)
         window_ends = [file["timeseries/t/$iteration"] / 86400 for iteration in iterations]
-        windows = map(iterations) do iteration
-            P = read_centered_total(file, ("Abx", "Aby", "Abz"), iteration, geometry)
-            G = read_centered_total(file, ("Gbx", "Gby", "Gbz"), iteration, geometry)
+        windows     = map(iterations) do iteration
+            P       = read_centered_total(file, ("Abx", "Aby", "Abz"), iteration, geometry)
+            G       = read_centered_total(file, ("Gbx", "Gby", "Gbz"), iteration, geometry)
             invalid = .!isfinite.(P) .| .!isfinite.(G)
             P[invalid] .= 0
             G[invalid] .= 0
@@ -289,8 +289,8 @@ end
 # With `reuse`, a compact file already in the data cache spares the pass over the original output.
 function compact_dataset(dataset, filename, prepare; directory=nothing, reuse=false)
     raw_directory = isnothing(directory) ? joinpath(@__DIR__, "..", dataset) : abspath(directory)
-    raw_path = joinpath(raw_directory, filename)
-    compact_name = "compact_" * filename
+    raw_path      = joinpath(raw_directory, filename)
+    compact_name  = "compact_" * filename
     local_compact = joinpath(raw_directory, compact_name)
     isfile(local_compact) && return JLD2.load(local_compact, "data")
     cached_compact = joinpath(@__DIR__, "..", "data", dataset, compact_name)
@@ -309,10 +309,10 @@ end
 function prepare_global_surface_averages(path)
     (; Nx, Ny, Nz, Hx, Hy, wet, Az) = global_ocean_geometry(path)
     weights = Az .* view(wet, :, :, Nz)
-    area = sum(weights)
+    area    = sum(weights)
     return jldopen(path) do file
         iterations = sort(parse.(Int, keys(file["timeseries/t"])))
-        days = [file["timeseries/t/$iteration"] / 86400 for iteration in iterations]
+        days       = [file["timeseries/t/$iteration"] / 86400 for iteration in iterations]
         surface_mean(name, iteration) = sum(view(file["timeseries/$name/$iteration"], Hx+1:Hx+Nx, Hy+1:Hy+Ny, 1) .* weights) / area
         return (; days, temperature=[surface_mean("T", iteration) for iteration in iterations],
                   salinity=[surface_mean("S", iteration) for iteration in iterations])

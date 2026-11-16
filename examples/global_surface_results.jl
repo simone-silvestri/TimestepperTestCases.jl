@@ -18,15 +18,20 @@ regions = [(; name="Gulf Stream", longitudes=(280, 320), latitudes=(28, 50)),
            (; name="Southern Ocean", longitudes=(30, 90), latitudes=(-70, -38))]
 
 surfaces = map(labels) do label
-    path = joinpath(directory, "global_ocean_$(label)_surface.jld2")
+    path     = joinpath(directory, "global_ocean_$(label)_surface.jld2")
+    diagnostics = joinpath(directory, "global_ocean_$(label)_velocity_diagnostics.jld2")
+    if isfile(diagnostics) && mtime(diagnostics) ≥ mtime(path)
+        @info "Reading surface velocity diagnostics" label
+        return JLD2.load(diagnostics, "result")
+    end
     geometry = global_ocean_geometry(path)
     @info "Reducing surface velocities" label
     result = jldopen(path) do file
         iterations, days = daily_records(file)
-        selected = findall(≥(last(days) - 365), days)[1:5:end]
+        selected       = findall(≥(last(days) - 365), days)[1:5:end]
         last_iteration = last(iterations)
         kinetic_energy = surface_kinetic_energy(file["timeseries/u/$last_iteration"], file["timeseries/v/$last_iteration"], geometry)
-        spectra = map(regions) do region
+        spectra        = map(regions) do region
             segments = land_free_segments(region, geometry; segment_length=96)
             spacings = [mean(geometry.Δx[i, segment.row] for i in segment.columns) for segment in segments]
             spectrum(field) = mean(tapered_spectrum(Float64[field[geometry.Hx+i, geometry.Hy+segment.row, 1] for i in segment.columns], spacing)
@@ -37,7 +42,7 @@ surfaces = map(labels) do label
         return (; label, snapshot_day=last(days), spectral_days=days[selected], kinetic_energy, spectra, λ=geometry.λᶠᶠ, φ=geometry.φᶠᶠ)
     end
     @info "Surface reduction complete" label result.snapshot_day length(result.spectral_days)
-    jldsave(joinpath(directory, "global_ocean_$(label)_velocity_diagnostics.jld2"); result)
+    jldsave(diagnostics; result)
     return result
 end
 
@@ -48,7 +53,7 @@ Colorbar(figure[1, 1]; colormap=:magma, limits=(0, 0.5), vertical=false, height=
          label=L"\sqrt{u^2+v^2}\;[\mathrm{m\,s^{-1}}]")
 for (row, index) in enumerate((1, 3, 5))
     surface = surfaces[index]
-    axis = Axis(figure[row+1, 1]; title="($(('a', 'b', 'c')[row])) $(surface.label)", titlealign=:left,
+    axis    = Axis(figure[row+1, 1]; title="($(('a', 'b', 'c')[row])) $(surface.label)", titlealign=:left,
                 backgroundcolor=global_land_color, xgridvisible=false, ygridvisible=false,
                 xlabel=row == 3 ? L"\lambda\;[^\circ\mathrm{E}]" : "", ylabel=L"\varphi\;[^\circ\mathrm{N}]",
                 xticks=0:90:360, yticks=-60:30:60, xticklabelsvisible=row == 3)

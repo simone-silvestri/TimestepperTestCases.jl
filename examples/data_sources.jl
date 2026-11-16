@@ -12,9 +12,9 @@ function dataset_file(dataset, filename; directory=nothing)
     local_path = joinpath(@__DIR__, "..", dataset, filename)
     isfile(local_path) && return local_path
 
-    record = parsefile(joinpath(@__DIR__, "datasets.toml"))[dataset]
+    record   = parsefile(joinpath(@__DIR__, "datasets.toml"))[dataset]
     checksum = get(record["sha256"], filename, "")
-    path = joinpath(@__DIR__, "..", "data", dataset, filename)
+    path     = joinpath(@__DIR__, "..", "data", dataset, filename)
     if isfile(path) && !isempty(checksum) && open(sha256, path) == hex2bytes(checksum)
         return path
     end
