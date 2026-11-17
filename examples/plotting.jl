@@ -108,41 +108,7 @@ end
 const global_time_label = L"t\;[\mathrm{years}]"
 const global_depth_label = L"z\;[\mathrm{km}]"
 const global_diffusivity_label = L"\kappa\;[\mathrm{m^2\,s^{-1}}]"
-const global_year_ticks = 0:5
 const global_land_color = RGBf(0.82, 0.82, 0.82)
-
-function plot_global_kinetic_energy(histories)
-    figure    = Figure(size=(1100, 400))
-    whole_run = Axis(figure[1, 1]; title="Whole run", xlabel=global_time_label, xticks=global_year_ticks,
-                     ylabel=L"\langle E_k\rangle\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]")
-    last_years = Axis(figure[1, 2]; title="Last two years", xlabel=global_time_label)
-    for history in histories, axis in (whole_run, last_years)
-        lines!(axis, history.years, 1e3 * history.kinetic_energy; plot_style(history.label)..., label=history.label)
-    end
-    ylims!(whole_run, 0, nothing)
-    limits!(last_years, 3, maximum(last(history.years) for history in histories), 3.3, 3.8)
-    Legend(figure[2, 1:2], whole_run; orientation=:horizontal)
-    return save_example(figure, "global_kinetic_energy")
-end
-
-function plot_global_tracers(histories)
-    tracers = ((drift=:temperature_drift, difference=:temperature_difference, drift_scale=1,
-                drift_label=L"\Delta\langle T\rangle\;[^\circ\mathrm{C}]", difference_label=L"\delta\langle T\rangle\;[10^{-3}\,{}^\circ\mathrm{C}]"),
-               (drift=:salinity_drift, difference=:salinity_difference, drift_scale=1e3,
-                drift_label=L"\Delta\langle S\rangle\;[10^{-3}\,\mathrm{psu}]", difference_label=L"\delta\langle S\rangle\;[10^{-3}\,\mathrm{psu}]"))
-    figure     = Figure(size=(1100, 600))
-    drift_axes = [Axis(figure[1, column]; title="Drift from the initial state", ylabel=tracer.drift_label, xticks=global_year_ticks,
-                       xticklabelsvisible=false) for (column, tracer) in enumerate(tracers)]
-    difference_axes = [Axis(figure[2, column]; title="Difference from AB2-SE", ylabel=tracer.difference_label, xlabel=global_time_label,
-                            xticks=global_year_ticks) for (column, tracer) in enumerate(tracers)]
-    for (tracer, drift_axis, difference_axis) in zip(tracers, drift_axes, difference_axes), history in histories
-        style = plot_style(history.label)
-        lines!(drift_axis, history.years, tracer.drift_scale * getproperty(history, tracer.drift); style..., label=history.label)
-        lines!(difference_axis, history.years, 1e3 * getproperty(history, tracer.difference); style...)
-    end
-    Legend(figure[3, 1:2], first(drift_axes); orientation=:horizontal)
-    return save_example(figure, "global_tracers")
-end
 
 # Each cell is drawn between its four corners, unwrapped against the first one, so that a cell across the date
 # line is not stretched over the map. The few cells wider than `maximum_cell_span` touch the pole and are dropped.
@@ -166,48 +132,7 @@ function tripolar_heatmap!(axis, values, λ, φ; longitude_limits=(0, 360), lati
     return mesh!(axis, vertices, faces; color=colors, shading=NoShading, rasterize=2, kwargs...)
 end
 
-function plot_global_surface_kinetic_energy(snapshots; decades=(-4, 0))
-    figure = Figure(size=(1000, 1260))
-    for (row, snapshot) in enumerate(snapshots)
-        is_last_row = row == length(snapshots)
-        axis        = Axis(figure[row, 1]; title=snapshot.label, backgroundcolor=global_land_color, xgridvisible=false, ygridvisible=false,
-                    xlabel=is_last_row ? L"\lambda\;[^\circ\mathrm{E}]" : "", xticklabelsvisible=is_last_row, xticks=0:60:360,
-                    ylabel=L"\varphi\;[^\circ\mathrm{N}]", yticks=-60:30:60)
-        tripolar_heatmap!(axis, log10.(snapshot.kinetic_energy), snapshot.λ, snapshot.φ; colormap=:magma, colorrange=decades)
-        limits!(axis, 0, 360, -80, 85)
-    end
-    exponents = first(decades):last(decades)
-    Colorbar(figure[length(snapshots)+1, 1]; colormap=:magma, limits=decades, nsteps=256, vertical=false, flipaxis=false, height=14,
-             ticks=(exponents, [latexstring("10^{$exponent}") for exponent in exponents]),
-             label=L"E_k=\frac{1}{2}(u^2+v^2)\;[\mathrm{m^2\,s^{-2}}]")
-    return save_example(figure, "global_surface_kinetic_energy")
-end
-
-function plot_global_surface_kinetic_energy_regions(snapshots, regions; decades=(-3, 0))
-    figure = Figure(size=(1180, 1040))
-    for (row, region) in enumerate(regions)
-        Label(figure[row, 0], region.name; rotation=π/2, tellheight=false)
-        for (column, snapshot) in enumerate(snapshots)
-            axis = Axis(figure[row, column]; title=row == 1 ? snapshot.label : "", backgroundcolor=global_land_color, aspect=AxisAspect(1.7),
-                        xgridvisible=false, ygridvisible=false, xticks=range(region.longitudes...; length=3), yticks=range(region.latitudes...; length=3),
-                        xlabel=row == length(regions) ? L"\lambda\;[^\circ\mathrm{E}]" : "",
-                        ylabel=column == 1 ? L"\varphi\;[^\circ\mathrm{N}]" : "", yticklabelsvisible=column == 1)
-            tripolar_heatmap!(axis, log10.(snapshot.kinetic_energy), snapshot.λ, snapshot.φ; longitude_limits=region.longitudes, latitude_limits=region.latitudes,
-                              colormap=:magma, colorrange=decades)
-            limits!(axis, region.longitudes..., region.latitudes...)
-        end
-    end
-    exponents = first(decades):last(decades)
-    Colorbar(figure[length(regions)+1, 1:length(snapshots)]; colormap=:magma, limits=decades, nsteps=256, vertical=false, flipaxis=false, height=14,
-             ticks=(exponents, [latexstring("10^{$exponent}") for exponent in exponents]),
-             label=L"E_k=\frac{1}{2}(u^2+v^2)\;[\mathrm{m^2\,s^{-2}}]")
-    return save_example(figure, "global_surface_kinetic_energy_regions")
-end
-
 const global_wavenumber_label = L"k\;[\mathrm{rad\,m^{-1}}]"
-const global_spectra_panels = ((name=:kinetic_energy, label=L"E_k(k)\;[\mathrm{m^3\,s^{-2}}]", ratio_label=L"E_k/E_k^{\mathrm{AB2}}", title="Kinetic energy"),
-                               (name=:temperature, label=L"E_T(k)\;[^\circ\mathrm{C}^2\,\mathrm{m}]", ratio_label=L"E_T/E_T^{\mathrm{AB2}}", title="Temperature"),
-                               (name=:salinity, label=L"E_S(k)\;[\mathrm{psu^2\,m}]", ratio_label=L"E_S/E_S^{\mathrm{AB2}}", title="Salinity"))
 
 function cubic_slope!(axis, k, energy)
     wavenumbers = k[end÷8:end÷2]
@@ -215,86 +140,6 @@ function cubic_slope!(axis, k, energy)
     lines!(axis, wavenumbers, slope; color=:gray40, linewidth=1)
     text!(axis, wavenumbers[end÷2], slope[end÷2]; text=L"k^{-3}", color=:gray40, align=(:left, :bottom), offset=(4, 4))
     return axis
-end
-
-function plot_global_surface_spectra(spectra)
-    figure = Figure(size=(1180, 440))
-    panels = map(enumerate(global_spectra_panels)) do (column, panel)
-        axis = Axis(figure[1, column]; panel.title, ylabel=panel.label, xlabel=global_wavenumber_label, xscale=log10, yscale=log10)
-        for spectrum in spectra
-            lines!(axis, spectrum.wavenumbers[2:end], getproperty(spectrum, panel.name)[2:end]; plot_style(spectrum.label)..., label=spectrum.label)
-        end
-        return axis
-    end
-    cubic_slope!(first(panels), first(spectra).wavenumbers, first(spectra).kinetic_energy)
-    Legend(figure[2, 1:3], first(panels); orientation=:horizontal)
-    return save_example(figure, "global_surface_spectra")
-end
-
-# A grid of axes with one quantity per row and one region per column, drawn over the same wavenumbers in every region.
-function regional_spectra_axes(figure, estimates; ylabel_name, yscale, ylimits=nothing, wavenumber_limits=(4e-6, 2.5e-4))
-    return [Axis(figure[row, column]; title=row == 1 ? estimate.name : "", xscale=log10, yscale, limits=(wavenumber_limits, ylimits),
-                 xticks=LogTicks(-5:-4), xminorticks=IntervalsBetween(9), xminorticksvisible=true,
-                 xlabel=row == length(global_spectra_panels) ? global_wavenumber_label : "", xticklabelsvisible=row == length(global_spectra_panels),
-                 ylabel=column == 1 ? getproperty(panel, ylabel_name) : "", yticklabelsvisible=column == 1)
-            for (row, panel) in enumerate(global_spectra_panels), (column, estimate) in enumerate(estimates)]
-end
-
-function plot_global_surface_spectra_regions(estimates)
-    figure = Figure(size=(1180, 860))
-    panels = regional_spectra_axes(figure, estimates; ylabel_name=:label, yscale=log10)
-    for (row, panel) in enumerate(global_spectra_panels), (column, estimate) in enumerate(estimates), simulation in estimate.simulations
-        lines!(panels[row, column], estimate.wavenumbers[3:end], getproperty(simulation.means, panel.name)[3:end]; plot_style(simulation.label)..., label=simulation.label)
-    end
-    foreach(row -> linkyaxes!(row...), eachrow(panels))
-    for (column, estimate) in enumerate(estimates)
-        cubic_slope!(panels[1, column], estimate.wavenumbers, first(estimate.simulations).means.kinetic_energy)
-    end
-    Legend(figure[length(global_spectra_panels)+1, 1:length(estimates)], panels[1, 1]; orientation=:horizontal)
-    return save_example(figure, "global_surface_spectra_regions")
-end
-
-function plot_global_surface_spectra_ratio(estimates; ratio_limits=(0.5, 1.75))
-    figure = Figure(size=(1180, 760))
-    panels = regional_spectra_axes(figure, estimates; ylabel_name=:ratio_label, yscale=identity, ylimits=ratio_limits)
-    for (row, panel) in enumerate(global_spectra_panels), (column, estimate) in enumerate(estimates)
-        axis = panels[row, column]
-        hlines!(axis, 1; color=:gray50, linewidth=1)
-        for simulation in estimate.simulations[2:end]
-            (; ratio, error) = getproperty(simulation.ratios, panel.name)
-            style = plot_style(simulation.label)
-            band!(axis, estimate.wavenumbers[3:end], (ratio-error)[3:end], (ratio+error)[3:end]; color=(style.color, 0.2))
-            lines!(axis, estimate.wavenumbers[3:end], ratio[3:end]; style..., label=simulation.label)
-        end
-    end
-    Legend(figure[length(global_spectra_panels)+1, 1:length(estimates)], panels[1, 1]; orientation=:horizontal)
-    return save_example(figure, "global_surface_spectra_ratio")
-end
-
-function plot_global_surface_hovmoller(hovmollers; temperature_range=(-2, 30), salinity_range=(32, 37), temperature_limit=1, salinity_limit=0.2)
-    reference = first(hovmollers)
-    panels    = ((name=:temperature, difference=:temperature_difference, colormap=:thermal, range=temperature_range, limit=temperature_limit,
-               label=L"T_s\;[^\circ\mathrm{C}]", difference_label=L"\delta T_s\;[^\circ\mathrm{C}]"),
-              (name=:salinity, difference=:salinity_difference, colormap=:haline, range=salinity_range, limit=salinity_limit,
-               label=L"S_s\;[\mathrm{psu}]", difference_label=L"\delta S_s\;[\mathrm{psu}]"))
-    figure = Figure(size=(1180, 640))
-    for (row, panel) in enumerate(panels)
-        is_last_row = row == length(panels)
-        latitude_axis(column, title) = Axis(figure[row, column]; title=row == 1 ? title : "", limits=(0, 5, -80, 90), xticks=global_year_ticks, yticks=-60:30:60,
-                                            xlabel=is_last_row ? global_time_label : "", xticklabelsvisible=is_last_row,
-                                            ylabel=column == 1 ? L"\varphi\;[^\circ\mathrm{N}]" : "", yticklabelsvisible=column == 1,
-                                            backgroundcolor=global_land_color)
-        heatmap!(latitude_axis(1, reference.label), reference.years, reference.latitudes, transpose(getproperty(reference, panel.name));
-                 colormap=panel.colormap, colorrange=panel.range, nan_color=:transparent, rasterize=2)
-        Colorbar(figure[row, 2]; colormap=panel.colormap, limits=panel.range, label=panel.label, nsteps=256)
-        for (offset, hovmoller) in enumerate(hovmollers[2:end])
-            heatmap!(latitude_axis(2 + offset, hovmoller.label * " − " * reference.label), hovmoller.years, hovmoller.latitudes,
-                     transpose(getproperty(hovmoller, panel.difference)); colormap=:balance, colorrange=(-panel.limit, panel.limit),
-                     nan_color=:transparent, rasterize=2)
-        end
-        Colorbar(figure[row, 2+length(hovmollers)]; colormap=:balance, limits=(-panel.limit, panel.limit), label=panel.difference_label, nsteps=256)
-    end
-    return save_example(figure, "global_surface_hovmoller")
 end
 
 positive_part(value) = value > 0 ? value : NaN
@@ -402,30 +247,6 @@ function plot_global_diffusivity_history(histories)
     end
     Legend(figure[2, 1:2], first(panels); orientation=:horizontal)
     return save_example(figure, "global_diffusivity_history")
-end
-
-function plot_global_simulation_differences(divergence_histories, interior_estimates; transient_days=360)
-    figure          = Figure(size=(1100, 460))
-    divergence_axis = Axis(figure[1, 1]; title="Surface divergence, first year", xlabel=L"t\;[\mathrm{days}]", xticks=0:60:transient_days,
-                           ylabel=L"\langle\delta^2\rangle/\langle\delta^2\rangle^{\mathrm{AB2}}")
-    diffusivity_axis = Axis(figure[1, 2]; title="Numerical diffusivity, more than 5 cells from a wall", xlabel=L"\kappa/\kappa^{\mathrm{AB2}}",
-                            ylabel=global_depth_label)
-    hlines!(divergence_axis, 1; color=:gray50, linewidth=1)
-    vlines!(diffusivity_axis, 1; color=:gray50, linewidth=1)
-    for history in divergence_histories
-        first_year = findall(day -> 0 < day ≤ transient_days, history.days)
-        lines!(divergence_axis, history.days[first_year], history.ratio[first_year]; plot_style(history.label)..., label=replace(history.label, "SM05" => "F1"))
-    end
-    for estimate in interior_estimates
-        style  = plot_style(estimate.label)
-        depths = estimate.depths / 1000
-        band!(diffusivity_axis, depths, estimate.ratio - estimate.error, estimate.ratio + estimate.error; direction=:y, color=(style.color, 0.2))
-        scatterlines!(diffusivity_axis, estimate.ratio, depths; style..., markercolor=style.color, markersize=9)
-    end
-    xlims!(divergence_axis, 0, transient_days)
-    ylims!(diffusivity_axis, -5, 0)
-    Legend(figure[2, 1:2], divergence_axis; orientation=:horizontal)
-    return save_example(figure, "global_simulation_differences")
 end
 
 function plot_global_surface_tracer_histories(histories)

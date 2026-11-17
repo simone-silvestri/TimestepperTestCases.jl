@@ -38,4 +38,12 @@ implementation-plan*.md
 Manifest.toml
 Manifest-v*.toml
 !/run_env/Manifest.toml
-!/docs/figures/*.png
+
+# Local simulation campaigns and diagnostic experiments
+/global_ocean/
+/internal_tide/
+/channel_simulation/
+/near_global/
+/dense_overflow/
+/internal_seiche*/
+/internal_tide_*/

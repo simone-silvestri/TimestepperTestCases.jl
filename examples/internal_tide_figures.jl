@@ -1,6 +1,6 @@
 # # Internal tide: campaign figures
 #
-# Render snapshots, numerical diffusivity, energetics, and timestep-refinement comparisons from the thirteen
+# Render snapshots, numerical diffusivity, energetics, and timestep-refinement comparisons from the fifteen
 # completed 40-day simulations. Run with `julia --project=examples examples/internal_tide_figures.jl internal_tide`.
 
 using Oceananigans, CairoMakie, TimestepperTestCases, Statistics, LaTeXStrings, JLD2
@@ -9,11 +9,11 @@ folder = abspath(isempty(ARGS) ? joinpath(@__DIR__, "..", "internal_tide") : fir
 production_only = "--production-only" in ARGS
 files = filter(name -> endswith(name, ".jld2"), readdir(folder; join=true))
 production_only && filter!(name -> !occursin(r"-dt[48]\.jld2$", name), files)
-@assert length(files) == (production_only ? 7 : 13) "Unexpected number of internal-tide simulations"
+@assert length(files) == (production_only ? 7 : 15) "Unexpected number of internal-tide simulations"
 for file in files
     jldopen(file) do output
         times = output["timeseries/t"]
-        @assert maximum(times[key] for key in keys(times)) ≈ 40 * 86400 "Incomplete simulation: $file"
+        @assert maximum(times[key] for key in keys(times)) > 40 * 86400 - 3600 "Incomplete simulation: $file"
     end
 end
 
@@ -105,6 +105,11 @@ for extension in ("pdf", "png")
 end
 # ![Final surface height, velocity, and stratification](figure-internal-tide.png)
 
+# AB2-SE is saved every 18 steps rather than every hour, so the runs are compared at the saved time closest to each
+# hourly output of WRK3-SE
+reference_times = cases[findfirst(v -> v.label == "WRK3-SE", variants)][:Abz].times
+nearest_index(c, t) = argmin(abs.(c[:Abz].times .- t))
+
 mvv = 8
 zC  = cases[1][:Abx].grid.z.cᵃᵃᶜ[2:128] ./ 1000
 fig = Figure(size = (950, 350))
@@ -125,11 +130,11 @@ for (col, it) in enumerate(its)
     ax = Axis(fig[1, col];
               xlabel = L"\kappa \text{ [m}^2\text{s}^{-1}\text{]}",
               xticks = xticks_list[col],
-              title  = L"t = \text{%$(Oceananigans.Utils.prettytime(cases[1][:Abz].times[it]))}",
+              title  = L"t = \text{%$(Oceananigans.Utils.prettytime(reference_times[it]))}",
               ylabel = col == 1 ? L"\text{Depth [km]}" : "",
               yticks = col == 1 ? ticks([-2, -1, 0]) : ([-2, -1, 0], ["", "", ""]))
     for (i, c) in enumerate(cases[1:end])
-        κ = κprofile(c, it)
+        κ = κprofile(c, nearest_index(c, reference_times[it]))
         lines!(ax, κ, zC, color = (colors[i], 0.1))
         lines!(ax, running_mean(κ, mvv), running_mean(zC, mvv), color = colors[i], linewidth = 1.5, label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
     end
@@ -153,8 +158,7 @@ ncols      = 3
 κfloor     = 1e-9
 κmax       = 1.5e-5
 
-itr   = 1:length(cases[1][:Abz].times)
-tdays = cases[1][:Abz].times[itr] ./ 86400
+tdays = reference_times ./ 86400
 
 κprof(c, it) = abs.(interior(Field(mean(c[:Abz][it] + c[:Abx][it], dims=1) /
                                    (mean(c[:Gbz][it], dims=1) + ϵκ) / 2), 1, 1, 2:128))
@@ -168,7 +172,7 @@ function boxmean(A, nz, nt)
     return B
 end
 
-κs = [boxmean(reduce(hcat, [κprof(c, it) for it in itr]), vertical_window, temporal_window) for c in cases]
+κs = [boxmean(reduce(hcat, [κprof(c, nearest_index(c, t)) for t in reference_times]), vertical_window, temporal_window) for c in cases]
 
 iref   = findfirst(v -> v.label == "WRK3-SE", variants)
 panels = difference ? [i for i in eachindex(cases) if i != iref] : collect(eachindex(cases))
@@ -199,7 +203,7 @@ axg = Axis(gtop[1, 1]; xlabel = L"\text{time [days]}", xticks = tticks, yticks =
 axp = Axis(gtop[1, 2]; xlabel = L"\kappa \text{ [m}^2\text{s}^{-1}\text{]}",
            xscale = log10, xticks = κlogticks,
            ylabel = L"\text{Depth [km]}", yticks = zticks,
-           title = L"\text{Time mean: 0--40 days}", titlealign = :left, titlesize = 13)
+           title  = L"\text{Time mean: 0–40 days}", titlealign = :left, titlesize = 13)
 
 for (i, c) in enumerate(cases)
     lines!(axg, tdays, vec(mean(κs[i], dims = 1));
@@ -221,11 +225,11 @@ for (r, i) in enumerate(panels)
     bottom   = r + ncols > length(panels)
 
     ax = Axis(gbot[row, col]; title = latexstring(raw"\text{" * replace(labels[i], "-SM05" => "-F1") * "}"), titlealign = :left, titlesize = 13, titlegap = 3,
-              ylabel = col == 1 ? L"\text{Depth [km]}" : "",
-              yticks = col == 1 ? zticks : ([-2, -1, 0], ["", "", ""]),
-              xticks = tticks,
+              ylabel        = col == 1 ? L"\text{Depth [km]}" : "",
+              yticks        = col == 1 ? zticks : ([-2, -1, 0], ["", "", ""]),
+              xticks        = tticks,
               xticksvisible = bottom, xticklabelsvisible = bottom,
-              xlabel = bottom ? L"\text{time [days]}" : "")
+              xlabel        = bottom ? L"\text{time [days]}" : "")
 
     global hm = heatmap!(ax, tdays, zC, fields[r]'; colorrange = crange, colormap =  Reverse(:RdBu),
                          lowclip = :darkblue, highclip = :darkred, rasterize = 2)
@@ -247,17 +251,20 @@ for extension in ("pdf", "png")
 end
 # ![Numerical diffusivity history and differences](diffusivity-hovmoller-internal-tide.png)
 
+# compute_rpe_density integrates ρ z with ρ = ρ₀(1 - b/g): g/ρ₀ turns it into the buoyancy form -∫ b z, in m² s⁻²
+g, ρ₀ = 9.80655, 1000.0
+potential_energy_scale = 1e3 * g / ρ₀
+
 fig = Figure(size = (820, 300))
 ax1 = Axis(fig[1, 1], title=L"\text{TKE}\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]",                    xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=WilkinsonTicks(4))
-ax2 = Axis(fig[1, 2], title=L"\text{RPE}-\text{RPE}|_{t=0}",  xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=ticks([0.00, 0.2, 0.4, 0.6]))
-ax3 = Axis(fig[1, 3], title=L"\text{APE}-\text{APE}|_{t=0}",  xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=ticks([0.00, -0.2, -0.4, -0.6, -0.8]))
+ax2 = Axis(fig[1, 2], title=L"\Delta\text{RPE}\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]",  xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=ticks([0, 2, 4, 6]))
+ax3 = Axis(fig[1, 3], title=L"\Delta\text{APE}\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]",  xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=ticks([0, 2, 4, 6]))
 ax4 = Axis(fig[1, 4], title=L"\eta^2 \text{ [cm}^2\text{]}",  xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=ticks([0, 10, 20, 30, 40]))
-times = cases[1][:Abx].times ./ 86400
-
 for (i, c) in enumerate(cases)
+    times = c[:Abx].times ./ 86400
     lines!(ax1, running_mean(times, 12), 1e3 * running_mean(c[:KE] .- c[:MKE], 12), color = colors[i], label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
-    lines!(ax2, running_mean(times[3:end], 12), running_mean(c[:RPE][3:end] .- c[:RPE][3], 12), color = colors[i], linestyle = linestyles[i])
-    lines!(ax3, running_mean(times[3:end], 12), -running_mean(c[:APE][3:end] .- c[:APE][3], 12), color = colors[i], label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
+    lines!(ax2, running_mean(times[3:end], 12), potential_energy_scale * running_mean(c[:RPE][3:end] .- c[:RPE][3], 12), color = colors[i], linestyle = linestyles[i])
+    lines!(ax3, running_mean(times[3:end], 12), potential_energy_scale * running_mean(c[:APE][3:end] .- c[:APE][3], 12), color = colors[i], label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
     lines!(ax4, running_mean(times, 12), running_mean(c[:η2] .* 1e4, 12), color = colors[i], label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
 end
 
@@ -272,39 +279,30 @@ end
 production_only && exit()
 
 
-# ══ Temporal-resolution test: the rectified bottom flow (section 5.1) ═════════════════════════════
+# ══ Temporal-resolution test: rectified flow, numerical diffusivity and TKE (section 5.1) ══════════════════════
+#
+# The curves at the nominal step are the production runs.
 
-refined = [(; label = "WRK3-SE", timestepper = "SplitRungeKutta3",    tag = "dt4"),
-           (; label = "SRK3-SE", timestepper = "SSPRungeKutta3",      tag = "dt4"),
-           (; label = "MRK4-SE", timestepper = "ModifiedRungeKutta4", tag = "dt4"),
-           (; label = "WRK3-SE", timestepper = "SplitRungeKutta3",    tag = "dt8"),
-           (; label = "SRK3-SE", timestepper = "SSPRungeKutta3",      tag = "dt8"),
-           (; label = "MRK4-SE", timestepper = "ModifiedRungeKutta4", tag = "dt8")]
+refinement_schemes = [("AB2-SE",  "QuasiAdamsBashforth2", :black),
+                      ("WRK3-SE", "SplitRungeKutta3",     :blue),
+                      ("SRK3-SE", "SSPRungeKutta3",       :red),
+                      ("MRK4-SE", "ModifiedRungeKutta4",  :green)]
 
-refined_cases = [TimestepperTestCases.load_internal_tide(folder, v.timestepper, v.label * "-" * v.tag) for v in refined]
+function refinement_case(label, timestepper, n)
+    n == 1 && return cases[findfirst(v -> v.label == label, variants)]
+    return TimestepperTestCases.load_internal_tide(folder, timestepper, "$label-dt$n")
+end
 
+curves = [(n == 1 ? label : "$label, Δt/$n", refinement_case(label, timestepper, n), linestyle, color)
+          for (label, timestepper, color) in refinement_schemes
+          for (n, linestyle) in ((1, :solid), (4, :dash), (8, :dot))]
 
-
-# ══ Temporal-resolution test: rectified flow and irreversible mixing ══════════════════════════════
 depths_in_kilometers = zu ./ 1000
-iW = findfirst(v -> v.label == "WRK3-SE", variants)
-iS = findfirst(v -> v.label == "SRK3-SE", variants)
-iM = findfirst(v -> v.label == "MRK4-SE", variants)
-
-curves = [("WRK3-SE",       cases[iW],        :solid, :blue),
-          ("WRK3-SE, Δt/4", refined_cases[1], :dash,  :blue),
-          ("WRK3-SE, Δt/8", refined_cases[4], :dot,   :blue),
-          ("SRK3-SE",       cases[iS],        :solid, :red),
-          ("SRK3-SE, Δt/4", refined_cases[2], :dash,  :red),
-          ("SRK3-SE, Δt/8", refined_cases[5], :dot,   :red),
-          ("MRK4-SE",       cases[iM],        :solid, :green),
-          ("MRK4-SE, Δt/4", refined_cases[3], :dash,  :green),
-          ("MRK4-SE, Δt/8", refined_cases[6], :dot,   :green)]
 
 "Time-mean of u' over x and t: the tide cancels, the rectified flow survives."
 function rectified_profile(c; days = 10)
-    t  = c[:u].times ./ 86400
-    i0 = findfirst(≥(t[end] - days), t)
+    t   = c[:u].times ./ 86400
+    i0  = findfirst(≥(t[end] - days), t)
     acc = zeros(size(interior(c[:u][1]), 3)); n = 0
     for it in i0:length(t)
         u = interior(c[:u][it]) ./ interior(c[:VFCC][it])
@@ -313,31 +311,46 @@ function rectified_profile(c; days = 10)
     return acc ./ n
 end
 
-uticks = ([0.0, 1e-3, 2e-3, 3e-3], [L"0", L"1\cdot 10^{-3}", L"2\cdot 10^{-3}", L"3\cdot 10^{-3}"])
-tticks = ticks([0, 10, 20, 30, 40])
+"Time mean of the box-averaged diffusivity profile, as in the summary row of the Hovmöller figure."
+function time_mean_diffusivity(c)
+    t = c[:Abz].times ./ 86400
+    κ = boxmean(reduce(hcat, [κprof(c, it) for it in eachindex(t)]), vertical_window, temporal_window)
+    Δ = diff(t)
+    w = [Δ[1] / 2; (Δ[1:end-1] .+ Δ[2:end]) ./ 2; Δ[end] / 2]
+    return κ * (w ./ sum(w))
+end
 
-fig = Figure(size = (900, 300), fontsize = 14)
+refinement_label(lab) = latexstring(raw"\text{" * replace(lab, "-" => "‐", "Δt" => raw"}\Delta t\text{") * "}")
 
-axu = Axis(fig[1, 1]; xlabel = L"\langle u^\prime \rangle_{x,t} \text{ [m s}^{-1}\text{]}",
-           ylabel = L"\text{Depth [km]}", xticks = uticks,
-           yticks = ticks([-2.0, -1.8, -1.6, -1.4, -1.2]))
+refinement = [(; label = refinement_label(lab), color = clr, linestyle = ls,
+                 u = rectified_profile(c), κ = max.(time_mean_diffusivity(c), κfloor),
+                 t = c[:Abx].times ./ 86400, tke = 1e3 .* (c[:KE] .- c[:MKE]))
+              for (lab, c, ls, clr) in curves]
 
-for (lab, c, ls, clr) in curves
-    lines!(axu, rectified_profile(c), depths_in_kilometers; color = clr, linestyle = ls, linewidth = 2, label = latexstring(replace(lab, "Δt" => raw"$\Delta t$")))
+uticks = ([0.0, 1e-3, 2e-3, 3e-3], [L"0", L"1", L"2", L"3"])
+tticks = ticks([0, 20, 40])
+
+fig = Figure(size = (1600, 540), fontsize = 26)
+
+axu = Axis(fig[1, 1]; xlabel = L"\langle u^\prime \rangle_{x,t} \text{ [10}^{-3}\text{ m s}^{-1}\text{]}", xticks = uticks,
+           ylabel = L"\text{Depth [km]}", yticks = ticks([-2.0, -1.6, -1.2]))
+axκ = Axis(fig[1, 2]; xlabel = L"\kappa \text{ [m}^2\text{s}^{-1}\text{]}", xscale = log10, xticks = κlogticks,
+           ylabel = L"\text{Depth [km]}", yticks = zticks)
+axk = Axis(fig[1, 3]; xlabel = L"\text{time [days]}", xticks = tticks,
+           ylabel = L"\text{TKE}\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]", yticks = WilkinsonTicks(3))
+
+for r in refinement
+    style = (; color = r.color, linestyle = r.linestyle, linewidth = 2)
+    lines!(axu, r.u, depths_in_kilometers; style...)
+    lines!(axκ, r.κ, zC; style...)
+    lines!(axk, running_mean(r.t, 12), running_mean(r.tke, 12); label = r.label, style...)
 end
 vlines!(axu, 0; color = (:black, 0.3), linewidth = 0.8)
 ylims!(axu, -2, -1.2)
+ylims!(axκ, -2, 0); xlims!(axκ, 1e-7, 2e-4)
+xlims!(axk, 0, 40)
 
-axr = Axis(fig[1, 2]; xlabel = L"\text{time [days]}", xticks = tticks,
-           ylabel = L"\text{RPE} - \text{RPE}|_{t=0}", yticks = ticks([-0.1, 0.0, 0.1, 0.2, 0.3]))
-
-for (lab, c, ls, clr) in curves
-    t = c[:Abx].times ./ 86400
-    lines!(axr, running_mean(t[3:end], 12), running_mean(c[:RPE][3:end] .- c[:RPE][3], 12);
-           color = clr, linestyle = ls, linewidth = 2, label = latexstring(replace(lab, "Δt" => raw"$\Delta t$")))
-end
-xlims!(axr, 0, 40)
-Legend(fig[1, 3], axr; framevisible = true, labelsize = 11)
+Legend(fig[1, 4], axk; framevisible = true, labelsize = 24, patchsize = (40, 14), rowgap = 8, patchlabelgap = 10)
 
 
 for extension in ("pdf", "png")

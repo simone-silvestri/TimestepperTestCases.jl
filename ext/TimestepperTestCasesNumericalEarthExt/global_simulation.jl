@@ -39,7 +39,7 @@ function download_from_artifacts(filepath)
         return
     end
 
-    filename = basename(filepath)
+    filename     = basename(filepath)
     fallback_url = ARTIFACTS_BASE_URL * filename
     @info "Downloading $filename from NumericalEarthArtifacts fallback..."
     mktemp(dirname(filepath)) do tmppath, tmpio
@@ -103,7 +103,7 @@ Barotropic substep count that puts the substep Courant number `c₀ k Δτ` at t
 """
 function global_ocean_substeps(barotropic_scheme, grid, scheme = :SplitRungeKutta3;
                               averaging_kernel = OptimizedAsymmetricAveragingKernel(),
-                              Δt = global_ocean_timestep(Val(scheme)))
+                              Δt               = global_ocean_timestep(Val(scheme)))
     return barotropic_substeps(barotropic_scheme; Δt, averaging_kernel, rate = global_ocean_barotropic_rate(grid))
 end
 
@@ -160,7 +160,7 @@ The eastward stress of `zonal_wind_stress` as the pair of surface momentum fluxe
 projected onto the grid directions and negated, a top flux `J` contributing `-J/Δz` to the boundary cell.
 """
 function global_ocean_wind_stress(grid; latitudes = default_wind_stress_latitudes,
-                                       stresses = default_wind_stress_values,
+                                       stresses          = default_wind_stress_values,
                                        reference_density = 1026)
     τˣ = Field{Face, Center, Nothing}(grid)
     τʸ = Field{Center, Face, Nothing}(grid)
@@ -200,11 +200,11 @@ $(SIGNATURES)
 used as stored, in-situ temperature and practical salinity, the case running a `LinearEquationOfState`.
 """
 function global_ocean_surface_restoring(grid, name; piston_velocity = 1/6, dataset = WOAMonthly())
-    zF = Array(znodes(grid, Face()))
+    zF                = Array(znodes(grid, Face()))
     surface_thickness = zF[end] - zF[end-1]
-    rate = piston_velocity / (surface_thickness * days)
+    rate              = piston_velocity / (surface_thickness * days)
 
-    metadata = Metadata(name; dataset)
+    metadata  = Metadata(name; dataset)
     restoring = DatasetRestoring(metadata, architecture(grid); rate,
                                  time_indices_in_memory = length(metadata))
 
@@ -212,24 +212,24 @@ function global_ocean_surface_restoring(grid, name; piston_velocity = 1/6, datas
 end
 
 function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
-                     arch = CPU(),
-                     grid = global_ocean_grid(arch),
+                     arch         = CPU(),
+                     grid         = global_ocean_grid(arch),
                      free_surface = nothing,
                      filter::Symbol = :optasym,
-                     averaging_kernel = global_ocean_kernel(filter),
-                     barotropic_timestepper = ForwardBackwardScheme(),
-                     slow_forcing = FrozenSlowForcing(),
-                     tracer_advection = nothing,
-                     momentum_advection = nothing,
-                     Δt = global_ocean_timestep(Val(timestepper)),
-                     nominal_timestep = Δt,
-                     cold_start_Δt = Δt / 3,
-                     cold_start_duration = 60days,
-                     stop_time = 720days,
-                     cost_stop_time = min(stop_time, 365days),
-                     dissipation = true,
-                     statistics = true,
-                     closure = global_ocean_closure(),
+                     averaging_kernel        = global_ocean_kernel(filter),
+                     barotropic_timestepper  = ForwardBackwardScheme(),
+                     slow_forcing            = FrozenSlowForcing(),
+                     tracer_advection        = nothing,
+                     momentum_advection      = nothing,
+                     Δt                      = global_ocean_timestep(Val(timestepper)),
+                     nominal_timestep        = Δt,
+                     cold_start_Δt           = Δt / 3,
+                     cold_start_duration     = 60days,
+                     stop_time               = 720days,
+                     cost_stop_time          = min(stop_time, 365days),
+                     dissipation             = true,
+                     statistics              = true,
+                     closure                 = global_ocean_closure(),
                      bottom_drag_coefficient = 0.003,
                      # uᵦ = 0.1 m s⁻¹ stands for the barotropic tide, which this configuration does not force
                      bottom_drag_background_velocity = 0.1,
@@ -256,7 +256,7 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
     if free_surface === nothing
         # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
         # target, so that the barotropic Courant number is a stated property of the run.
-        substeps = global_ocean_substeps(barotropic_timestepper, grid; averaging_kernel, Δt = nominal_timestep)
+        substeps     = global_ocean_substeps(barotropic_timestepper, grid; averaging_kernel, Δt = nominal_timestep)
         free_surface = SplitExplicitFreeSurface(grid; substeps, averaging_kernel,
                                                 timestepper = barotropic_timestepper,
                                                 slow_forcing)
@@ -307,20 +307,20 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
 
     if output
         ocean.output_writers[:surface] = JLD2Writer(ocean.model, surface;
-                                                    schedule = surface_output_interval,
-                                                    indices = (:, :, grid.Nz),
-                                                    filename = filename * "_surface",
-                                                    with_halos = true,
+                                                    schedule        = surface_output_interval,
+                                                    indices         = (:, :, grid.Nz),
+                                                    filename        = filename * "_surface",
+                                                    with_halos      = true,
                                                     overwrite_files = true,
-                                                    array_type = Array{Float32})
+                                                    array_type      = Array{Float32})
 
         ocean.output_writers[:average] = JLD2Writer(ocean.model, surface;
-                                                    schedule = dissipation_output_interval,
-                                                    indices = (:, :, grid.Nz),
-                                                    filename = filename * "_average",
-                                                    with_halos = true,
+                                                    schedule        = dissipation_output_interval,
+                                                    indices         = (:, :, grid.Nz),
+                                                    filename        = filename * "_average",
+                                                    with_halos      = true,
                                                     overwrite_files = true,
-                                                    array_type = Array{Float32})
+                                                    array_type      = Array{Float32})
     end
 
     # Without a checkpointer a job that dies at hour ten of a fourteen hour run leaves nothing to resume from,
@@ -328,10 +328,10 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
     # newest, so the chain costs one checkpoint of disk rather than one per interval.
     if !isnothing(checkpoint_interval)
         ocean.output_writers[:checkpointer] = Checkpointer(ocean.model;
-                                                           schedule = TimeInterval(checkpoint_interval),
-                                                           prefix = filename * "_checkpoint",
+                                                           schedule        = TimeInterval(checkpoint_interval),
+                                                           prefix          = filename * "_checkpoint",
                                                            overwrite_files = true,
-                                                           cleanup = true)
+                                                           cleanup         = true)
     end
 
     add_callback!(ocean, global_ocean_progress, progress_interval)
@@ -348,8 +348,8 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
         ocean.Δt        = Δt
         ocean.stop_time = cost_stop_time
         first_production_iteration = iteration(ocean)
-        production_wall  = @elapsed run!(ocean)
-        production_steps = iteration(ocean) - first_production_iteration
+        production_wall            = @elapsed run!(ocean)
+        production_steps           = iteration(ocean) - first_production_iteration
     end
 
     # The budget's averaging windows are phased from the moment its writer is attached, so the join time is
@@ -379,18 +379,19 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
 
         diss = merge(TimestepperTestCases.BuoyancyVarianceDissipationComputations.flatten_dissipation_fields(ϵb), (; Gbx, Gby, Gbz))
         ocean.output_writers[:dissipation] = JLD2Writer(ocean.model, diss;
-                                                        schedule = dissipation_output_interval,
-                                                        filename = filename * "_dissipation",
-                                                        overwrite_files = true)
+                                                        schedule        = dissipation_output_interval,
+                                                        filename        = filename * "_dissipation",
+                                                        overwrite_files = true,
+                                                        array_type      = Array{Float32})
     end
 
     # Float64 because the variance is recovered as ψ² - ψ̄², which cancels below Float32 precision in the abyss
     if output && statistics
         statistics_writer = JLD2Writer(ocean.model, global_ocean_statistics(ocean.model);
-                                       schedule = statistics_output_interval,
-                                       filename = filename * "_statistics",
+                                       schedule        = statistics_output_interval,
+                                       filename        = filename * "_statistics",
                                        overwrite_files = true,
-                                       array_type = Array{Float64})
+                                       array_type      = Array{Float64})
 
         ocean.output_writers[:statistics] = initialize_schedules!(statistics_writer, ocean.model)
     end
@@ -401,9 +402,9 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
     # clock before stepping; the writers above were built first so the budget is attached from the restart on.
     dissipation_wall = stop_time > cost_stop_time ? @elapsed(run!(ocean)) : 0.0
 
-    wall_time  = cold_wall + production_wall + dissipation_wall
-    iterations = iteration(ocean)
-    seconds_per_step = production_steps == 0 ? NaN : production_wall / production_steps
+    wall_time               = cold_wall + production_wall + dissipation_wall
+    iterations              = iteration(ocean)
+    seconds_per_step        = production_steps == 0 ? NaN : production_wall / production_steps
     simulated_years_per_day = global_ocean_simulated_years_per_day(nominal_timestep, seconds_per_step)
 
     label = something(label, global_ocean_label(timestepper, filter, free_surface))
@@ -485,7 +486,7 @@ free_surface_report(fs) = ""
 function free_surface_report(fs::ImplicitFreeSurface)
     solver = fs.implicit_step_solver
     hasproperty(solver, :preconditioned_conjugate_gradient_solver) || return ""
-    cg = solver.preconditioned_conjugate_gradient_solver
+    cg             = solver.preconditioned_conjugate_gradient_solver
     preconditioner = isnothing(cg.preconditioner) ? "none" : nameof(typeof(cg.preconditioner))
     return @sprintf(", CG: %d/%d iters, |r|: %.3e, reltol %.1e, preconditioner %s",
                     cg.iteration, cg.maxiter, cg.residual_norm(cg.residual), cg.reltol, preconditioner)
@@ -494,7 +495,7 @@ end
 function global_ocean_progress(sim)
     ocean = sim
     u, v, w = ocean.model.velocities
-    T = ocean.model.tracers.T
+    T         = ocean.model.tracers.T
     step_time = 1e-9 * (time_ns() - TimestepperTestCases.wall_clock[])
     @info @sprintf("Iter: %d, time: %s, Δt: %s, max|u|: (%.2e, %.2e, %.2e), extrema(T): (%.2f, %.2f), wall: %s%s",
                    iteration(sim), prettytime(sim), prettytime(sim.Δt),
@@ -523,10 +524,10 @@ function global_ocean(d::Discretization; arch = CPU(), grid = global_ocean_grid(
     # only a tracer advection that departs from the shared default is forwarded; every other discretization
     # keeps the vertically implicit WENO9 of this case
     return global_ocean(d.timestepper; arch, grid,
-                       free_surface = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
-                       averaging_kernel = d.averaging_kernel,
+                       free_surface           = d.implicit_free_surface ? ImplicitFreeSurface() : nothing,
+                       averaging_kernel       = d.averaging_kernel,
                        barotropic_timestepper = d.barotropic_timestepper,
-                       slow_forcing = d.slow_forcing,
-                       tracer_advection = forwarded_tracer_advection(d),
-                       label = d.label, kw...)
+                       slow_forcing           = d.slow_forcing,
+                       tracer_advection       = forwarded_tracer_advection(d),
+                       label                  = d.label, kw...)
 end

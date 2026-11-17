@@ -38,9 +38,22 @@ Compact files are saved in `data/internal_tide_weno_new/` and `data/channel_simu
 
 The global diffusivity example reads `global_ocean_<label>_dissipation.jld2` and saves compact reductions in `data/global_ocean/`. Each reduction retains the variance tendency and squared gradient separately for every complete averaging window, depth, distance from topography, and latitude band. Pass the compact directory to redraw without reading the original files. The six-case comparison uses the eight complete 90-day windows ending at days 1170–1800.
 
-`examples/internal_tide_figures.jl` renders all five internal-tide figures, including the snapshots, energetics, diffusivity, and timestep-refinement comparison. It reads the thirteen completed runs and writes PDF and PNG files to `<input directory>/figures/`. The original output files are unchanged.
+`examples/internal_tide_figures.jl` renders all five internal-tide figures, including the snapshots, energetics, diffusivity, and timestep-refinement comparison. It reads the fifteen completed runs and writes PDF and PNG files to `<input directory>/figures/`. The original output files are unchanged.
 
 The global campaign ran with `statistics=false`. Its `_average` files contain surface averages; volume-integrated kinetic energy, temperature, and salinity histories were not saved and cannot be recovered from these outputs. The diffusivity figures use the saved buoyancy-variance budgets. `global_surface_averages.jl` computes area-weighted surface temperature and salinity from the `_average` files and compares them with AB2-SE at matching output times.
+
+## Surface publication files
+
+`global_surface_results.jl` reads either complete surface output or publication files containing daily `u` and `v` snapshots from the final year. Both use the Oceananigans JLD2 layout, including the original grid, times, iteration numbers, and field metadata. The final snapshot supplies the maps; every fifth daily snapshot supplies the spectra.
+
+Create the publication files in a separate directory:
+
+```sh
+julia --project=examples examples/archive_global_surface.jl /path/to/full_global_outputs /path/to/publication/global_ocean
+julia --project=examples examples/global_surface_results.jl /path/to/publication/global_ocean
+```
+
+The archive script copies the selected arrays without changing precision, applies shuffle and Zstandard compression, verifies every copied array, and checks `FieldTimeSeries` loading. Existing destinations are rejected. Keep the complete dissipation files alongside the surface files to reproduce the global diffusivity figures.
 
 ## Publication
 
