@@ -37,7 +37,6 @@ implementation-plan*.md
 /examples/Manifest.toml
 Manifest.toml
 Manifest-v*.toml
-!/run_env/Manifest.toml
 
 # Local simulation campaigns and diagnostic experiments
 /global_ocean/
