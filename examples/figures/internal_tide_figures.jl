@@ -1,11 +1,11 @@
 # # Internal tide: campaign figures
 #
 # Render snapshots, numerical diffusivity, energetics, and timestep-refinement comparisons from the fifteen
-# completed 40-day simulations. Run with `julia --project=examples examples/internal_tide_figures.jl internal_tide`.
+# completed 40-day simulations. Run with `julia --project=examples examples/figures/internal_tide_figures.jl internal_tide`.
 
 using Oceananigans, CairoMakie, TimestepperTestCases, Statistics, LaTeXStrings, JLD2
-include("plotting.jl") #src
-folder = abspath(isempty(ARGS) ? joinpath(@__DIR__, "..", "internal_tide") : first(ARGS)) * "/"
+include("../shared/plotting.jl") #src
+folder = abspath(isempty(ARGS) ? joinpath(@__DIR__, "..", "..", "internal_tide") : first(ARGS)) * "/"
 production_only = "--production-only" in ARGS
 files = filter(name -> endswith(name, ".jld2"), readdir(folder; join=true))
 production_only && filter!(name -> !occursin(r"-dt[48]\.jld2$", name), files)

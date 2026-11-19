@@ -191,12 +191,12 @@ end
 
 # With `reuse`, a compact file already in the data cache spares the pass over the original output.
 function compact_dataset(dataset, filename, prepare; directory=nothing, reuse=false)
-    raw_directory = isnothing(directory) ? joinpath(@__DIR__, "..", dataset) : abspath(directory)
+    raw_directory = isnothing(directory) ? joinpath(@__DIR__, "..", "..", dataset) : abspath(directory)
     raw_path      = joinpath(raw_directory, filename)
     compact_name  = "compact_" * filename
     local_compact = joinpath(raw_directory, compact_name)
     isfile(local_compact) && return JLD2.load(local_compact, "data")
-    cached_compact = joinpath(@__DIR__, "..", "data", dataset, compact_name)
+    cached_compact = joinpath(@__DIR__, "..", "..", "data", dataset, compact_name)
     if reuse && isfile(cached_compact) && (!isfile(raw_path) || mtime(cached_compact) ≥ mtime(raw_path))
         return JLD2.load(cached_compact, "data")
     end

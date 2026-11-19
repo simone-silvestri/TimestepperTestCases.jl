@@ -9,9 +9,30 @@
 using TimestepperTestCases
 using Oceananigans
 using Statistics
-include("data_sources.jl") #src
-include("compact_data.jl") #src
-include("plotting.jl") #src
+include("../shared/data_sources.jl") #src
+include("../shared/compact_data.jl") #src
+include("../shared/plotting.jl") #src
+function plot_internal_tide(profiles, differences)
+    figure       = Figure(size=(1100, 720))
+    history      = Axis(figure[1, 1:2]; xlabel=L"t\;[\mathrm{days}]", ylabel=L"\langle\kappa\rangle\;[\mathrm{m^2\,s^{-1}}]")
+    profile_axis = Axis(figure[1, 3]; xlabel=L"\overline{\kappa}\;[\mathrm{m^2\,s^{-1}}]", ylabel=L"z\;[\mathrm{km}]")
+    for profile in profiles
+        style = plot_style(profile.label)
+        lines!(history, profile.t / 86400, profile.κᶻ; style..., label=profile.label)
+        lines!(profile_axis, profile.κᵗ, profile.z / 1000; style...)
+    end
+    Legend(figure[2, 1:3], history; nbanks=4, framevisible=true)
+    rowsize!(figure.layout, 2, Auto(false))
+    rowgap!(figure.layout, 16)
+    limit = 1.5e-5
+    for (column, profile) in enumerate(differences)
+        axis = Axis(figure[3, column]; title=profile.label * " − WRK3-SE", xlabel=L"t\;[\mathrm{days}]", ylabel=L"z\;[\mathrm{km}]")
+        heatmap!(axis, profile.t / 86400, profile.z / 1000, transpose(profile.Δκ);
+                 colormap=:balance, colorrange=(-limit, limit), colorscale=Makie.Symlog10(limit / 100))
+    end
+    Colorbar(figure[3, 4]; colormap=:balance, limits=(-limit, limit), scale=Makie.Symlog10(limit / 100), label=L"\Delta\kappa\;[\mathrm{m^2\,s^{-1}}]")
+    return save_example(figure, "internal_tide_diffusivity")
+end
 
 directory = isempty(ARGS) ? nothing : first(ARGS)
 variants = discretizations()

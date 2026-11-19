@@ -1,97 +1,3 @@
-using CairoMakie
-using LaTeXStrings
-
-manuscript_font = joinpath(pkgdir(Makie.MathTeXEngine), "assets", "fonts", "ComputerModern", "cmr10.ttf")
-set_theme!(Theme(fontsize=16, fonts=(; regular=manuscript_font, bold=manuscript_font), Legend=(; framevisible=true)))
-
-function save_example(figure, name; pt_per_unit=0.75)
-    directory = joinpath(@__DIR__, "output")
-    mkpath(directory)
-    for extension in ("png", "pdf")
-        path = joinpath(directory, name * "." * extension)
-        extension == "pdf" ? save(path, figure; pt_per_unit) : save(path, figure)
-    end
-    return figure
-end
-
-function plot_internal_tide(profiles, differences)
-    figure       = Figure(size=(1100, 720))
-    history      = Axis(figure[1, 1:2]; xlabel=L"t\;[\mathrm{days}]", ylabel=L"\langle\kappa\rangle\;[\mathrm{m^2\,s^{-1}}]")
-    profile_axis = Axis(figure[1, 3]; xlabel=L"\overline{\kappa}\;[\mathrm{m^2\,s^{-1}}]", ylabel=L"z\;[\mathrm{km}]")
-    for profile in profiles
-        style = plot_style(profile.label)
-        lines!(history, profile.t / 86400, profile.κᶻ; style..., label=profile.label)
-        lines!(profile_axis, profile.κᵗ, profile.z / 1000; style...)
-    end
-    Legend(figure[2, 1:3], history; nbanks=4, framevisible=true)
-    rowsize!(figure.layout, 2, Auto(false))
-    rowgap!(figure.layout, 16)
-    limit = 1.5e-5
-    for (column, profile) in enumerate(differences)
-        axis = Axis(figure[3, column]; title=profile.label * " − WRK3-SE", xlabel=L"t\;[\mathrm{days}]", ylabel=L"z\;[\mathrm{km}]")
-        heatmap!(axis, profile.t / 86400, profile.z / 1000, transpose(profile.Δκ);
-                 colormap=:balance, colorrange=(-limit, limit), colorscale=Makie.Symlog10(limit / 100))
-    end
-    Colorbar(figure[3, 4]; colormap=:balance, limits=(-limit, limit), scale=Makie.Symlog10(limit / 100), label=L"\Delta\kappa\;[\mathrm{m^2\,s^{-1}}]")
-    return save_example(figure, "internal_tide_diffusivity")
-end
-
-function plot_channel(profiles, reference, differences)
-    figure = Figure(size=(595, 210), fontsize=10)
-    labels = (L"|\kappa_{\mathrm{num},h}|\;[\mathrm{m^2\,s^{-1}}]", L"|\kappa_{\mathrm{num}}|\;[\mathrm{m^2\,s^{-1}}]",
-              L"\kappa_{\mathrm{phys},z}/\kappa_{\mathrm{num}}")
-    axes = [Axis(figure[1, column]; title=label, ylabel=column == 1 ? L"z\;[\mathrm{km}]" : "", xscale=log10,
-                 yticklabelsvisible=column == 1, yticks=-3:0.5:0, limits=(nothing, nothing, -3, 0),
-                 xgridcolor=(:black, 0.08), ygridcolor=(:black, 0.08)) for (column, label) in enumerate(labels)]
-    axes[1].xticks = ([1, 10], [L"10^0", L"10^1"])
-    axes[2].xticks = ([1e-6, 1e-5, 1e-4, 1e-3], [L"10^{-6}", L"10^{-5}", L"10^{-4}", L"10^{-3}"])
-    axes[3].xticks = ([0.1, 1, 10], [L"10^{-1}", L"10^0", L"10^1"])
-    xlims!(axes[2], 5e-7, 1e-3)
-    for profile in profiles
-        style = plot_style(profile.label; distinct_colors=true)
-        label = profile.label == "WRK3-SE-SM05" ? "WRK3-SE-F1" : profile.label
-        for (column, values) in enumerate((profile.κₕ, profile.κ, profile.ratio))
-            displayed = column < 3 ? abs.(values) : [value > 0 ? value : NaN for value in values]
-            lines!(axes[column], displayed, profile.z / 1000; style..., linewidth=1.4, label)
-        end
-    end
-    vlines!(axes[3], [1]; color=(:black, 0.35), linestyle=:dash, linewidth=0.8)
-    Legend(figure[1, 4], axes[1]; framevisible=true, patchsize=(20, 8), rowgap=3, padding=(5, 5, 5, 5))
-    colgap!(figure.layout, 12)
-    save_example(figure, "channel_diffusivity"; pt_per_unit=1)
-
-    figure = Figure(size=(764, 383), fontsize=10)
-    for (row, property, difference_property) in ((1, :Pₕ, :ΔPₕ), (2, :Pz, :ΔPz))
-        for (column, section) in enumerate((reference, differences...))
-            is_reference = column == 1
-            values       = getproperty(section, is_reference ? property : difference_property)
-            lower, upper, count = is_reference ? (-9.5, -4.5, 14) : row == 1 ? (-7.5, -4.5, 13) : (-8.5, -5.5, 13)
-            positive_levels = 10.0 .^ range(lower, upper; length=count)
-            levels          = vcat(-reverse(positive_levels), 0, positive_levels)
-            scale           = Makie.Symlog10(first(positive_levels); linscale=10/9)
-            title           = row == 1 ? (is_reference ? section.label : section.label * " − WRK3-SE") : ""
-            axis            = Axis(figure[row, is_reference ? 1 : column+1]; title, xlabel=row == 2 ? L"y\;(\mathrm{km})" : "",
-                        ylabel=is_reference ? "Depth (km)" : "", yticklabelsvisible=is_reference, xticklabelsvisible=row == 2,
-                        yticks=-3:1:0, xticks=500:500:1500, limits=(0, 2000, -3, 0), xgridvisible=false, ygridvisible=false)
-            bands = contourf!(axis, section.y / 1000, section.z / 1000, values; levels, colorscale=scale,
-                              colormap=:bwr, extendlow=:auto, extendhigh=:auto)
-            contour!(axis, section.y / 1000, section.z / 1000, values; levels, color=(:white, 0.4), linewidth=0.25)
-            if is_reference || column == 4
-                powers      = 10.0 .^ (ceil(Int, lower):floor(Int, upper))
-                ticks       = vcat(-reverse(powers), 0, powers)
-                tick_labels = [iszero(value) ? L"0" : LaTeXString((value < 0 ? "-" : "") * "10^{" * string(round(Int, log10(abs(value)))) * "}") for value in ticks]
-                label       = is_reference ? (row == 1 ? L"\overline{P_x+P_y}" : L"\overline{P_z}") :
-                                       (row == 1 ? L"\Delta\overline{P_x+P_y}" : L"\Delta\overline{P_z}")
-                Colorbar(figure[row, is_reference ? 2 : 6], bands; scale, ticks=(ticks, tick_labels), label, width=6,
-                         ticklabelsize=7, ticksize=2, labelsize=9)
-            end
-        end
-    end
-    colgap!(figure.layout, 8)
-    rowgap!(figure.layout, 8)
-    return save_example(figure, "channel_dissipation"; pt_per_unit=1)
-end
-
 function plot_global_cost(measurements, throughput)
     figure = Figure(size=(850, 430))
     axis   = Axis(figure[1, 1]; ylabel="Throughput relative to AB2-SE",
@@ -100,10 +6,6 @@ function plot_global_cost(measurements, throughput)
     hlines!(axis, [1]; color=:black, linestyle=:dash)
     return save_example(figure, "global_throughput")
 end
-
-#####
-##### Global configuration
-#####
 
 const global_time_label = L"t\;[\mathrm{years}]"
 const global_depth_label = L"z\;[\mathrm{km}]"
@@ -160,7 +62,7 @@ function plot_global_diffusivity_profile(profiles)
                        [L"10^{-6}", L"2\cdot10^{-6}", L"5\cdot10^{-6}", L"10^{-5}", L"2\cdot10^{-5}", L"5\cdot10^{-5}", L"10^{-4}"]),
                        yticks=-1:0.2:0, logarithmic...)
     for profile in profiles, axis in (full_depth, upper_ocean)
-        signed_profile!(axis, profile.κ, profile.z; label=replace(profile.label, "SM05" => "F1"), plot_style(profile.label)...)
+        signed_profile!(axis, profile.κ, profile.z; label=publication_label(profile.label), plot_style(profile.label)...)
     end
     ylims!(full_depth, -4, 0)
     limits!(upper_ocean, 1e-6, 1e-4, -1, 0)
@@ -178,7 +80,7 @@ function plot_global_diffusivity_wall_distance(profiles; diffusivity_limits=(1e-
         axis = Axis(figure[row, column]; title=title(distance), xscale=log10, xticks=LogTicks(-6:-3), xlabel=row == 2 ? global_diffusivity_label : "",
                     xticklabelsvisible=row == 2, ylabel=column == 1 ? global_depth_label : "", yticklabelsvisible=column == 1)
         for profile in profiles
-            signed_profile!(axis, view(profile.wall_diffusivity, distance, :), profile.z; label=replace(profile.label, "SM05" => "F1"), plot_style(profile.label)...)
+            signed_profile!(axis, view(profile.wall_diffusivity, distance, :), profile.z; label=publication_label(profile.label), plot_style(profile.label)...)
         end
         limits!(axis, diffusivity_limits..., -5, 0)
         return axis
@@ -198,7 +100,7 @@ function plot_global_diffusivity_section(sections; diffusivity_limits=(1e-6, 1e-
     for (index, section) in enumerate((reference, differences...))
         row, column = fldmod1(index, 3)
         is_reference = index == 1
-        title        = replace(section.label, "SM05" => "F1") * (is_reference ? "" : " − WRK3-SE")
+        title        = publication_label(section.label) * (is_reference ? "" : " − WRK3-SE")
         axis         = Axis(figure[row, column]; title, backgroundcolor=global_land_color, xgridvisible=false, ygridvisible=false,
                     xlabel=row == 2 ? L"\varphi\;[^\circ\mathrm{N}]" : "", xticks=-60:30:60, xticklabelsvisible=row == 2,
                     ylabel=column == 1 ? global_depth_label : "", yticklabelsvisible=column == 1)
@@ -223,7 +125,7 @@ function plot_global_diffusivity_section(sections; diffusivity_limits=(1e-6, 1e-
         elseif index == length(sections)
             powers      = 10.0 .^ (-7:2:-3)
             ticks       = vcat(-reverse(powers), 0, powers)
-            tick_labels = [iszero(value) ? L"0" : LaTeXString((value < 0 ? "-" : "") * "10^{" * string(round(Int, log10(abs(value)))) * "}") for value in ticks]
+            tick_labels = signed_power_label.(ticks)
             Colorbar(figure[3, 2:3], bands; vertical=false, ticks=(scale.(ticks), tick_labels), height=12,
                      label=L"\kappa-\kappa^{\mathrm{WRK3-SE}}\;[\mathrm{m^2\,s^{-1}}]")
         end
@@ -241,7 +143,7 @@ function plot_global_diffusivity_history(histories)
         axis = Axis(figure[1, column]; title, xlabel=global_time_label, ylabel=column == 1 ? L"\kappa\;[10^{-5}\,\mathrm{m^2\,s^{-1}}]" : "")
         for history in histories
             style = plot_style(history.label)
-            scatterlines!(axis, history.years, 1e5 * getproperty(history, name); style..., markercolor=style.color, markersize=9, label=replace(history.label, "SM05" => "F1"))
+            scatterlines!(axis, history.years, 1e5 * getproperty(history, name); style..., markercolor=style.color, markersize=9, label=publication_label(history.label))
         end
         return axis
     end
@@ -259,7 +161,7 @@ function plot_global_surface_tracer_histories(histories)
                                ylabel=L"\Delta\langle S\rangle_A\;[10^{-3}\,\mathrm{psu}]")
     for history in histories
         style = plot_style(history.label)
-        label = replace(history.label, "SM05" => "F1")
+        label = publication_label(history.label)
         lines!(temperature, history.years, history.temperature; style..., label)
         lines!(salinity, history.years, history.salinity; style...)
         lines!(temperature_difference, history.years, 1e3 * history.temperature_difference; style...)
@@ -267,4 +169,45 @@ function plot_global_surface_tracer_histories(histories)
     end
     Legend(figure[3, 1:2], temperature; orientation=:horizontal)
     return save_example(figure, "global_surface_tracer_histories")
+end
+
+function plot_global_surface(surfaces, regions)
+    figure = Figure(size=(1200, 1120), fontsize=22)
+    Colorbar(figure[1, 1]; colormap=:magma, limits=(0, 0.5), vertical=false, height=9,
+             width=Relative(0.8), flipaxis=true, ticks=0:0.1:0.5, ticklabelsize=18,
+             label=L"\sqrt{u^2+v^2}\;[\mathrm{m\,s^{-1}}]")
+    for (row, label) in enumerate(("AB2-SE", "WRK3-SE", "MRK4-SE"))
+        surface = only(surface for surface in surfaces if surface.label == label)
+        axis    = Axis(figure[row+1, 1]; title="($(('a', 'b', 'c')[row])) $(surface.label)", titlealign=:left,
+                    backgroundcolor=global_land_color, xgridvisible=false, ygridvisible=false,
+                    xlabel=row == 3 ? L"\lambda\;[^\circ\mathrm{E}]" : "", ylabel=L"\varphi\;[^\circ\mathrm{N}]",
+                    xticks=0:90:360, yticks=-60:30:60, xticklabelsvisible=row == 3)
+        tripolar_heatmap!(axis, sqrt.(2surface.kinetic_energy), surface.λ, surface.φ; colormap=:magma, colorrange=(0, 0.5))
+        limits!(axis, 0, 360, -80, 85)
+        for (region, abbreviation) in zip(regions, ("GS", "KE", "SO"))
+            west, east = region.longitudes
+            south, north = region.latitudes
+            lines!(axis, [west, east, east, west, west], [south, south, north, north, south]; color=:cyan, linewidth=1.7)
+            text!(axis, (west+east)/2, north; text=abbreviation, color=:cyan, align=(:center, :bottom), fontsize=17)
+        end
+    end
+    for (row, region) in enumerate(regions)
+        axis = Axis(figure[row+1, 2]; title="($(('d', 'e', 'f')[row])) $(region.name)", titlealign=:left,
+                    xlabel=row == 3 ? global_wavenumber_label : "", xscale=log10, yscale=log10,
+                    ylabel=L"E_k(k)\;[\mathrm{m^3\,s^{-2}}]", xticks=LogTicks(-5:-4),
+                    xticklabelsvisible=row == 3, xgridcolor=(:black, 0.07), ygridcolor=(:black, 0.07))
+        for surface in surfaces
+            spectrum = surface.spectra[row]
+            lines!(axis, spectrum.wavenumbers[3:end], vec(mean(spectrum.energy; dims=2))[3:end];
+                   plot_style(surface.label; distinct_colors=true)..., linewidth=2,
+                   label=publication_label(surface.label))
+        end
+        spectrum = first(surfaces).spectra[row]
+        cubic_slope!(axis, spectrum.wavenumbers, vec(mean(spectrum.energy; dims=2)))
+        row == 1 && Legend(figure[5, 1:2], axis; orientation=:horizontal, nbanks=2, framevisible=true)
+    end
+    colsize!(figure.layout, 1, Relative(0.65))
+    colgap!(figure.layout, 28)
+    rowgap!(figure.layout, 18)
+    return save_example(figure, "global_surface_comparison")
 end

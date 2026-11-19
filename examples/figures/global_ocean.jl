@@ -6,8 +6,9 @@
 
 using TimestepperTestCases
 using JLD2
-include("data_sources.jl") #src
-include("plotting.jl") #src
+include("../shared/data_sources.jl") #src
+include("../shared/plotting.jl") #src
+include("../shared/global_plots.jl") #src
 
 directory = isempty(ARGS) ? nothing : first(ARGS)
 measurements = NamedTuple[]

@@ -1,9 +1,9 @@
 # Retain daily surface velocities over the final year, including Oceananigans grid and field metadata.
-# Run `julia --project=examples examples/archive_global_surface.jl INPUT_DIRECTORY OUTPUT_DIRECTORY`.
+# Run `julia --project=examples scripts/archive_global_surface.jl INPUT_DIRECTORY OUTPUT_DIRECTORY`.
 
 using JLD2
 using Oceananigans
-include("compact_data.jl")
+include("../examples/shared/compact_data.jl")
 
 function copy_output_group!(destination, source)
     for name in keys(source)

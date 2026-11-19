@@ -25,7 +25,7 @@ figure_directories = (joinpath(@__DIR__, "..", "examples", "output"),
                       joinpath(@__DIR__, "..", "internal_tide", "figures"), joinpath(@__DIR__, "figures"))
 
 for name in ("internal_tide", "internal_tide_figures", "channel", "global_ocean", "global_ocean_results", "global_surface_averages")
-    source = joinpath(@__DIR__, "..", "examples", name * ".jl")
+    source = joinpath(@__DIR__, "..", "examples", "figures", name * ".jl")
     local page = Literate.markdown(source, generated; execute=false, flavor=Literate.CommonMarkFlavor(), credit=false)
     content = read(page, String)
     for image in eachmatch(r"!\[.*?\]\(([^)]+)\)", content)
