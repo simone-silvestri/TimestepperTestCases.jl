@@ -144,7 +144,7 @@ function plot_damping_balance(panels, rows, output_directory)
         end
         if column == 2
             lines!(axes[3], [NaN], [NaN]; color=(:gray, 0.72), label=L"\mathrm{Matrix},\ \varepsilon=0.01")
-            scatter!(axes[3], [NaN], [NaN]; color=:white, strokecolor=:black, strokewidth=0.7, markersize=4, label="Leading approximation")
+            scatter!(axes[3], [NaN], [NaN]; color=:white, strokecolor=:black, strokewidth=0.7, markersize=4, label="Analytical approximation")
             Legend(figure[4, 1:2], axes[3]; orientation=:horizontal, nbanks=3, labelsize=10.5, patchsize=(20, 8), rowgap=4, padding=(5, 5, 5, 5))
         end
     end
