@@ -117,9 +117,7 @@ end
 
 function plot_damping_balance(panels, rows, output_directory)
     figure     = Figure(size=(626, 468), fontsize=12)
-    row_labels = (L"\mathrm{Re}(\bar{\lambda}_j V_{jj})/|\lambda_j|",
-                  L"\mathrm{Re}(\bar{\lambda}_j\,\delta\lambda_{j,\mathrm{ind}})/|\lambda_j|",
-                  L"|\lambda_j+\delta\lambda_j|-1")
+    row_labels = (L"\mathcal{G}_j^{\mathrm{dir}}", L"\mathcal{G}_j^{\mathrm{ind}}", L"\mathcal{G}_j")
     for (column, scheme) in enumerate((WickerSkamarock3(), ShuOsher3()))
         axes = [Axis(figure[row, column], xlabel=row == 3 ? L"\mu_0" : "", xticklabelsvisible=row == 3,
                      title=row == 1 ? (scheme isa ShuOsher3 ? "SRK3" : "WRK3") : "",
@@ -154,7 +152,6 @@ function plot_damping_balance(panels, rows, output_directory)
             Legend(figure[4, 1:2], axes[3]; orientation=:horizontal, nbanks=3, labelsize=10.5, patchsize=(20, 8), rowgap=4, padding=(5, 5, 5, 5))
         end
     end
-    Label(figure[1:3, 0], L"\mathrm{normalized\ by}\ 1-|\lambda_j|"; rotation=π/2)
     rowgap!(figure.layout, 1, 6)
     rowgap!(figure.layout, 2, 6)
     return save_results(output_directory, "damping_balance", figure, rows)
