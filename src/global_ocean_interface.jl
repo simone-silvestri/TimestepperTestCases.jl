@@ -7,9 +7,10 @@ function global_ocean_cost end
 """
 $(TYPEDSIGNATURES)
 
-The manuscript discretizations for the global configuration, excluding `WRK3-UP`.
+The discretizations integrated for five years in the global configuration: every manuscript discretization except
+`WRK3-IM`, which is only timed.
 """
-global_ocean_discretizations() = filter(d -> d.label != "WRK3-UP", discretizations())
+global_ocean_discretizations() = filter(d -> d.label != "WRK3-IM", discretizations())
 
 """
 $(TYPEDSIGNATURES)

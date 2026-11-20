@@ -74,13 +74,14 @@ Return the recommended time step for the internal tide test case given a timeste
 $(SIGNATURES)
 
 # Arguments
-- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2`, `:SplitRungeKutta3`, or `:SplitRungeKutta4`)
+- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2`, `:SplitRungeKutta3`, `:SSPRungeKutta3`
+  or `:ModifiedRungeKutta4`)
 
 # Returns
 - Recommended time step [s] for the given timestepper
 
-The time steps are chosen to match computational cost between AB2 and RK schemes while
-maintaining stability, as described in the paper.
+The three-stage schemes run at the stability limit on the first baroclinic mode (11.3 minutes), AB2 at 0.29 and
+MRK4 at 1.609 times that step (3.3 and 18.1 minutes).
 """
 internal_tide_timestep(::Val{scheme}) where scheme =
     baroclinic_timestep(scheme; internal_tide_stability_parameters()...)
@@ -99,9 +100,9 @@ end
 """
     internal_tide_substeps(barotropic_scheme, scheme; averaging_kernel)
 
-Barotropic substep count for this case, fixed so that the substep Courant number `c₀ k Δτ` sits at 70% of the
-limit of `barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward. The
-count therefore depends on the substep integrator as well as on the baroclinic time step.
+Barotropic substep count for this case, the smallest that keeps the substep Courant number `c₀ k Δτ` at the
+[`barotropic_cfl`](@ref) of `barotropic_scheme`, 0.8 for forward-backward and 1.3 for the three-stage Runge-Kutta
+substep. The count therefore depends on the substep integrator as well as on the baroclinic time step.
 """
 function internal_tide_substeps(barotropic_scheme, scheme = :SplitRungeKutta3;
                                 averaging_kernel = OptimizedAsymmetricAveragingKernel())
@@ -206,10 +207,12 @@ Set up and run the internal tide test case simulation.
 $(SIGNATURES)
 
 # Arguments
-- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2`, `:SplitRungeKutta3`, or `:SplitRungeKutta4`)
+- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2`, `:SplitRungeKutta3`, `:SSPRungeKutta3`
+  or `:ModifiedRungeKutta4`)
 
 # Keyword Arguments
-- `free_surface`: Free surface formulation (default: `SplitExplicitFreeSurface` with 60 substeps)
+- `free_surface`: Free surface formulation (default: `SplitExplicitFreeSurface` with forward-backward substeps,
+  their count from [`internal_tide_substeps`](@ref))
 - `tracer_advection`: Tracer advection scheme (`nothing`, the default, uses `TimestepperTestCases.tracer_advection`)
 - `momentum_advection`: Flux-form momentum advection scheme (`nothing`, the default, builds a fifth-order one with
   [`split_flux_form_momentum_advection`](@ref))

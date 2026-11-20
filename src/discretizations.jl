@@ -132,8 +132,8 @@ by `stability_parameters`, a named tuple `(; N², H, Δx)`.
 
 Both are derived: the time step from the theoretical limit of `d.timestepper` -- on the first baroclinic mode,
 or on advection where `stability_parameters` supplies a speed `U` and advection is the tighter of the two --
-and the substep count as the smallest that keeps the barotropic Courant number at 70% of the limit of
-`d.barotropic_timestepper`. The substep count therefore depends on the substep integrator as well as on the
+and the substep count as the smallest that keeps the barotropic Courant number at the `barotropic_cfl` of the substep integrator, 0.8 for forward-backward and 1.3 for the
+three-stage Runge-Kutta substep ([`barotropic_cfl`](@ref)). The substep count therefore depends on the substep integrator as well as on the
 time step, which is why the forward-backward cases carry more substeps than the Runge-Kutta ones.
 """
 function timestep_and_free_surface(d::Discretization, grid, stability_parameters)

@@ -18,6 +18,7 @@ implementation-plan*.md
 /examples/output/
 /data/
 *.png
+!/docs/figures/*.png
 *.pdf
 *.svg
 *.jpg

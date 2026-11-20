@@ -1,91 +1,102 @@
-# Data-driven Julia examples
+# Reproducing the paper
 
-The examples read local campaign outputs or compact JLD2 datasets. The campaign outputs are published in Zenodo record 24315107 ([doi:10.5281/zenodo.24315107](https://doi.org/10.5281/zenodo.24315107)); `examples/datasets.toml` lists its download locations and SHA-256 checksums.
+The simulation outputs behind the manuscript are archived in Zenodo record 24315107
+([doi:10.5281/zenodo.24315107](https://doi.org/10.5281/zenodo.24315107), CC BY 4.0). The record holds three campaigns as
+individual JLD2 files, `internal_tide` (12 GB), `channel` (25 GB) and `global_ocean` (100 GB), together with SHA-256
+checksums, a file manifest, the final global timings, and a snapshot of the analysis source. The theory figures need no
+data: they are computed directly by `TimestepperTheory`.
 
-## Local execution
+## Figure map
 
-From the repository root:
+| Manuscript | Script | Data | Rendered page |
+| --- | --- | --- | --- |
+| Figures 1–9 | `lib/TimestepperTheory/examples/time_discretization.jl` | none | [Manuscript example](generated/time_discretization.md) |
+| Figures 10–13 | `examples/figures/internal_tide_figures.jl` | `internal_tide` | [Internal tide figures](generated/internal_tide_figures.md) |
+| Figures 14–15 | `examples/figures/channel.jl` | `channel` (averages files) | [Channel figures](generated/channel.md) |
+| Figure 16 | `examples/figures/global_ocean_results.jl` | `global_ocean` (dissipation files) | [Global numerical diffusivity](generated/global_ocean_results.md) |
+| Figure 17 | `examples/figures/global_surface_results.jl` | `global_ocean` (surface files) | [Global surface velocity](generated/global_surface_results.md) |
+| Table 3 | `examples/figures/global_ocean.jl` | `global_ocean/reported_timings.csv` | [Global computational cost](generated/global_ocean.md) |
+| Figure 19 | `lib/TimestepperTheory/examples/rotation.jl` | none | — |
+
+The global surface tracer histories ([Surface tracers](generated/global_surface_averages.md)) use the `global_ocean` average
+files and do not appear in the manuscript. The figures of the rendered pages are the published ones, stored in
+`docs/figures/`; the global figures were redrawn from the downloaded record and match the published versions pixel for
+pixel.
+
+## Download
+
+From the repository root, download and verify the campaigns you need:
+
+```sh
+julia scripts/download_data.jl /path/to/data internal_tide channel global_ocean
+```
+
+Without campaign names, the script downloads all three; a numeric first argument selects another version of the record.
+It uses Julia standard libraries only, restores the `internal_tide/`, `channel/` and `global_ocean/` folders, and verifies
+every file against `SHA256SUMS`. Files already present with a matching checksum are reused, and an interrupted transfer
+resumes from its `.partial` file, both within a run and when the script is rerun. Version 1.0 of `SHA256SUMS` also lists
+`global_ocean/global_ocean_SRK3-SE_cost.jld2`, which the record does not provide; the script skips it, and no figure uses
+it. The checksums and download locations are also listed in `examples/datasets.toml`.
+
+## Run the figure scripts
+
+Instantiate the examples environment once, then pass each campaign directory to its script:
 
 ```sh
 julia --project=examples -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
-julia --project=examples examples/figures/internal_tide_figures.jl /path/to/internal_tide
-julia --project=examples examples/figures/channel.jl       /path/to/channel_simulation
-julia --project=examples examples/figures/global_ocean.jl  /path/to/global_ocean
-julia --project=examples examples/figures/global_ocean_results.jl /path/to/global_ocean/raw
-julia --project=examples examples/figures/global_surface_averages.jl /path/to/global_ocean/global
+julia --project=examples examples/figures/internal_tide_figures.jl /path/to/data/internal_tide
+julia --project=examples examples/figures/channel.jl /path/to/data/channel
+julia --project=examples examples/figures/global_ocean_results.jl /path/to/data/global_ocean
+julia --project=examples examples/figures/global_surface_results.jl /path/to/data/global_ocean
+julia --project=examples examples/figures/global_surface_averages.jl /path/to/data/global_ocean
+julia --project=examples examples/figures/global_ocean.jl
 ```
 
-Omitting the directory uses the corresponding case directory in this checkout: `internal_tide/` for the manuscript internal-tide campaign, `channel_simulation/` for the channel, and `global_ocean/` for the global timings and results. Local data always take precedence over downloads. When a file is absent, `internal_tide.jl` and `channel.jl` download it from the record into `data/<campaign>/`, verify its checksum, and reduce it. The global example accepts a list of case labels after the directory for partial timing datasets; include AB2-SE because it defines the relative throughput.
+Without a directory argument, `internal_tide_figures.jl` and the global scripts read `internal_tide/` and `global_ocean/` in
+the repository root, the layout produced by `julia scripts/download_data.jl . internal_tide global_ocean`. `channel.jl`
+and `global_ocean.jl` download a missing file from the record into `data/<campaign>/` and verify its checksum. The
+internal-tide figures are written to `<input directory>/figures/`; the channel and global figures, as PNG and PDF, to
+`examples/output/`. Both locations are ignored by Git, and the original data files are never modified.
 
-```sh
-julia --project=examples examples/figures/global_ocean.jl /path/to/global_ocean AB2-SE WRK3-SE-SM05
-```
+## Reductions
 
-## Computations and outputs
+The scripts reduce the three-dimensional outputs once and cache the result, so that later runs redraw the figures in
+seconds. Halos are removed and face values are interpolated to cell centers before any reduction.
 
-- Internal tide: numerical diffusivity from the ratio of horizontally averaged variance destruction and squared gradients, depth and temporal averages, and depth–time differences against WRK3-SE.
-- Channel: numerical diffusivity profiles, physical-to-numerical diffusivity ratios, and signed variance-tendency differences against WRK3-SE. The final saved averaging window is used.
-- Global cost: simulated years per wall-clock day and throughput relative to AB2-SE, calculated using the nominal production timestep.
-- Global results: numerical diffusivity profiles, profiles grouped by distance from topography, latitude–depth sections, and whole-ocean and deep-ocean histories from the buoyancy-variance budgets.
+- **Channel:** final-window zonal means of `Abx`, `Aby`, `Abz`, `Gbx`, `Gby`, `Gbz` and `Dbz`, with `y`, `z` and the output
+  time, saved as `data/channel_simulation/compact_averages_<label>.jld2`.
+- **Global diffusivity:** the variance tendency P and the squared gradient G of every complete 90-day window, summed by
+  depth, by distance from topography and by latitude band, saved as `data/global_ocean/compact_global_ocean_<label>_dissipation.jld2`.
+  The diffusivity κ = −ΣP/(2ΣG) is formed only after summation. The six-case comparison uses the eight complete windows
+  ending at days 1170–1800.
+- **Global surface:** the final daily snapshot of surface kinetic energy and the regional velocity spectra of 74 snapshots
+  at five-day spacing over the final year, saved next to the input as `global_ocean_<label>_velocity_diagnostics.jld2`.
+- **Global surface tracers:** area-weighted surface temperature and salinity of each output window, saved as
+  `data/global_ocean/compact_global_ocean_<label>_average.jld2`.
 
-Computations are shown in the rendered examples. Shared styling and output helpers are in `examples/shared/plotting.jl`; channel and internal-tide plotting functions live with their figure drivers, and global plotting functions are shared in `examples/shared/global_plots.jl`. Global and channel figures are written to `examples/output/` as PNG and PDF; this directory is ignored by Git. The complete internal-tide renderer also includes snapshots, rectified-flow convergence, and energetics.
+To redraw from a cache, pass the directory that holds it; delete a cache file to recompute it.
 
-## Compact datasets
+## Contents and limits of the record
 
-When reading original outputs, `examples/shared/compact_data.jl` reads the stored grid using the pinned Oceananigans environment and extracts the required arrays. Halos are removed and face values are interpolated to cell centers before reduction. No original data file is modified.
+- WRK3-SE-SM05 in file names is labelled WRK3-SE-F1 in the figures.
+- The global `_surface` files are a subset of the original output: daily `u` and `v` over the final 365 days, with the
+  original grid, iterations, times and field metadata, compressed with shuffle and Zstandard. The `_average` and
+  `_dissipation` files are the original outputs.
+- The global campaign did not write volume-integrated kinetic energy, temperature or salinity, so those histories cannot be
+  recovered from the record.
+- `reported_timings.csv` holds the final timings of Table 3. The raw timing logs and the per-run cost records are not in
+  the record.
+- The source snapshot of version 1.0 (`analysis_source.tar.gz`) sets the channel sponge width to 9Ly/10 and leaves the
+  global run settings (time steps, duration, budget windows, cold start, drag and vertical Courant limits) to the
+  campaign driver. The channel runs used Ly/10, and the code in this repository sets the global run settings as the
+  defaults of `global_ocean`.
 
-Compact files are saved in `data/internal_tide/` and `data/channel_simulation/`, with `compact_` prepended to the original filename. To use a compact dataset directly, pass that directory to the example. Channel files contain the final-window zonal means of Abx, Aby, Abz, Gbx, Gby, Gbz, and Dbz, plus y, z, and the output time. Internal-tide files contain centered Abx, Abz, and Gbz on x–z–time coordinates, the wet mask, and vertical cell widths. Global cost records are already small and are used directly.
+## Documentation figures
 
-The global diffusivity example reads `global_ocean_<label>_dissipation.jld2` and saves compact reductions in `data/global_ocean/`. Each reduction retains the variance tendency and squared gradient separately for every complete averaging window, depth, distance from topography, and latitude band. Pass the compact directory to redraw without reading the original files. The six-case comparison uses the eight complete 90-day windows ending at days 1170–1800.
+The documentation build does not read simulation data. For each data-driven page it copies the figure from
+`examples/output/`, when a local run has produced one, or otherwise from the committed copy in `docs/figures/`. On CI a
+missing figure stops the build. After regenerating a figure, copy the PNG to `docs/figures/` so that it reaches the site.
 
-`examples/figures/internal_tide_figures.jl` renders all five internal-tide figures, including the snapshots, energetics, diffusivity, and timestep-refinement comparison. It reads the fifteen completed runs and writes PDF and PNG files to `<input directory>/figures/`. The original output files are unchanged.
-
-The global campaign ran with `statistics=false`. Its `_average` files contain surface averages; volume-integrated kinetic energy, temperature, and salinity histories were not saved and cannot be recovered from these outputs. The diffusivity figures use the saved buoyancy-variance budgets. `global_surface_averages.jl` computes area-weighted surface temperature and salinity from the `_average` files and compares them with AB2-SE at matching output times.
-
-## Surface publication files
-
-`global_surface_results.jl` reads either complete surface output or publication files containing daily `u` and `v` snapshots from the final year. Both use the Oceananigans JLD2 layout, including the original grid, times, iteration numbers, and field metadata. The final snapshot supplies the maps; every fifth daily snapshot supplies the spectra.
-
-Create the publication files in a separate directory:
-
-```sh
-julia --project=examples scripts/archive_global_surface.jl /path/to/full_global_outputs /path/to/publication/global_ocean
-julia --project=examples examples/figures/global_surface_results.jl /path/to/publication/global_ocean
-```
-
-The archive script copies the selected arrays without changing precision, applies shuffle and Zstandard compression, verifies every copied array, and checks `FieldTimeSeries` loading. Existing destinations are rejected. Keep the complete dissipation files alongside the surface files to reproduce the global diffusivity figures.
-
-## Publication
-
-Zenodo record 24315107 contains the three campaigns as individual JLD2 files: `internal_tide` (12 GB), `channel`
-(25 GB), and `global_ocean` (100 GB). From the repository root, download and verify the campaigns you need:
-
-```sh
-julia scripts/download_data.jl /path/to/downloaded-data internal_tide channel global_ocean
-```
-
-Without campaign names, the script downloads all three. A numeric first argument selects another version of the
-record. The script uses Julia standard libraries, restores `internal_tide/`, `channel/`, and `global_ocean/`, and
-verifies every file against `SHA256SUMS`. Existing matching files are reused, and an interrupted transfer
-resumes from its `.partial` file, both within a run and when the script is rerun. `SHA256SUMS` of version 1.0 also lists
-`global_ocean/global_ocean_SRK3-SE_cost.jld2`, which the record does not provide; the script skips it, and no figure
-uses it. Pass the relevant directory to the examples:
-
-```sh
-julia --project=examples examples/figures/internal_tide_figures.jl /path/to/downloaded-data/internal_tide
-julia --project=examples examples/figures/channel.jl /path/to/downloaded-data/channel
-julia --project=examples examples/figures/global_ocean_results.jl /path/to/downloaded-data/global_ocean
-julia --project=examples examples/figures/global_surface_results.jl /path/to/downloaded-data/global_ocean
-```
-
-The archive contains raw averages and dissipation outputs,
-plus the final-year velocity subset described above. The reported timing CSV documents the final measurements;
-the complete original timing logs are unavailable. The source snapshot includes the pinned analysis environments.
-
-The documentation build renders the example source and includes figures that have been generated locally. Where `examples/output/` holds no such figure, it uses the copy in `docs/figures/`, which is how the global results reach the deployed site; copy a figure there again after regenerating it. The build does not download unpublished datasets or run large simulations.
-
-For campaign timings, use the same discretization as the simulation. For example, profile
-`global_ocean_cost(discretization("WRK3-UP"); arch=GPU())` to measure third-order upwind tracer advection;
-`WRK3-SE` uses WENO9. For an implicit-solver sensitivity run, pass
-`free_surface=ImplicitFreeSurface(solver_method=:PreconditionedConjugateGradient; reltol=1e-8, maxiter=1000)`
-to either `global_ocean` or `global_ocean_cost` for `WRK3-IM`. The progress log reports the iteration count and residual.
+`scripts/archive_global_surface.jl` prepares the global surface subset for a new version of the record: it copies the
+selected arrays without changing precision, verifies every copied array and checks that each file loads as a
+`FieldTimeSeries`.

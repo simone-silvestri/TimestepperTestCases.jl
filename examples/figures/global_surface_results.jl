@@ -1,6 +1,6 @@
 # # Global ocean: surface speed and regional velocity spectra
 #
-# Run `julia --project=examples examples/figures/global_surface_results.jl global_ocean/global` from the repository root.
+# Run `julia --project=examples examples/figures/global_surface_results.jl /path/to/global_ocean` from the repository root.
 # The maps use the final common daily snapshot. Velocity spectra use 96-cell, land-free sections, with a linear
 # detrend and Hann window, sampled every five days over the final 365 days. Each region averages the two velocity spectra.
 
@@ -8,11 +8,11 @@ using TimestepperTestCases
 using Oceananigans
 using JLD2
 using Statistics
-include("../shared/compact_data.jl")
-include("../shared/plotting.jl")
-include("../shared/global_plots.jl")
+include("../shared/compact_data.jl") #src
+include("../shared/plotting.jl") #src
+include("../shared/global_plots.jl") #src
 
-directory = isempty(ARGS) ? joinpath(@__DIR__, "..", "..", "global_ocean", "global") : first(ARGS)
+directory = isempty(ARGS) ? joinpath(@__DIR__, "..", "..", "global_ocean") : first(ARGS)
 labels = ["AB2-SE", "WRK3-SE-SM05", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-UP"]
 regions = [(; name="Gulf Stream", longitudes=(280, 320), latitudes=(28, 50)),
            (; name="Kuroshio Extension", longitudes=(135, 175), latitudes=(25, 47)),
@@ -48,4 +48,5 @@ surfaces = map(labels) do label
 end
 
 @assert all(surface -> surface.snapshot_day == first(surfaces).snapshot_day && surface.spectral_days ≈ first(surfaces).spectral_days, surfaces)
-plot_global_surface(surfaces, regions)
+plot_global_surface(surfaces, regions) #src
+# ![Surface speed and regional velocity spectra](global_surface_comparison.png)

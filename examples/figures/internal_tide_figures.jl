@@ -1,4 +1,4 @@
-# # Internal tide: campaign figures
+# # Internal tide: manuscript figures
 #
 # Render snapshots, numerical diffusivity, energetics, and timestep-refinement comparisons from the fifteen
 # completed 40-day simulations. Run with `julia --project=examples examples/figures/internal_tide_figures.jl internal_tide`.

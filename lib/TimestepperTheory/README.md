@@ -6,7 +6,7 @@ Julia implementation of the time-discretization theory in Sections 2–4 of *A c
 
 The [Literate example](examples/time_discretization.jl) follows the analysis from the outer stability polynomials to the coupled barotropic–baroclinic system. Equations introduce each calculation, and the numerical experiments appear directly in the script. Figure layouts, colors, legends, and output are collected in [time_discretization_figures.jl](examples/time_discretization_figures.jl).
 
-The [example guide](../../docs/src/theory_example.md) describes the parameters and outputs. The rendered example is part of the repository's Documenter site.
+The [theory overview](../../docs/src/theory.md) describes the parameters and outputs. The rendered example is part of the repository's Documenter site.
 
 The [reconstruction-weight example](examples/reconstruction_weights.jl) computes all four MRK4 forcing reconstructions for `a = 0.23`, explains the polynomial fit, and checks that the final-stage weights recover a quadratic exactly.
 

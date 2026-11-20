@@ -40,7 +40,7 @@ julia --project=lib/TimestepperTheory/examples lib/TimestepperTheory/examples/ti
 
 The example saves nine figures and their numerical values as PDF, PNG, and CSV files in `lib/TimestepperTheory/output`. The computations appear in the Literate source; plotting helpers live in `time_discretization_figures.jl`. Build the [documentation](#documentation) to read the rendered example at `docs/build/generated/time_discretization.html`.
 
-See the [example guide](docs/src/theory_example.md) for the experiments, parameter choices, and output files. Adding `--quick` to the computation command uses coarse parameter grids and overwrites the same output files; rerun without it to restore the manuscript grids.
+See the [theory overview](docs/src/theory.md) for the experiments, parameter choices, and output files. Adding `--quick` to the computation command uses coarse parameter grids and overwrites the same output files; rerun without it to restore the manuscript grids.
 
 ## Run the ocean simulations
 
@@ -58,13 +58,13 @@ The Julia examples accept a local data directory and generate figures in the ign
 
 ```sh
 julia --project=examples -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'
-julia --project=examples examples/figures/internal_tide.jl /path/to/internal_tide
-julia --project=examples examples/figures/channel.jl /path/to/channel_simulation
-julia --project=examples examples/figures/global_ocean.jl /path/to/global_ocean
+julia --project=examples examples/figures/internal_tide_figures.jl /path/to/internal_tide
+julia --project=examples examples/figures/channel.jl /path/to/channel
 julia --project=examples examples/figures/global_ocean_results.jl /path/to/global_ocean
+julia --project=examples examples/figures/global_ocean.jl
 ```
 
-See the [data guide](docs/src/data_examples.md) for commands and diagnostic coverage. Locally retained notebooks are ignored and excluded from the published tree.
+See [Reproducing the paper](docs/src/data_examples.md) for the figure map, downloads, and cached reductions. Locally retained notebooks are ignored and excluded from the published tree.
 
 ## Reproduce the manuscript figures
 
@@ -77,6 +77,7 @@ The simulation output is archived on Zenodo (Silvestri et al., 2026, [doi:10.528
 | `internal_tide` | 12 GB | `examples/figures/internal_tide_figures.jl` | 10–13 |
 | `channel` | 25 GB | `examples/figures/channel.jl` | 14–15 |
 | `global_ocean` | 100 GB | `examples/figures/global_ocean_results.jl`, `examples/figures/global_surface_results.jl` | 16–17 |
+| `global_ocean` (`reported_timings.csv`) | 1 KB | `examples/figures/global_ocean.jl` | Table 3 |
 
 From the repository root, after instantiating the examples environment as above:
 

@@ -1,6 +1,6 @@
 # # Global ocean: numerical diffusivity
 #
-# Run `julia --project=examples examples/figures/global_ocean_results.jl global_ocean/raw` to reproduce these figures.
+# Run `julia --project=examples examples/figures/global_ocean_results.jl /path/to/global_ocean` to reproduce these figures.
 # The six campaign files are named `global_ocean_<label>_dissipation.jld2`. Compact reductions are saved in
 # `data/global_ocean/`; pass that directory to redraw the figures without the original three-dimensional fields.
 
@@ -12,7 +12,7 @@ include("../shared/compact_data.jl") #src
 include("../shared/plotting.jl") #src
 include("../shared/global_plots.jl") #src
 
-directory = isempty(ARGS) ? joinpath(@__DIR__, "..", "..", "global_ocean", "raw") : first(ARGS)
+directory = isempty(ARGS) ? joinpath(@__DIR__, "..", "..", "global_ocean") : first(ARGS)
 labels = ["AB2-SE", "WRK3-SE-SM05", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-UP"]
 budgets = map(labels) do label
     @info "Reading global buoyancy-variance budget" label

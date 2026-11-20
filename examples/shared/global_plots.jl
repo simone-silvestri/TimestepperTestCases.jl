@@ -1,9 +1,17 @@
 function plot_global_cost(measurements, throughput)
-    figure = Figure(size=(850, 430))
-    axis   = Axis(figure[1, 1]; ylabel="Throughput relative to AB2-SE",
-                xticks=(eachindex(measurements), [measurement.label for measurement in measurements]), xticklabelrotation=π/6)
-    barplot!(axis, collect(eachindex(measurements)), throughput; color=[plot_style(measurement.label).color for measurement in measurements])
-    hlines!(axis, [1]; color=:black, linestyle=:dash)
+    figure    = Figure(size=(1100, 430))
+    positions = collect(eachindex(measurements))
+    colors    = [plot_style(measurement.label).color for measurement in measurements]
+    labels    = [publication_label(measurement.label) for measurement in measurements]
+    panels    = ((L"\mathrm{SYPD}", [measurement.years_per_day for measurement in measurements], 3),
+                 ("Throughput relative to AB2-SE", throughput, 2))
+    for (column, (ylabel, values, digits)) in enumerate(panels)
+        axis = Axis(figure[1, column]; ylabel, xticks=(positions, labels), xticklabelrotation=π/6, xgridvisible=false)
+        bar_labels = [rpad(string(round(value; digits)), length(string(floor(Int, value))) + 1 + digits, '0') for value in values]
+        barplot!(axis, positions, values; color=colors, bar_labels, label_size=13)
+        ylims!(axis, 0, 1.15maximum(values))
+        column == 2 && hlines!(axis, [1]; color=:black, linestyle=:dash, linewidth=1)
+    end
     return save_example(figure, "global_throughput")
 end
 

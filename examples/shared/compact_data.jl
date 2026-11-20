@@ -31,22 +31,6 @@ function prepare_channel(path)
     end
 end
 
-function prepare_internal_tide(path)
-    return jldopen(path) do file
-        saved_grid = file["serialized/grid"]
-        grid       = saved_grid.underlying_grid
-        iterations = sort(parse.(Int, keys(file["timeseries/t"])))
-        t          = [file["timeseries/t/$iteration"] for iteration in iterations]
-        z          = collect(grid.z.cᵃᵃᶜ[1:grid.Nz])
-        x          = collect(grid.xᶜᵃᵃ[1:grid.Nx])
-        bottom     = vec(Array(saved_grid.immersed_boundary.bottom_height[1:grid.Nx, 1, 1]))
-        wet        = [depth > floor for floor in bottom, depth in z]
-        fields     = Dict(name => cat([dropdims(centered_output(file, name, iteration, grid); dims=2)
-                                  for iteration in iterations]...; dims=3) for name in ("Abx", "Abz", "Gbz"))
-        return (; x, z, Δz=diff(collect(grid.z.cᵃᵃᶠ[1:grid.Nz+1])), t, wet, fields)
-    end
-end
-
 #####
 ##### Global configuration
 #####

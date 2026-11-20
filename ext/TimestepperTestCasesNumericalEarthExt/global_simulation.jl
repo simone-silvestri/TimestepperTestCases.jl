@@ -77,11 +77,18 @@ function global_ocean_vertical_discretization(Nz = 100, depth = 5000meters, surf
 end
 
 
-# measured, not derived: c₁ and Δx both vary over the domain, so the binding c₁ k needs the stratification field
-global_ocean_timestep(::Val{:SplitRungeKutta3}) = 20minutes
+# measured, not derived: c₁ and Δx both vary over the domain, so the binding c₁ k needs the stratification field.
+# AB2-SE is unstable at the 13 minutes implied by its ratio and runs at 11, the largest stable step.
+global_ocean_timestep(::Val{:QuasiAdamsBashforth2}) = 11minutes
+global_ocean_timestep(::Val{:ModifiedRungeKutta4})  = 72minutes
+global_ocean_timestep(::Val{scheme}) where scheme   = 45minutes
 
-# every other scheme scales from that reference by θ★(scheme)/θ★(WRK3), as in the idealized cases
-global_ocean_timestep(::Val{scheme}) where scheme = baroclinic_timestep(scheme, global_ocean_timestep(Val(:SplitRungeKutta3)))
+# AB2 from rest survives neither the jump to Δt/3 nor the one to 11 minutes: it cold-starts at 1.741 minutes and
+# passes through 5.5 minutes for 600 days before the production step.
+global_ocean_cold_start_timestep(::Val{:QuasiAdamsBashforth2}, Δt) = 1.741minutes
+global_ocean_cold_start_timestep(::Val{scheme}, Δt) where scheme  = Δt / 3
+global_ocean_handover_timestep(::Val{:QuasiAdamsBashforth2}) = 5.5minutes
+global_ocean_handover_timestep(::Val{scheme}) where scheme   = nothing
 
 """
     global_ocean_barotropic_rate(grid; g = Oceananigans.defaults.gravitational_acceleration)
@@ -223,12 +230,14 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
                      momentum_advection      = nothing,
                      Δt                      = global_ocean_timestep(Val(timestepper)),
                      nominal_timestep        = Δt,
-                     cold_start_Δt           = Δt / 3,
-                     cold_start_duration     = 60days,
-                     stop_time               = 720days,
+                     cold_start_Δt           = global_ocean_cold_start_timestep(Val(timestepper), Δt),
+                     cold_start_duration     = 360days,
+                     handover_Δt             = global_ocean_handover_timestep(Val(timestepper)),
+                     handover_duration       = 600days,
+                     stop_time               = 1830days,
                      cost_stop_time          = min(stop_time, 365days),
                      dissipation             = true,
-                     statistics              = true,
+                     statistics              = false,
                      closure                 = global_ocean_closure(),
                      bottom_drag_coefficient = 0.003,
                      # uᵦ = 0.1 m s⁻¹ stands for the barotropic tide, which this configuration does not force
@@ -247,11 +256,11 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
                      init_date = DateTime(1993, 1, 1),
                      progress_interval = TimeInterval(5days),
                      surface_output_interval = TimeInterval(1days),
-                     dissipation_output_interval = AveragedTimeInterval(30days),
+                     dissipation_output_interval = AveragedTimeInterval(90days),
                      statistics_output_interval = AveragedTimeInterval(7days),
                      checkpoint_interval = 60days,
                      pickup = false,
-                     dissipation_start_time = cost_stop_time)
+                     dissipation_start_time = 1095days)
 
     if free_surface === nothing
         # Fixed substep count, set from the substep integrator's own stability limit rather than from a cfl
@@ -262,12 +271,14 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
                                                 slow_forcing)
     end
     
-    # the campaign the finished cases belong to ran at cfl 1; a tighter threshold moves more vertical flux
-    # into the implicit solve, which carries its own diffusivity and is the quantity being measured
-    time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = parse(Float64, get(ENV, "M1_VERTICAL_CFL", "1")))
+    vertical_cfl        = timestepper === :QuasiAdamsBashforth2 ? 0.5 : 1.0
+    time_discretization = AdaptiveVerticallyImplicitDiscretization(cfl = vertical_cfl)
 
     momentum_advection = something(momentum_advection, split_momentum_advection(nothing, time_discretization))
     tracer_advection   = something(tracer_advection, weno_tracer_advection(9, time_discretization))
+
+    # the third-order upwind of WRK3-UP takes the same adaptive implicit vertical treatment as the WENO tracers
+    tracer_advection isa UpwindBiased && (tracer_advection = UpwindBiased(order = 3, time_discretization))
 
     wind_fluxes = if wind_stress
         τˣ, τʸ = global_ocean_wind_stress(grid; latitudes = wind_stress_latitudes,
@@ -344,6 +355,16 @@ function global_ocean(timestepper::Symbol = :SplitRungeKutta3;
         cold_wall, production_wall, production_steps = 0.0, 0.0, 0
     else
         cold_wall = @elapsed run!(ocean)
+
+        # An intermediate rung between the cold step and the production step: the two-level scheme survives
+        # neither jump on its own, and the transition rather than the step itself is what it fails at.
+        if !isnothing(handover_Δt) && time(ocean) < cold_start_duration + handover_duration
+            ocean.Δt        = handover_Δt
+            ocean.stop_time = cold_start_duration + handover_duration
+            @info @sprintf("[global_ocean] %s handover at %.3f minutes until day %.0f", label,
+                           handover_Δt / 60, (cold_start_duration + handover_duration) / 86400)
+            run!(ocean)
+        end
 
         ocean.Δt        = Δt
         ocean.stop_time = cost_stop_time

@@ -1,6 +1,8 @@
-# Diagnostics
+# Variance-budget diagnostics
 
-This package provides comprehensive diagnostics for quantifying numerical mixing and assessing the performance of time-stepping schemes. The diagnostics are based on exact variance budget methodology that is exact locally in both space and time.
+Numerical mixing is quantified from the discrete tracer-variance budget, which closes exactly in space and time for each
+cell and each timestep. The diagnosed variance destruction, divided by the squared tracer gradient, defines the numerical
+diffusivity shown in the manuscript figures.
 
 ## Variance Budget Methodology
 
@@ -40,13 +42,16 @@ where `M-1` indicates the second-to-last substep.
 
 ## Numerical Diffusivity
 
-The effective numerical diffusivity is computed as:
+The numerical diffusivity of a region is
 
 ```math
-\kappa_{\text{num}} = \frac{1}{2} \frac{\overline{P_x} + \overline{P_y} + \overline{P_z}}{\overline{|\nabla b|^2}}
+\kappa_{\text{num}} = -\frac{\sum (P_x + P_y + P_z)}{2 \sum |\nabla b|^2},
 ```
 
-where the overbar indicates an averaging operator (varies by test case) and `P_x`, `P_y`, `P_z` are the dissipation rates in each direction.
+where `P_x`, `P_y`, `P_z` are the variance tendencies in each direction (saved as `Abx`, `Aby`, `Abz`), `|∇b|²` is the
+squared buoyancy gradient (saved as `Gbx`, `Gby`, `Gbz`), and both sums run over the cells and output windows of the region.
+Both saved quantities already include cell volumes, so the sums are volume integrals. The ratio is formed after summing,
+never cell by cell. Variance destruction is negative, so κ > 0 is diffusive and κ < 0 anti-diffusive.
 
 ## Reference Potential Energy (RPE)
 
@@ -92,7 +97,7 @@ Load and compute diagnostics from saved output:
 
 ```julia
 # Load case
-case = load_internal_tide("output/", "SplitRungeKutta3", "split_free_surface_DFB")
+case = load_internal_tide("internal_tide/", "SplitRungeKutta3", "WRK3-SE")
 
 # Access pre-computed diagnostics
 case[:RPE]  # Reference potential energy time series
@@ -117,16 +122,8 @@ zstar = calculate_z★_diagnostics(b_field, vol_field)
 rpe_ape_fields = compute_rpe_density(b_field, vol_field)
 ```
 
-## Interpretation
+## Results
 
-- **Low RPE increase**: Indicates less irreversible mixing
-- **High APE**: Indicates more energy available for instabilities
-- **Low numerical diffusivity**: Indicates less spurious mixing from discretization
-- **κ_phys / κ_num > 1**: Physical processes dominate over numerical artifacts
-
-As shown in the paper, RK3 schemes consistently show:
-- Lower numerical diffusivity than AB2
-- Less RPE increase (less irreversible mixing)
-- Higher APE (more energy available for instabilities)
-- Better preservation of stratification and mesoscale variability
-
+The diagnosed diffusivities of each experiment are shown on the figure pages of the
+[internal tide](generated/internal_tide_figures.md), the [re-entrant channel](generated/channel.md) and the
+[quarter-degree global ocean](generated/global_ocean_results.md).

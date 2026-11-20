@@ -24,10 +24,10 @@ end
 weights_example = joinpath(dirname(example), "reconstruction_weights.jl")
 Literate.markdown(weights_example, generated; execute=true, credit=false)
 
-figure_directories = (joinpath(@__DIR__, "..", "examples", "output"),
-                      joinpath(@__DIR__, "..", "internal_tide", "figures"), joinpath(@__DIR__, "figures"))
+figure_directories = (joinpath(@__DIR__, "..", "examples", "output"), joinpath(@__DIR__, "figures"))
+on_ci = get(ENV, "CI", "false") == "true"
 
-for name in ("internal_tide", "internal_tide_figures", "channel", "global_ocean", "global_ocean_results", "global_surface_averages")
+for name in ("internal_tide_figures", "channel", "global_ocean_results", "global_surface_results", "global_surface_averages", "global_ocean")
     source = joinpath(@__DIR__, "..", "examples", "figures", name * ".jl")
     local page = Literate.markdown(source, generated; execute=false, flavor=Literate.CommonMarkFlavor(), credit=false)
     content = read(page, String)
@@ -35,6 +35,8 @@ for name in ("internal_tide", "internal_tide_figures", "channel", "global_ocean"
         paths = [joinpath(directory, image.captures[1]) for directory in figure_directories]
         found = findfirst(isfile, paths)
         if isnothing(found)
+            on_ci && error("$(image.captures[1]), shown in examples/figures/$name.jl, is missing from docs/figures.")
+            @warn "Figure missing; the page shows a placeholder" figure=image.captures[1] example=name
             content = replace(content, image.match => "Run this example with local or published data to generate the figure.")
         else
             cp(paths[found], joinpath(generated, image.captures[1]); force=true)
@@ -43,34 +45,35 @@ for name in ("internal_tide", "internal_tide_figures", "channel", "global_ocean"
     write(page, content)
 end
 
-experiment_pages = [
-    "Internal Tide" => "experiments/internal_tide.md",
-    "Channel Flow" => "experiments/channel.md",
-]
-
 pages = [
     "Home" => "index.md",
-    "Getting Started" => "getting_started.md",
-    "Experiments" => experiment_pages,
-    "Diagnostics" => "diagnostics.md",
+    "Getting started" => "getting_started.md",
+    "Experiments" => [
+        "Internal tide" => [
+            "Configuration and run" => "experiments/internal_tide.md",
+            "Manuscript figures" => "generated/internal_tide_figures.md",
+        ],
+        "Re-entrant channel" => [
+            "Configuration and run" => "experiments/channel.md",
+            "Manuscript figures" => "generated/channel.md",
+        ],
+        "Quarter-degree global ocean" => [
+            "Configuration and run" => "experiments/global_ocean.md",
+            "Numerical diffusivity" => "generated/global_ocean_results.md",
+            "Surface velocity" => "generated/global_surface_results.md",
+            "Surface tracers" => "generated/global_surface_averages.md",
+            "Computational cost" => "generated/global_ocean.md",
+        ],
+    ],
+    "Reproducing the paper" => "data_examples.md",
+    "Variance-budget diagnostics" => "diagnostics.md",
     "Time-discretization theory" => [
         "Overview" => "theory.md",
-        "Example guide" => "theory_example.md",
         "Manuscript example" => "generated/time_discretization.md",
         "Reconstruction weights" => "generated/reconstruction_weights.md",
         "Theory API" => "theory_api.md",
     ],
-    "Stability Analysis" => "stability.md",
-    "Data-driven examples" => [
-        "Data and execution" => "data_examples.md",
-        "Internal tide" => "generated/internal_tide.md",
-        "Internal tide: campaign figures" => "generated/internal_tide_figures.md",
-        "Channel" => "generated/channel.md",
-        "Global cost" => "generated/global_ocean.md",
-        "Global diffusivity" => "generated/global_ocean_results.md",
-        "Global surface averages" => "generated/global_surface_averages.md",
-    ],
-    "API Reference" => "api_reference.md",
+    "API reference" => "api_reference.md",
 ]
 
 makedocs(;
@@ -80,7 +83,7 @@ makedocs(;
     format=Documenter.HTML(;
         canonical="https://simone-silvestri.github.io/TimestepperTestCases.jl",
         edit_link="main",
-        prettyurls=get(ENV, "CI", "false") == "true",
+        prettyurls=on_ci,
         assets=String[],
     ),
     pages=pages,

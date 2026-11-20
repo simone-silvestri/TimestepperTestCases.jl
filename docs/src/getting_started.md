@@ -1,86 +1,58 @@
-# Getting Started
+# Getting started
 
 ## Installation
 
-Install TimestepperTestCases.jl using Julia's package manager:
+The package is not registered. Clone the repository and work from its root:
 
-```julia
-using Pkg
-Pkg.add("TimestepperTestCases")
+```sh
+git clone https://github.com/simone-silvestri/TimestepperTestCases.jl
+cd TimestepperTestCases.jl
 ```
 
-Or add it directly from the GitHub repository:
+The repository holds four Julia environments, each pinned by its own manifest. Use Julia 1.12 or newer.
 
-```julia
-using Pkg
-Pkg.add(url="https://github.com/simone-silvestri/TimestepperTestCases.jl")
-```
+| Environment | Purpose | Set up with |
+| --- | --- | --- |
+| `.` | Simulations and diagnostics (`TimestepperTestCases`, pinned Oceananigans revision) | `julia --project=. -e 'using Pkg; Pkg.instantiate()'` |
+| `examples` | Figure scripts that read the published data | `julia --project=examples -e 'using Pkg; Pkg.develop(path="."); Pkg.instantiate()'` |
+| `lib/TimestepperTheory/examples` | Time-discretization theory and its figures | `julia --project=lib/TimestepperTheory/examples -e 'using Pkg; Pkg.develop(path="lib/TimestepperTheory"); Pkg.instantiate()'` |
+| `docs` | This documentation | `julia --project=docs -e 'using Pkg; Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path="lib/TimestepperTheory")]); Pkg.instantiate()'` |
 
-## Basic Usage
+## Discretizations
 
-After installation, load the package:
-
-```julia
-using TimestepperTestCases
-```
-
-### Running a Test Case
-
-The package provides three main test case functions:
-
-#### Internal Tide
+Every experiment runs the same set of time discretizations, identified by a label that combines the outer scheme, the
+barotropic solver and, where relevant, the averaging filter or the tracer advection:
 
 ```julia
 using TimestepperTestCases
 
-# Run with RK3 and split-explicit free surface
-sim = internal_tide(:SplitRungeKutta3)
-
-# Or with AB2
-sim = internal_tide(:QuasiAdamsBashforth2)
+[d.label for d in discretizations()]   # AB2-SE, WRK3-SE, WRK3-SE-SM05, SRK3-SE, MRK4-SE, WRK3-IM, WRK3-UP
+d = discretization("WRK3-SE")
 ```
 
-#### Channel Simulation
+The figures label WRK3-SE-SM05 as WRK3-SE-F1. Each experiment derives the timestep and the free surface of a label from
+its own stability parameters.
+
+## Run an experiment
 
 ```julia
-# Run channel simulation with default settings
-sim = channel_simulation(timestepper=:SplitRungeKutta3)
+using TimestepperTestCases
 
-# Or customize closure and grid
-sim = channel_simulation(
-    timestepper=:SplitRungeKutta3,
-    closure=default_closure(),
-    zstar=true
-)
+internal_tide(discretization("WRK3-SE"))          # 40-day internal tide on the CPU
+channel_simulation(discretization("WRK3-SE"))     # re-entrant channel, GPU by default
 ```
 
-### Loading Simulation Output
+The quarter-degree global configuration lives in a package extension that loads with NumericalEarth and
+WorldOceanAtlasTools and runs on a GPU. The campaign drivers in `examples/simulations/` run every discretization of an
+experiment in turn. The experiment pages describe each configuration, its outputs and its manuscript figures:
 
-After running a simulation, load the output data:
+- [Internal tide](experiments/internal_tide.md)
+- [Re-entrant channel](experiments/channel.md)
+- [Quarter-degree global ocean](experiments/global_ocean.md)
 
-```julia
-# For internal tide
-case = load_internal_tide("output_folder/", "SplitRungeKutta3", "split_free_surface_DFB")
+## Reproduce the figures
 
-# Access diagnostics
-case[:KE]   # Kinetic energy time series
-case[:RPE]  # Reference potential energy
-case[:APE]  # Available potential energy
-case[:κb]   # Numerical diffusivity
-```
-
-## Dependencies
-
-TimestepperTestCases.jl requires:
-
-- Julia 1.9 or later
-- Oceananigans.jl (for the ocean model)
-- JLD2 (for reading/writing simulation output)
-- Various plotting and analysis packages (see `Project.toml`)
-
-## Next Steps
-
-- Learn about the [experiments](experiments/internal_tide.md) in detail
-- Understand the [diagnostics](diagnostics.md) used to quantify numerical mixing
-- Run the [Julia examples](data_examples.md) with local or published data
-
+The outputs of all three campaigns are published on Zenodo. [Reproducing the paper](data_examples.md) explains how to
+download them and which script draws each manuscript figure. The [variance-budget diagnostics](diagnostics.md) page
+defines the numerical diffusivity used throughout, and the [time-discretization theory](theory.md) pages cover Sections
+2–4 of the manuscript.

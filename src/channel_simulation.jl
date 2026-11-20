@@ -217,12 +217,13 @@ Return the recommended time step for the channel simulation given a timestepper.
 $(SIGNATURES)
 
 # Arguments
-- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2`, `:SplitRungeKutta3`, or `:SplitRungeKutta6`)
+- `timestepper`: Symbol indicating the timestepper (`:QuasiAdamsBashforth2`, `:SplitRungeKutta3`, `:SSPRungeKutta3`
+  or `:ModifiedRungeKutta4`)
 
 # Returns
 - Recommended time step [s] for the given timestepper
 
-Time steps are chosen to match computational cost between different timesteppers.
+The three-stage schemes run at 16 minutes, AB2 at 0.29 and MRK4 at 1.609 times that step (4.6 and 25.75 minutes).
 """
 simulation_Δt(::Val{scheme}) where scheme = baroclinic_timestep(scheme; channel_stability_parameters()...)
 
@@ -249,8 +250,8 @@ end
 """
     channel_substeps(barotropic_scheme, scheme; averaging_kernel)
 
-Barotropic substep count for this case, fixed so that the substep Courant number sits at 70% of the limit of
-`barotropic_scheme` -- `√3` for the three-stage Runge-Kutta substep, `1` for forward-backward.
+Barotropic substep count for this case, the smallest that keeps the substep Courant number at the
+[`barotropic_cfl`](@ref) of `barotropic_scheme`, 0.8 for forward-backward and 1.3 for the three-stage Runge-Kutta substep.
 """
 function channel_substeps(barotropic_scheme, scheme = :SplitRungeKutta3;
                           averaging_kernel = OptimizedAsymmetricAveragingKernel())
@@ -279,7 +280,9 @@ function default_closure()
 end
 
 """
-    channel_simulation(; momentum_advection, tracer_advection, closure, zstar, restart_file, arch, bottom_height, timestepper, grid, initial_file, testcase)
+    channel_simulation(; momentum_advection, tracer_advection, closure, zstar, restart_file, free_surface, arch,
+                         bottom_height, timestepper, grid, initial_file, testcase, averaging_kernel,
+                         barotropic_timestepper, slow_forcing)
 
 Set up and run the idealized re-entrant channel flow simulation.
 
@@ -292,14 +295,14 @@ $(SIGNATURES)
 - `closure`: Turbulence closure (default: `CATKEVerticalDiffusivity`)
 - `zstar`: Whether to use z-star vertical coordinates (default: `true`)
 - `restart_file`: Optional restart file path (default: `nothing`)
-- `arch`: Architecture to run on (default: `CPU()`)
+- `free_surface`: Free surface (default: `nothing`, a split-explicit free surface with [`channel_substeps`](@ref))
+- `arch`: Architecture to run on (default: `GPU()`)
 - `bottom_height`: Optional bottom height function (default: `nothing` for flat bottom)
-- `timestepper`: Timestepper symbol (default: `:SplitRungeKutta`)
+- `timestepper`: Timestepper symbol (default: `:SplitRungeKutta3`)
 - `grid`: Grid to use (default: `default_grid(...)`)
 - `initial_file`: Optional initial condition file (default: `"tIni_80y_90L.bin"`)
-- `testcase`: Test case identifier string (default: `"0"`), which names every output file of the run. A
-  boundary scheme that departs from the default is appended to it, so that its output does not overwrite the
-  default run it is meant to be compared against.
+- `testcase`: Test case identifier string (default: `"0"`), which names every output file of the run
+- `averaging_kernel`, `barotropic_timestepper`, `slow_forcing`: settings of the split-explicit free surface
 
 # Returns
 - `Simulation` object after running to completion
@@ -458,7 +461,6 @@ function channel_simulation(; momentum_advection = nothing,
 
     Δt₀ = 1minutes
 
-    # 50 years of simulation
     simulation = Simulation(model; Δt = actual_Δt, stop_time = 100days)
 
     # add progress callback
