@@ -1,16 +1,68 @@
-# Fill in the versioned record URLs and SHA-256 hashes after uploading the selected output files.
-# Existing local files do not require a download URL.
-[internal_tide_weno_new]
-doi = ""
-base_url = ""
-[internal_tide_weno_new.sha256]
+# Zenodo record 24315107 (https://doi.org/10.5281/zenodo.24315107): versioned download locations and
+# SHA-256 checksums of the published campaign files, as listed in the record's SHA256SUMS.
+
+[internal_tide]
+doi = "10.5281/zenodo.24315107"
+base_url = "https://zenodo.org/records/24315107/files"
+
+[internal_tide.sha256]
+"internal_tide_ModifiedRungeKutta4_MRK4-SE-dt4.jld2" = "35ea92102e836bf1ea6c5ef72e59dd4901f521567a15ed80318217727cefb072"
+"internal_tide_ModifiedRungeKutta4_MRK4-SE-dt8.jld2" = "90ed58601563f400116477dce773c862deb972b655b551029dd6f174240a4925"
+"internal_tide_ModifiedRungeKutta4_MRK4-SE.jld2" = "457ed0f0d3e1a6aadbb49eb4efa100c652ad0130208a0078d8bf1b8f60188ec4"
+"internal_tide_QuasiAdamsBashforth2_AB2-SE-dt4.jld2" = "74e6f1aa894cc62969d0c8d7111259e54dadf1c78b1ebcf68c68ce4b40a95cfa"
+"internal_tide_QuasiAdamsBashforth2_AB2-SE-dt8.jld2" = "5d007bad8a0603658ad1fcb162c84ac877be6544824c03667afd0087516b914a"
+"internal_tide_QuasiAdamsBashforth2_AB2-SE.jld2" = "dd32b73937e4aa07a0786f233b3a1fca0617c27b08cb644e8dee54939aa14200"
+"internal_tide_SSPRungeKutta3_SRK3-SE-dt4.jld2" = "d30dd4cbd590fa153e5144346421bb2d389796d4e6f777e8c472f3a2f1270670"
+"internal_tide_SSPRungeKutta3_SRK3-SE-dt8.jld2" = "b8fb576728328a3ae8ef275214e44233f9af791d9e080ec00bcca62059cd5540"
+"internal_tide_SSPRungeKutta3_SRK3-SE.jld2" = "d7f41740858bd8e4860baaf7b443bd93c72ed39481e7d98379a0e9991a99bb78"
+"internal_tide_SplitRungeKutta3_WRK3-IM.jld2" = "47dc0c296accb776a9b7ac79eecf13330a3aecd972db001a739624a9208d2ccf"
+"internal_tide_SplitRungeKutta3_WRK3-SE-SM05.jld2" = "54785bd4a1cccc6698712a42801b6fbab02fce905f1a5acf45c744071d7d9a90"
+"internal_tide_SplitRungeKutta3_WRK3-SE-dt4.jld2" = "094e3e0983c27dfb176ada63868f8b260fb7e38733204f73be6dee4ae50c1b88"
+"internal_tide_SplitRungeKutta3_WRK3-SE-dt8.jld2" = "19e12888b78c736b89034e2ab1f0020f3ca7d71ed0b8364ef5b117c37668a368"
+"internal_tide_SplitRungeKutta3_WRK3-SE.jld2" = "1ac3d82608d76f24594ba35ae01f0ee171b70368095bfdd276501c4c84c32451"
+"internal_tide_SplitRungeKutta3_WRK3-UP.jld2" = "e2fe567057341843f7edffd5de225e8da0b1fac51eb7067908785230b59e92f0"
 
 [channel_simulation]
-doi = ""
-base_url = ""
+doi = "10.5281/zenodo.24315107"
+base_url = "https://zenodo.org/records/24315107/files"
+
 [channel_simulation.sha256]
+"averages_AB2-SE.jld2" = "252601c7645f069d1aeb68b21ec516b90f117337063475ee10ea7ee648eb49cc"
+"averages_MRK4-SE.jld2" = "dc511d3f770fe4a9f79ea6c757b873b7d3abb7f2a82181336556e2e9909e0829"
+"averages_SRK3-SE.jld2" = "42dac8af707d9ce5a5c08721a36db38a613a3a48057b22342eab9ae09efad5d7"
+"averages_WRK3-IM.jld2" = "9fdfeec13563719ebf61e67fd304402355bcfa9d052dfaa9e541fffd8adc3185"
+"averages_WRK3-SE-SM05.jld2" = "0117136ca27a58d802b47c55e6ce4ffec7f4177cfed02438db181ed19ce4e356"
+"averages_WRK3-SE.jld2" = "c4ee98491bb854b30c654a82e21b6b2026f3e44506bcc2b366eac70a4ff198c4"
+"averages_WRK3-UP.jld2" = "e629e1d52296d932ba75eff8948f23230fcff06aea4189f7b0dd9f5185b4b8a0"
+"mixing_AB2-SE.jld2" = "dd7d6504d072b03aea3710b02415379eb5e7518b22f5450be457142d5b397061"
+"mixing_MRK4-SE.jld2" = "1f4352e08984eba1b329da9f88ab7cc69850d6506c6dcd369379977f91a9f4be"
+"mixing_SRK3-SE.jld2" = "682ae28442bf0bedba80b73b98712dae6a5c2df8621fb41cb061e72520122c13"
+"mixing_WRK3-IM.jld2" = "1f0e4c26cf0c8f03866c96ede99aa49b1ff4424be8fbbd34c141ea7fe275494e"
+"mixing_WRK3-SE-SM05.jld2" = "3041e4586fad169b9054d35ab25cc9eff65ba28c49e5ee35e2f733fff917bb2a"
+"mixing_WRK3-SE.jld2" = "1d70a460bb4890172007514668a3deb2d5ddb1330899c31e23cd7297136b824c"
+"mixing_WRK3-UP.jld2" = "ee7cc6ae02c1aff33b83ffff06e1f6be75af1170cf2b551b2f66f55c0758bba0"
 
 [global_ocean]
-doi = ""
-base_url = ""
+doi = "10.5281/zenodo.24315107"
+base_url = "https://zenodo.org/records/24315107/files"
+
 [global_ocean.sha256]
+"global_ocean_AB2-SE_average.jld2" = "ca448dbc67df144c2052dce661b0ce49f3800b7f7edd07a6d907450adeb0f0f5"
+"global_ocean_AB2-SE_dissipation.jld2" = "e49a216aacc7aec0f252a13809b5afbac27a1da74f6d91c3f08a629a61a9fecc"
+"global_ocean_AB2-SE_surface.jld2" = "4b602d4f6ea534518696a781ad3ab36d13bee262074186c82f0196f117e481ff"
+"global_ocean_MRK4-SE_average.jld2" = "95bfc76b6c4a16179bdf89361e5ae7e9817abc5cb920c442237dd84270af5cf5"
+"global_ocean_MRK4-SE_dissipation.jld2" = "d29e673fa7d09017437c9fb6cb4aa618c5460b6a1d2d51666286dd5898736020"
+"global_ocean_MRK4-SE_surface.jld2" = "a94b330f3f3fde47e6623be6772d39e72bc4ed8cd809314ebab2ed9da1d31e27"
+"global_ocean_SRK3-SE_average.jld2" = "9b0cefb8ee22cfa62399801e496027bf63f78da4d5d3e6d0f917c092fbbaa176"
+"global_ocean_SRK3-SE_dissipation.jld2" = "1c45a9e6be1919e5e3f5ef58441214771c5c1eabfdc72012cac2788fff2714a9"
+"global_ocean_SRK3-SE_surface.jld2" = "974f1955d236e6bce5894f57d2876d533f7f06e03976a632a189df89c1733d9f"
+"global_ocean_WRK3-SE-SM05_average.jld2" = "5ba997deea750ef6d0b9bbbf9202ff2bb09b71b9b02a7ad03b34419d64c5d146"
+"global_ocean_WRK3-SE-SM05_dissipation.jld2" = "d8e921b2b0938489c6c878316f43420b2091c99bc4324f592afe7c0036793246"
+"global_ocean_WRK3-SE-SM05_surface.jld2" = "09354d971915a49a0e28dd42fde66b551b21793d73766c22563766e096abd21d"
+"global_ocean_WRK3-SE_average.jld2" = "03744a25dce409919a4b8a52e23b2d2586c7cc2eb7f281d85676f37a23467fbc"
+"global_ocean_WRK3-SE_dissipation.jld2" = "0bbfa28291981a5efff80aee17580ec8c084984a622ce6c8c2abda291e1db899"
+"global_ocean_WRK3-SE_surface.jld2" = "338753ff64010da6b70ca644a4946f820da4bc96c23cd9fafb51a2aa7844d985"
+"global_ocean_WRK3-UP_average.jld2" = "947ebdf111ec58f4aae1156e8be9fcb6f9c41be5170c92bee4ce1a2e1acacaf7"
+"global_ocean_WRK3-UP_dissipation.jld2" = "ee06eb3e75a91a5134c700927866ea1bc880484753e399bd226f781e6535d1f8"
+"global_ocean_WRK3-UP_surface.jld2" = "2d4c64a241678edc85336135756a6c3851ed90f4267f55e0b573fa152e3f01c6"
+"reported_timings.csv" = "e197be6e021311890fdf27f6a2bf990fc740f2a5a25e2c8090a498007142467c"

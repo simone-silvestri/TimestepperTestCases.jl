@@ -64,7 +64,32 @@ julia --project=examples examples/figures/global_ocean.jl /path/to/global_ocean
 julia --project=examples examples/figures/global_ocean_results.jl /path/to/global_ocean
 ```
 
-Download the published campaigns with `julia scripts/download_data.jl RECORD_ID /path/to/data`, then pass the corresponding campaign directory to each example. The downloader restores the three folders and verifies SHA-256 checksums. The record ID is pending publication. See the [data guide](docs/src/data_examples.md) for commands and diagnostic coverage. Locally retained notebooks are ignored and excluded from the published tree.
+See the [data guide](docs/src/data_examples.md) for commands and diagnostic coverage. Locally retained notebooks are ignored and excluded from the published tree.
+
+## Reproduce the manuscript figures
+
+The simulation output is archived on Zenodo (Silvestri et al., 2026, [doi:10.5281/zenodo.24315107](https://doi.org/10.5281/zenodo.24315107), CC BY 4.0). `scripts/download_data.jl` downloads the selected campaigns of record 24315107, restores their folders, and verifies every file against the record's SHA-256 checksums with Julia standard libraries only. The record holds about 137 GB, so download only the campaigns you need:
+
+| Campaign | Download | Figure driver | Manuscript figures |
+|---|---|---|---|
+| — | — | `lib/TimestepperTheory/examples/time_discretization.jl` | 1–9 |
+| — | — | `lib/TimestepperTheory/examples/rotation.jl` | 19 |
+| `internal_tide` | 12 GB | `examples/figures/internal_tide_figures.jl` | 10–13 |
+| `channel` | 25 GB | `examples/figures/channel.jl` | 14–15 |
+| `global_ocean` | 100 GB | `examples/figures/global_ocean_results.jl`, `examples/figures/global_surface_results.jl` | 16–17 |
+
+From the repository root, after instantiating the examples environment as above:
+
+```sh
+julia scripts/download_data.jl /path/to/data internal_tide channel global_ocean
+julia --project=examples examples/figures/internal_tide_figures.jl /path/to/data/internal_tide
+julia --project=examples examples/figures/channel.jl /path/to/data/channel
+julia --project=examples examples/figures/global_ocean_results.jl /path/to/data/global_ocean
+julia --project=examples examples/figures/global_surface_results.jl /path/to/data/global_ocean
+julia --project=lib/TimestepperTheory/examples --threads=auto lib/TimestepperTheory/examples/rotation.jl
+```
+
+The internal-tide figures are written to `/path/to/data/internal_tide/figures/`, the channel and global figures to `examples/output/`, and the theory figures to `lib/TimestepperTheory/output/`. The global timings of the manuscript's cost table are in `global_ocean/reported_timings.csv`; the record does not contain the raw timing logs.
 
 ## Documentation
 
@@ -94,7 +119,7 @@ The theory tests check modal identities, filter moments, stage updates, amplific
 
 ## Citation
 
-If you use this repository, please cite the accompanying manuscript:
+If you use this repository, please cite the accompanying manuscript, and the data record when you use the archived simulation output:
 
 ```bibtex
 @unpublished{silvestri2026conservative,
@@ -102,6 +127,15 @@ If you use this repository, please cite the accompanying manuscript:
   author = {Silvestri, Simone and Campin, Jean-Michel and Wagner, Gregory and Constantinou, Navid C. and Bishnu, Siddhartha and Lee, Xin Kai and Ferrari, Raffaele},
   year   = {2026},
   note   = {Manuscript}
+}
+
+@dataset{silvestri2026data,
+  title     = {Reproducibility data for ``A conservative {Runge--Kutta} framework for nonlinear free-surface ocean models''},
+  author    = {Silvestri, Simone},
+  year      = {2026},
+  publisher = {Zenodo},
+  version   = {1.0},
+  doi       = {10.5281/zenodo.24315107}
 }
 ```
 

@@ -3,7 +3,7 @@
 # This example reads the internal-tide outputs and computes the horizontally averaged numerical diffusivity,
 # its spatial and temporal averages, and differences relative to WRK3-SE. The stored dissipation and squared
 # gradient fields include cell volumes and are interpolated to cell centers before reduction.
-# Pass a local directory as the first command-line argument. Without it, the repository's internal_tide_weno_new/
+# Pass a local directory as the first command-line argument. Without it, the repository's internal_tide/
 # directory is checked before the versioned download location in datasets.toml.
 
 using TimestepperTestCases
@@ -46,7 +46,7 @@ profiles = NamedTuple[]
 
 for variant in variants
     filename = "internal_tide_$(variant.timestepper)_$(variant.label).jld2"
-    data     = compact_dataset("internal_tide_weno_new", filename, prepare_internal_tide; directory)
+    data     = compact_dataset("internal_tide", filename, prepare_internal_tide; directory)
     t, z = data.t, data.z
     P  = data.fields["Abx"] + data.fields["Abz"]
     G  = data.fields["Gbz"]
@@ -59,8 +59,12 @@ for variant in variants
     GC.gc()
 end
 
+# AB2-SE is saved every 18 steps rather than every hour, so each difference uses the saved time closest to each
+# output time of WRK3-SE.
 reference = only(filter(profile -> profile.label == "WRK3-SE", profiles))
-differences = [(; profile..., Δκ=profile.κ - reference.κ) for profile in profiles if profile.label in ("AB2-SE", "MRK4-SE", "WRK3-UP")]
+nearest_records(t) = [argmin(abs.(t .- τ)) for τ in reference.t]
+differences = [(; profile..., t=reference.t, Δκ=profile.κ[:, nearest_records(profile.t)] - reference.κ)
+               for profile in profiles if profile.label in ("AB2-SE", "MRK4-SE", "WRK3-UP")]
 
 plot_internal_tide(profiles, differences) #src
 # ![Internal-tide numerical diffusivity](internal_tide_diffusivity.png)

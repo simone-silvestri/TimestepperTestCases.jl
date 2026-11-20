@@ -189,7 +189,8 @@ end
 ##### Compact files
 #####
 
-# With `reuse`, a compact file already in the data cache spares the pass over the original output.
+# With `reuse`, a compact file already in the data cache spares the pass over the original output. Without a
+# directory, an original file missing from the checkout is downloaded from the record listed in datasets.toml.
 function compact_dataset(dataset, filename, prepare; directory=nothing, reuse=false)
     raw_directory = isnothing(directory) ? joinpath(@__DIR__, "..", "..", dataset) : abspath(directory)
     raw_path      = joinpath(raw_directory, filename)
@@ -200,13 +201,11 @@ function compact_dataset(dataset, filename, prepare; directory=nothing, reuse=fa
     if reuse && isfile(cached_compact) && (!isfile(raw_path) || mtime(cached_compact) ≥ mtime(raw_path))
         return JLD2.load(cached_compact, "data")
     end
-    if isfile(raw_path)
-        data = prepare(raw_path)
-        mkpath(dirname(cached_compact))
-        JLD2.jldsave(cached_compact; compress=true, data)
-        return data
-    end
-    return JLD2.load(dataset_file(dataset, compact_name; directory), "data")
+    isfile(raw_path) || isnothing(directory) || throw(ArgumentError("Dataset file does not exist: $raw_path"))
+    data = prepare(isfile(raw_path) ? raw_path : dataset_file(dataset, filename))
+    mkpath(dirname(cached_compact))
+    JLD2.jldsave(cached_compact; compress=true, data)
+    return data
 end
 
 function prepare_global_surface_averages(path)

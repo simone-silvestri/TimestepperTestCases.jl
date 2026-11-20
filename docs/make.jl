@@ -21,6 +21,9 @@ for image in eachmatch(r"!\[.*?\]\(([^)]+)\)", read(page, String))
     cp(joinpath(results, image.captures[1]), joinpath(generated, image.captures[1]); force=true)
 end
 
+weights_example = joinpath(dirname(example), "reconstruction_weights.jl")
+Literate.markdown(weights_example, generated; execute=true, credit=false)
+
 figure_directories = (joinpath(@__DIR__, "..", "examples", "output"),
                       joinpath(@__DIR__, "..", "internal_tide", "figures"), joinpath(@__DIR__, "figures"))
 
@@ -54,6 +57,7 @@ pages = [
         "Overview" => "theory.md",
         "Example guide" => "theory_example.md",
         "Manuscript example" => "generated/time_discretization.md",
+        "Reconstruction weights" => "generated/reconstruction_weights.md",
         "Theory API" => "theory_api.md",
     ],
     "Stability Analysis" => "stability.md",

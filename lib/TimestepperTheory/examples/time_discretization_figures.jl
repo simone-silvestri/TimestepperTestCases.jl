@@ -99,25 +99,31 @@ function plot_coupling_decomposition(panels, rows, output_directory)
     figure = Figure(size=(576, 331), fontsize=12)
     for (row, ε) in enumerate((big"0.0005", big"0.05")), (column, scheme) in enumerate((WickerSkamarock3(), ShuOsher3()))
         (; phases, corrections, complete, retained, predicted) = panels[2(row - 1) + column]
-        axis = Axis(figure[row, column], xlabel=L"\mu_0", title=row == 1 ? (scheme isa ShuOsher3 ? "SRK3" : "WRK3") : "")
+        axis = Axis(figure[row, column], xlabel=row == 2 ? L"\mu_0" : "", xticklabelsvisible=row == 2,
+                    title=row == 1 ? (scheme isa ShuOsher3 ? "SRK3" : "WRK3") : "")
         lines!(axis, Float64.(phases), Float64.([result.growth / result.damping for result in corrections]); color=:black, label="Full matrix")
         lines!(axis, Float64.(phases), Float64.(complete); color="#CC79A7", linestyle=:dash, label="All second-order terms")
         scatter!(axis, Float64.(phases[1:5:end]), Float64.(retained[1:5:end]); color=:white, strokecolor="#0072B2",
                  strokewidth=0.8, markersize=4, label="Direct + barotropic indirect")
-        lines!(axis, Float64.(phases), Float64.(predicted); color="#D55E00", linestyle=:dashdot, label="Leading analytical prediction")
+        lines!(axis, Float64.(phases), Float64.(predicted); color="#D55E00", linestyle=:dashdot, label="Analytical approximation")
         text!(axis, 0.03, 0.96; space=:relative, align=(:left, :top), text=row == 1 ? L"\varepsilon=5\times10^{-4}" : L"\varepsilon=0.05")
         xlims!(axis, 0, 16)
         row == 2 && column == 2 && Legend(figure[3, 1:2], axis; orientation=:horizontal, nbanks=2, labelsize=10.5, patchsize=(20, 10), rowgap=3, padding=(5, 5, 5, 5))
     end
-    Label(figure[1:2, 0], L"\mathrm{Growth}/(1-|\lambda_j|)"; rotation=π/2)
+    Label(figure[1:2, 0], L"(|\lambda_j+\delta\lambda_j|-1)/(1-|\lambda_j|)"; rotation=π/2)
+    rowgap!(figure.layout, 1, 6)
     return save_results(output_directory, "coupling_decomposition", figure, rows)
 end
 
 function plot_damping_balance(panels, rows, output_directory)
-    figure = Figure(size=(626, 468), fontsize=12)
+    figure     = Figure(size=(626, 468), fontsize=12)
+    row_labels = (L"\mathrm{Re}(\bar{\lambda}_j V_{jj})/|\lambda_j|",
+                  L"\mathrm{Re}(\bar{\lambda}_j\,\delta\lambda_{j,\mathrm{ind}})/|\lambda_j|",
+                  L"|\lambda_j+\delta\lambda_j|-1")
     for (column, scheme) in enumerate((WickerSkamarock3(), ShuOsher3()))
-        axes = [Axis(figure[row, column], xlabel=L"\mu_0", title=row == 1 ? (scheme isa ShuOsher3 ? "SRK3" : "WRK3") : "",
-                     ylabel=column == 1 ? ("Direct", "Barotropic indirect", "Total growth")[row] : "") for row in 1:3]
+        axes = [Axis(figure[row, column], xlabel=row == 3 ? L"\mu_0" : "", xticklabelsvisible=row == 3,
+                     title=row == 1 ? (scheme isa ShuOsher3 ? "SRK3" : "WRK3") : "",
+                     ylabel=column == 1 ? row_labels[row] : "") for row in 1:3]
         configurations = ((ExactSolver(), NoFilter()), (ExactSolver(), F3Filter()), (RungeKutta3(), F3Filter()),
                           (ForwardBackward(), F3Filter()), (ForwardBackward(), F1Filter()))
         for (index, (solver, averaging)) in enumerate(configurations)
@@ -148,7 +154,9 @@ function plot_damping_balance(panels, rows, output_directory)
             Legend(figure[4, 1:2], axes[3]; orientation=:horizontal, nbanks=3, labelsize=10.5, patchsize=(20, 8), rowgap=4, padding=(5, 5, 5, 5))
         end
     end
-    Label(figure[1:3, 0], L"\mathrm{Contribution}/(1-|\lambda_j|)"; rotation=π/2)
+    Label(figure[1:3, 0], L"\mathrm{normalized\ by}\ 1-|\lambda_j|"; rotation=π/2)
+    rowgap!(figure.layout, 1, 6)
+    rowgap!(figure.layout, 2, 6)
     return save_results(output_directory, "damping_balance", figure, rows)
 end
 

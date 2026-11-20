@@ -8,6 +8,8 @@ The [Literate example](examples/time_discretization.jl) follows the analysis fro
 
 The [example guide](../../docs/src/theory_example.md) describes the parameters and outputs. The rendered example is part of the repository's Documenter site.
 
+The [reconstruction-weight example](examples/reconstruction_weights.jl) computes all four MRK4 forcing reconstructions for `a = 0.23`, explains the polynomial fit, and checks that the final-stage weights recover a quadratic exactly.
+
 ## Run and render
 
 Run these commands from the monorepo root with Julia 1.12:

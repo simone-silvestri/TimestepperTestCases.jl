@@ -1,6 +1,6 @@
 # Data-driven Julia examples
 
-The examples read local campaign outputs or compact JLD2 datasets. Download locations in `examples/datasets.toml` are placeholders until the datasets are published. A missing URL produces an error asking for a local directory; it does not substitute synthetic results.
+The examples read local campaign outputs or compact JLD2 datasets. The campaign outputs are published in Zenodo record 24315107 ([doi:10.5281/zenodo.24315107](https://doi.org/10.5281/zenodo.24315107)); `examples/datasets.toml` lists its download locations and SHA-256 checksums.
 
 ## Local execution
 
@@ -15,7 +15,7 @@ julia --project=examples examples/figures/global_ocean_results.jl /path/to/globa
 julia --project=examples examples/figures/global_surface_averages.jl /path/to/global_ocean/global
 ```
 
-Omitting the directory uses the corresponding case directory in this checkout: `internal_tide/` for the manuscript internal-tide campaign, `channel_simulation/` for the channel, and `global_ocean/` for the global timings and results. Local data always take precedence over downloads. The global example accepts a list of case labels after the directory for partial timing datasets; include AB2-SE because it defines the relative throughput.
+Omitting the directory uses the corresponding case directory in this checkout: `internal_tide/` for the manuscript internal-tide campaign, `channel_simulation/` for the channel, and `global_ocean/` for the global timings and results. Local data always take precedence over downloads. When a file is absent, `internal_tide.jl` and `channel.jl` download it from the record into `data/<campaign>/`, verify its checksum, and reduce it. The global example accepts a list of case labels after the directory for partial timing datasets; include AB2-SE because it defines the relative throughput.
 
 ```sh
 julia --project=examples examples/figures/global_ocean.jl /path/to/global_ocean AB2-SE WRK3-SE-SM05
@@ -34,7 +34,7 @@ Computations are shown in the rendered examples. Shared styling and output helpe
 
 When reading original outputs, `examples/shared/compact_data.jl` reads the stored grid using the pinned Oceananigans environment and extracts the required arrays. Halos are removed and face values are interpolated to cell centers before reduction. No original data file is modified.
 
-Compact files are saved in `data/internal_tide_weno_new/` and `data/channel_simulation/`, with `compact_` prepended to the original filename. To use a compact dataset directly, pass that directory to the example. Channel files contain the final-window zonal means of Abx, Aby, Abz, Gbx, Gby, Gbz, and Dbz, plus y, z, and the output time. Internal-tide files contain centered Abx, Abz, and Gbz on x–z–time coordinates, the wet mask, and vertical cell widths. Global cost records are already small and are used directly.
+Compact files are saved in `data/internal_tide/` and `data/channel_simulation/`, with `compact_` prepended to the original filename. To use a compact dataset directly, pass that directory to the example. Channel files contain the final-window zonal means of Abx, Aby, Abz, Gbx, Gby, Gbz, and Dbz, plus y, z, and the output time. Internal-tide files contain centered Abx, Abz, and Gbz on x–z–time coordinates, the wet mask, and vertical cell widths. Global cost records are already small and are used directly.
 
 The global diffusivity example reads `global_ocean_<label>_dissipation.jld2` and saves compact reductions in `data/global_ocean/`. Each reduction retains the variance tendency and squared gradient separately for every complete averaging window, depth, distance from topography, and latitude band. Pass the compact directory to redraw without reading the original files. The six-case comparison uses the eight complete 90-day windows ending at days 1170–1800.
 
@@ -57,15 +57,19 @@ The archive script copies the selected arrays without changing precision, applie
 
 ## Publication
 
-The Zenodo record contains the three campaigns as individual JLD2 files. From the repository root, download
-and verify the record with its version-specific numeric ID:
+Zenodo record 24315107 contains the three campaigns as individual JLD2 files: `internal_tide` (12 GB), `channel`
+(25 GB), and `global_ocean` (100 GB). From the repository root, download and verify the campaigns you need:
 
 ```sh
-julia scripts/download_data.jl RECORD_ID /path/to/downloaded-data
+julia scripts/download_data.jl /path/to/downloaded-data internal_tide channel global_ocean
 ```
 
-The script uses Julia standard libraries, restores `internal_tide/`, `channel/`, and `global_ocean/`, and verifies
-all files against `SHA256SUMS`. Existing matching files are reused. Pass the relevant directory to the examples:
+Without campaign names, the script downloads all three. A numeric first argument selects another version of the
+record. The script uses Julia standard libraries, restores `internal_tide/`, `channel/`, and `global_ocean/`, and
+verifies every file against `SHA256SUMS`. Existing matching files are reused, and an interrupted transfer
+resumes from its `.partial` file, both within a run and when the script is rerun. `SHA256SUMS` of version 1.0 also lists
+`global_ocean/global_ocean_SRK3-SE_cost.jld2`, which the record does not provide; the script skips it, and no figure
+uses it. Pass the relevant directory to the examples:
 
 ```sh
 julia --project=examples examples/figures/internal_tide_figures.jl /path/to/downloaded-data/internal_tide
@@ -74,7 +78,7 @@ julia --project=examples examples/figures/global_ocean_results.jl /path/to/downl
 julia --project=examples examples/figures/global_surface_results.jl /path/to/downloaded-data/global_ocean
 ```
 
-The record ID will be supplied after publication. The archive contains raw averages and dissipation outputs,
+The archive contains raw averages and dissipation outputs,
 plus the final-year velocity subset described above. The reported timing CSV documents the final measurements;
 the complete original timing logs are unavailable. The source snapshot includes the pinned analysis environments.
 
