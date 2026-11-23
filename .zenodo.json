@@ -1,0 +1,20 @@
+{
+  "title": "TimestepperTestCases.jl: Test cases and analysis for a conservative Runge–Kutta framework for nonlinear free-surface ocean models",
+  "upload_type": "software",
+  "description": "Oceananigans simulation setups, buoyancy-variance diagnostics of numerical mixing, and the time-discretization theory (TimestepperTheory) accompanying the manuscript \"A conservative Runge–Kutta framework for nonlinear free-surface ocean models\". The repository contains the internal-tide, re-entrant channel and quarter-degree global ocean configurations, and the scripts that reproduce every manuscript figure from the simulation outputs archived at https://doi.org/10.5281/zenodo.24315107.",
+  "creators": [
+    {"name": "Silvestri, Simone"},
+    {"name": "Campin, Jean-Michel"},
+    {"name": "Wagner, Gregory"},
+    {"name": "Constantinou, Navid C."},
+    {"name": "Bishnu, Siddhartha"},
+    {"name": "Lee, Xin Kai"},
+    {"name": "Ferrari, Raffaele"}
+  ],
+  "license": "MIT",
+  "access_right": "open",
+  "keywords": ["ocean modeling", "time discretization", "Runge–Kutta", "split-explicit free surface", "numerical mixing", "Oceananigans", "Julia"],
+  "related_identifiers": [
+    {"identifier": "10.5281/zenodo.24315107", "relation": "isSupplementedBy", "resource_type": "dataset", "scheme": "doi"}
+  ]
+}
