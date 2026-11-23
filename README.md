@@ -120,7 +120,7 @@ The theory tests check modal identities, filter moments, stage updates, amplific
 
 ## Citation
 
-If you use this repository, please cite the accompanying manuscript, and the data record when you use the archived simulation output:
+If you use this repository, please cite the accompanying manuscript and the software release, and the data record when you use the archived simulation output:
 
 ```bibtex
 @unpublished{silvestri2026conservative,
@@ -128,6 +128,15 @@ If you use this repository, please cite the accompanying manuscript, and the dat
   author = {Silvestri, Simone and Campin, Jean-Michel and Wagner, Gregory and Constantinou, Navid C. and Bishnu, Siddhartha and Lee, Xin Kai and Ferrari, Raffaele},
   year   = {2026},
   note   = {Manuscript}
+}
+
+@software{silvestri2026software,
+  title     = {{TimestepperTestCases.jl}: Test cases and analysis for a conservative {Runge--Kutta} framework for nonlinear free-surface ocean models},
+  author    = {Silvestri, Simone and Campin, Jean-Michel and Wagner, Gregory and Constantinou, Navid C. and Bishnu, Siddhartha and Lee, Xin Kai and Ferrari, Raffaele},
+  year      = {2026},
+  publisher = {Zenodo},
+  version   = {1.0.0},
+  doi       = {10.5281/zenodo.24461770}
 }
 
 @dataset{silvestri2026data,
