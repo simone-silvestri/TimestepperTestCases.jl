@@ -132,10 +132,13 @@ plot_internal_tide_diffusivity_history(tdays, zC, κs, time_averaged_profiles, p
 # Numerical mixing and numerical damping also show up in the energy budget. The turbulent kinetic energy (TKE) is the
 # kinetic energy minus that of the horizontally averaged flow. The reference potential energy (RPE) is the potential
 # energy of the adiabatically sorted state; only irreversible mixing raises it, so its growth measures the spurious
-# mixing accumulated by each discretization. The reference and
-# available potential energies come from `compute_rpe_density`, which integrates ``\rho z`` with
-# ``\rho = \rho_0 (1 - b / g)``; the factor ``g / \rho_0`` turns them into the buoyancy form ``-\int b z``, in
-# m² s⁻², shown as changes from the third output. The curves are running means over 25 outputs.
+# mixing accumulated by each discretization. The reference and available potential energies come from
+# `compute_rpe_density`, which sorts the density anomaly ``\rho' = -\rho_0 (b - \bar b) / g`` into the basin and
+# integrates ``\rho' z_\star``. Each cell enters the sort as 32 vertical slices carrying a limited linear profile: the
+# initial buoyancy is uniform along each grid level, and whole cells would make every level a block of identical parcels
+# whose reference energy drops, by up to ``N^2 \Delta z^2 / 12``, as soon as the tide heaves the isopycnals. The factor
+# ``g / \rho_0`` turns the energies into the buoyancy form ``-\int (b - \bar b) z_\star``, in m² s⁻², shown as changes
+# from the third output. The curves are running means over 25 outputs.
 
 g, ρ₀ = 9.80655, 1000.0
 potential_energy_scale = 1e3 * g / ρ₀
@@ -144,7 +147,7 @@ plot_internal_tide_energetics(cases, labels, colors, linestyles, potential_energ
 # ![Energy histories](energetics-internal-tide.png)
 #
 # The TKE of AB2-SE saturates after about 20 days, well below that of the Runge–Kutta runs, and the RPE of AB2-SE grows
-# twice as much as theirs. Only WRK3-UP mixes more, as its higher TKE feeds the low-order advection.
+# about 1.7 times as much as theirs. Only WRK3-UP mixes more, as its higher TKE feeds the low-order advection.
 
 # ## Timestep refinement
 #

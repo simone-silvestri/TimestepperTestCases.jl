@@ -94,7 +94,7 @@ end
 compute_rpe_density(b::Oceananigans.AbstractOperations.AbstractOperation, vol) = compute_rpe_density(Field(b), vol)
 
 """
-    compute_rpe_density(b::Field, vol)
+    compute_rpe_density(b::Field, vol; subcells = 32, ρ₀ = 1000.0, g = 9.80655)
 
 Compute RPE and APE density fields from buoyancy and volume fields.
 
@@ -103,28 +103,94 @@ $(SIGNATURES)
 # Arguments
 - `b`: Buoyancy field
 - `vol`: Volume field
+- `subcells`: Number of vertical slices each wet cell is split into before sorting
 
 # Returns
 - Named tuple with `ze` (re-sorted height), `εe` (RPE density), and `αe` (APE density) fields
 
-This function computes the re-sorted height `z★` by sorting buoyancy and computing the cumulative
-volume distribution. RPE density is `ρ * z★` and APE density is `ρ * (z - z★)`, where `ρ` is
-computed from buoyancy using the linear equation of state.
+Each wet cell is split into `subcells` slices of equal volume carrying a minmod-limited linear profile of `b`,
+and the slices are sorted by buoyancy and stacked by cumulative volume into the basin. The cell values of
+`ze`, `εe` and `αe` are slice averages, with RPE density `ρ′ z★` and APE density `ρ′ (z - z★)`. The density
+`ρ′ = -ρ₀ (b - b̄) / g` is the anomaly from the volume mean `b̄`, evaluated in Float64.
+
+Sorting whole cells treats each level of a stratification that is uniform along the grid levels as a block of
+identical parcels. The reference energy of the blocks exceeds that of the continuous profile by up to `N²Δz²/12`,
+and it falls as reversible heaving breaks the ties, which would appear as a negative mixing signal.
 """
-function compute_rpe_density(b::Field, vol)
+function compute_rpe_density(b::Field, vol; subcells = 32, ρ₀ = 1000.0, g = 9.80655)
     bcpu   = on_architecture(CPU(), b)
     volcpu = on_architecture(CPU(), vol)
-    ze     = calculate_z★_diagnostics(bcpu, volcpu)
-    εe     = CenterField(bcpu.grid)
-    αe     = CenterField(bcpu.grid)
-    zh     = HeightField(ze.grid)
+    grid   = bcpu.grid
 
-    ρ = DensityOperation(bcpu)
-    set!(εe, ze * ρ)
-    set!(αe, (zh - ze) * ρ)
+    buoyancy = Array{Float64}(interior(bcpu))
+    volume   = Array{Float64}(interior(volcpu))
+    zf       = Array{Float64}(znodes(grid, Face()))
+    zc       = Array{Float64}(znodes(grid, Center()))
+
+    z★, ε, α = sorted_slice_energies(buoyancy, volume, zf, zc, subcells, Float64(ρ₀), Float64(g))
+
+    ze = CenterField(grid)
+    εe = CenterField(grid)
+    αe = CenterField(grid)
+    set!(ze, z★)
+    set!(εe, ε)
+    set!(αe, α)
 
     return (; ze, εe, αe)
 end
+
+function sorted_slice_energies(buoyancy::Array{Float64, 3}, volume::Array{Float64, 3}, zf::Vector{Float64}, zc::Vector{Float64}, subcells::Int, ρ₀::Float64, g::Float64)
+    Nx, Ny, Nz = size(buoyancy)
+    Δz  = diff(zf)
+    wet = (buoyancy .!= 0) .& (!).(isnan.(buoyancy))
+
+    slices  = count(wet) * subcells
+    cells   = Vector{Int}(undef, slices)
+    values  = Vector{Float64}(undef, slices)
+    volumes = Vector{Float64}(undef, slices)
+    heights = Vector{Float64}(undef, slices)
+    linear  = LinearIndices(buoyancy)
+
+    p = 0
+    for k in 1:Nz, j in 1:Ny, i in 1:Nx
+        wet[i, j, k] || continue
+        interior_cell = k > 1 && k < Nz && wet[i, j, k-1] && wet[i, j, k+1]
+        slope = interior_cell ? minmod((buoyancy[i, j, k]   - buoyancy[i, j, k-1]) / (zc[k]   - zc[k-1]),
+                                       (buoyancy[i, j, k+1] - buoyancy[i, j, k])   / (zc[k+1] - zc[k])) : 0.0
+        for s in 1:subcells
+            p += 1
+            offset     = ((s - 0.5) / subcells - 0.5) * Δz[k]
+            cells[p]   = linear[i, j, k]
+            values[p]  = buoyancy[i, j, k] + slope * offset
+            volumes[p] = volume[i, j, k] / subcells
+            heights[p] = zc[k] + offset
+        end
+    end
+
+    mean_buoyancy = sum(values .* volumes) / sum(volumes)
+    volume_below  = [0.0; cumsum(vec(sum(volume .* wet, dims = (1, 2))))]
+    order         = sortperm(values)
+
+    z★ = zeros(Nx, Ny, Nz)
+    ε  = zeros(Nx, Ny, Nz)
+    α  = zeros(Nx, Ny, Nz)
+
+    cumulative = 0.0
+    for q in order
+        midpoint    = cumulative + volumes[q] / 2
+        cumulative += volumes[q]
+        height      = sorted_height(volume_below, zf, midpoint)
+        anomaly     = -ρ₀ * (values[q] - mean_buoyancy) / g
+        c           = cells[q]
+        z★[c] += height / subcells
+        ε[c]  += anomaly * height / subcells
+        α[c]  += anomaly * (heights[q] - height) / subcells
+    end
+
+    return z★, ε, α
+end
+
+minmod(a, b) = a * b ≤ 0 ? zero(a) : (abs(a) < abs(b) ? a : b)
 
 """
     calculate_z★_diagnostics(b::Field, vol)

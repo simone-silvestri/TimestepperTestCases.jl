@@ -197,7 +197,7 @@ u = case[:u][end] / case[:VFCC][end]
 ## Results
 
 In the manuscript, AB2-SE is about twice as diffusive as WRK3-SE over the depth, retains less kinetic energy, and
-increases the reference potential energy twice as much as the Runge-Kutta cases, while WRK3-SE-SM05, SRK3-SE and
+increases the reference potential energy about 1.7 times as much as the Runge-Kutta cases, while WRK3-SE-SM05, SRK3-SE and
 MRK4-SE are indistinguishable from WRK3-SE. Under timestep refinement the Runge-Kutta solutions do not change, and
 AB2-SE approaches them without matching them at `Δt / 8`. The [manuscript figures](../generated/internal_tide_figures.md)
 page reproduces these comparisons from the 15 published files.
