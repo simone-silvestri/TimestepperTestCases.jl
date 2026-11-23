@@ -1,5 +1,8 @@
 # # Coupled stability with rotation
-# The boundaries compare frozen and progressive slow forcing over the outer scheme's wavenumber range.
+#
+# In this example, we extend the coupled stability analysis to a rotating system (Figure 19 of the manuscript). The
+# stability boundaries compare frozen and progressive slow forcing over the wavenumber range of each outer scheme. Run it
+# with `julia --project=lib/TimestepperTheory/examples --threads=auto lib/TimestepperTheory/examples/rotation.jl`.
 
 include("rotation_scan.jl")
 include("rotation_plots.jl")

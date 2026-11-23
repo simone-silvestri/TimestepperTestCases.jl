@@ -1,8 +1,8 @@
 # # Global ocean: computational cost
 #
 # The final timings of the quarter-degree configuration on one Nvidia H100 GPU are archived as `reported_timings.csv`
-# in the Zenodo record. This example reads them, recomputes the simulated years per wall-clock day (SYPD) as
-# Δt / (365 t_step) with both times in seconds, and the throughput relative to AB2-SE. Pass the directory holding
+# in the Zenodo record. In this example, we read them, recompute the simulated years per wall-clock day (SYPD)
+# as Δt / (365 t_step) with both times in seconds, and compute the throughput relative to AB2-SE. Pass the directory holding
 # `reported_timings.csv` as the first argument; without it, the file is downloaded from the record and verified.
 #
 # | Configuration | Δt (min) | t_step (s) | SYPD   | Relative throughput |
@@ -22,9 +22,20 @@ include("../shared/data_sources.jl") #src
 include("../shared/plotting.jl") #src
 include("../shared/global_plots.jl") #src
 
+# ## Reading the timings
+#
+# Each row of `reported_timings.csv` holds a configuration, its time step and its measured wall time per step, both in
+# seconds, together with the reported SYPD.
+
 directory = isempty(ARGS) ? nothing : first(ARGS)
 path      = dataset_file("global_ocean", "reported_timings.csv"; directory)
 rows      = [split(line, ','; limit=5) for line in readlines(path)[2:end]]
+
+# ## Throughput
+#
+# A time step Δt that costs t_step seconds of wall time advances the model by Δt / t_step simulated days per wall-clock
+# day, hence Δt / (365 t_step) simulated years per day. The recomputed value must match the reported one to the three
+# digits of the table.
 
 measurements = map(rows) do row
     label, Δt, seconds_per_step, reported_years_per_day = row[1], parse(Float64, row[2]), parse(Float64, row[3]), parse(Float64, row[4])
@@ -32,6 +43,8 @@ measurements = map(rows) do row
     @assert round(years_per_day; digits=3) ≈ reported_years_per_day
     return (; label=String(label), Δt, seconds_per_step, years_per_day)
 end
+
+# The throughput relative to AB2-SE is the ratio of the SYPD.
 
 reference           = only(filter(measurement -> measurement.label == "AB2-SE", measurements))
 relative_throughput = [measurement.years_per_day / reference.years_per_day for measurement in measurements]
@@ -42,3 +55,8 @@ end
 
 plot_global_cost(measurements, relative_throughput) #src
 # ![Global computational throughput](global_throughput.png)
+#
+# A three-stage Runge–Kutta step costs about 3.5 times an AB2 step, but it is about four times longer, so WRK3-SE,
+# SRK3-SE and MRK4-SE run 14 to 20% faster than AB2-SE. The barotropic treatment matters less: WRK3-SE-F1, with about
+# a quarter of the barotropic work of WRK3-SE, is only 10% faster. The implicit free surface halves the throughput,
+# because its global elliptic solve is expensive on a GPU.

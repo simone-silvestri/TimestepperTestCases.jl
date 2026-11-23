@@ -1,10 +1,21 @@
 # # Internal tide: manuscript figures
 #
-# Render snapshots, numerical diffusivity, energetics, and timestep-refinement comparisons from the fifteen
-# completed 40-day simulations. Run with `julia --project=examples examples/figures/internal_tide_figures.jl internal_tide`.
+# In this example, we draw the internal-tide figures of the manuscript (Figures 10–13) from the fifteen 40-day
+# simulations archived on Zenodo: the seven configurations of Table 2 at their production time step, and AB2-SE, WRK3-SE, SRK3-SE and MRK4-SE
+# at one fourth and one eighth of it. Run it with
+# `julia --project=examples examples/figures/internal_tide_figures.jl /path/to/internal_tide`; the figures are written
+# to `/path/to/internal_tide/figures/`. The option `--production-only` reads only the seven production runs and skips
+# the timestep-refinement figure.
 
 using Oceananigans, CairoMakie, TimestepperTestCases, Statistics, LaTeXStrings, JLD2
 include("../shared/plotting.jl") #src
+include("../shared/internal_tide_plots.jl") #src
+
+# ## Loading the simulations
+#
+# We first check that every run reached day 40, then load each discretization. The loader returns the saved fields as
+# `FieldTimeSeries`, together with the energy diagnostics computed from them.
+
 folder = abspath(isempty(ARGS) ? joinpath(@__DIR__, "..", "..", "internal_tide") : first(ARGS)) * "/"
 production_only = "--production-only" in ARGS
 files = filter(name -> endswith(name, ".jld2"), readdir(folder; join=true))
@@ -18,148 +29,69 @@ for file in files
 end
 
 variants = [(; label = d.label, timestepper = string(d.timestepper), free_surface = d.label) for d in discretizations()]
+cases    = [TimestepperTestCases.load_internal_tide(folder, v.timestepper, v.free_surface) for v in variants]
 
 labels     = [v.label for v in variants]
 styles     = [plot_style(v.label) for v in variants]
 colors     = [s.color     for s in styles]
 linestyles = [s.linestyle for s in styles]
-cases  = [TimestepperTestCases.load_internal_tide(folder, v.timestepper, v.free_surface) for v in variants]
+path       = mkpath(joinpath(folder, "figures")) * "/"
 
+# ## The flow after 40 days
+#
+# The saved velocity and buoyancy carry the volume of their cell, so they are divided by `VFCC` and `VCCC` before use.
+# Our first figure shows the free surface, the velocity fluctuation ``u' = u - V^{-1} \int_V u \, \mathrm{d}V`` and the
+# stratification ``N^2 = \partial_z b`` at the final output of six configurations.
 
-ticks(vec) = (vec, latexstring.(string.(vec)))
-
-function running_mean(v, points)
-    n  = length(v)
-    rm = zeros(length(v) - 2points+1)
-    for i in points+1:n-points
-        rm[i-points] = mean(v[i - points:i+points])
-    end
-    return rm[1:end-1]
-end
-
-path = mkpath(joinpath(folder, "figures")) * "/"
-
-# end-state fields for the snapshot figure, one entry per variant
 uprime = [Field(c[:u][end] / c[:VFCC][end] - mean(c[:u][end] / c[:VFCC][end])) for c in cases]
 ηend   = [c[:η][end] for c in cases]
 N2end  = [Field(∂z(c[:b][end] / c[:VCCC][end])) for c in cases]
 
-bu = Float64.(interior(cases[1][:u][end]) .== 0); bu[bu .== 1] .= NaN
-bw = Float64.(interior(N2end[1]) .== 0);          bw[bw .== 1] .= NaN
-nothing
-
-
-xu, yu, zu = nodes(cases[1][:u])
-xw, yw, zw = nodes(cases[1][:w])
-xη, yη, zη = nodes(cases[1][:η])
-
-shown = [findfirst(v -> v.label == l, variants) for l in ("AB2-SE", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-IM", "WRK3-UP")]
-xhalf = maximum(xu)
-xt  = [-400, 0, 400]
-xticks   = (xt .* 1000, latexstring.(string.(xt)))
-xnticks  = (xt .* 1000, fill("", length(xt)))
-yticks   = ([-2, -1.5, -1, -0.5, -0] .* 1000, latexstring.(string.([-2.0, -1.5, -1.0, -0.5, -0.0])))
-ynticks  = ([-2, -1.5, -1, -0.5, -0] .* 1000, ["", "", "", "", ""])
-yeticks  = ([-1, -0, 1] .* 1e-1, latexstring.(string.([-10, 0, 10])))
-yenticks = ([-1, -0, 1] .* 1e-1, ["", "", ""])
-
-# every case is a block of seven layout rows: η on the first, u' on the next three and N² on the last three
-ncols = 3
-nrows = cld(length(shown), ncols)
-fig   = Figure(size = (450 * ncols + 120, 520 * nrows), fontsize = 16)
-ga    = GridLayout(fig[1, 1])
-
-hmu = nothing
-hmN = nothing
-for (n, k) in enumerate(shown)
-    row, j = cld(n, ncols), mod1(n, ncols)
-    fst    = j == 1
-    bottom = n + ncols > length(shown)
-    r      = 7 * (row - 1)
-
-    axη = Axis(ga[r+1, j],     title = variants[k].label, ylabel = fst ? L"\eta \text{ [cm]}"  : "", xticks = xnticks, yticks = fst ? yeticks : yenticks)
-    axu = Axis(ga[r+2:r+4, j], ylabel = fst ? L"\text{Depth [km]}" : "", xticks = xnticks, yticks = fst ? yticks : ynticks)
-    axN = Axis(ga[r+5:r+7, j], xlabel = bottom ? L"\text{x [km]}" : "", ylabel = fst ? L"\text{Depth [km]}" : "",
-               xticks = bottom ? xticks : xnticks, yticks = fst ? yticks : ynticks)
-
-    lines!(axη, xη, interior(ηend[k], :, 1, 1), color = :grey, linewidth = 2)
-    ylims!(axη, -0.15, 0.15)
-
-    global hmu = heatmap!(axu, xu, zu, interior(uprime[k], :, 1, :) .+ bu[:, 1, :]; colormap = :bwr, colorrange = (-0.35, 0.35), nan_color = :black)
-    global hmN = heatmap!(axN, xw, zw[2:127], interior(N2end[k], :, 1, 2:127) .+ bw[:, 1, 2:127]; colormap = :ice, colorrange = (0.00009, 0.00011), nan_color = :green)
-
-    for ax in (axη, axu, axN); xlims!(ax, -xhalf, xhalf); end
-end
-
-for row in 1:nrows
-    r = 7 * (row - 1)
-    Colorbar(ga[r+2:r+4, ncols+1], hmu, label = L"\text{u' [m s}^{-1}\text{]}", ticks = ([-0.2, 0.0, 0.2], latexstring.(string.([-0.2, 0.0, 0.2]))))
-    Colorbar(ga[r+5:r+7, ncols+1], hmN, label = L"\text{N}^{2}\text{ } 10^{-4}\text{[s}^{-2}\text{]}", ticks = ([0.95, 1.00, 1.05] .* 1e-4, latexstring.(string.([0.95, 1.00, 1.05]))))
-end
-
-colgap!(ga, 10); rowgap!(ga, 10)
-for row in 1:nrows-1; rowgap!(ga, 7row, 30); end
-nothing
-for extension in ("pdf", "png")
-    CairoMakie.save(path * "figure-internal-tide." * extension, fig)
-end
+plot_internal_tide_snapshot(variants, cases, uprime, ηend, N2end, path) #src
 # ![Final surface height, velocity, and stratification](figure-internal-tide.png)
+#
+# The Runge–Kutta solutions are more energetic than AB2-SE: both ``u'`` and ``N^2`` keep sharper structures, a first sign
+# that the Runge–Kutta schemes damp the internal tide less.
 
-# AB2-SE is saved every 18 steps rather than every hour, so the runs are compared at the saved time closest to each
-# hourly output of WRK3-SE
+# ## Numerical diffusivity profiles
+#
+# How much does the discretization mix? A diffusive flux ``-\kappa \nabla b`` destroys buoyancy variance at the rate
+# ``2 \kappa |\nabla b|^2``, so dividing the variance destruction that the advection scheme actually produces by twice
+# the squared gradient tells us the diffusivity the discretization applies,
+#
+# ```math
+# \kappa = \left| \frac{\langle P_x + P_z \rangle_x}{2 \langle G_z \rangle_x} \right| ,
+# ```
+#
+# where ``P_x`` and ``P_z`` are the saved variance tendencies `Abx` and `Abz`, ``G_z`` is the squared vertical gradient
+# `Gbz`, and ``\langle \cdot \rangle_x`` is a horizontal mean. In this uniformly stratified flow the vertical gradient
+# dominates the squared gradient.
+# AB2-SE is saved every 18 steps rather than every hour, so every run is read at the saved time closest to each hourly
+# output of WRK3-SE.
+
 reference_times = cases[findfirst(v -> v.label == "WRK3-SE", variants)][:Abz].times
 nearest_index(c, t) = argmin(abs.(c[:Abz].times .- t))
+zC = cases[1][:Abx].grid.z.cᵃᵃᶜ[2:128] ./ 1000
 
-mvv = 8
-zC  = cases[1][:Abx].grid.z.cᵃᵃᶜ[2:128] ./ 1000
-fig = Figure(size = (950, 350))
+κprofile(c, it) = abs.(interior(Field(mean(c[:Abz][it] + c[:Abx][it], dims=1) / mean(c[:Gbz][it], dims=1) / 2), 1, 1, 2:128))
 
-xticks_list = [
-    ([0, 2e-5, 4e-5],         [L"0", L"2\cdot 10^{-5}", L"4\cdot 10^{-5}"]),
-    ([0, 2e-5, 4e-5, 6e-5],   [L"0", L"2\cdot 10^{-5}", L"4 \cdot 10^{-5}", L"6 \cdot 10^{-5}"]),
-    ([0, 3e-5, 6e-5, 9e-5],   [L"0", L"3\cdot 10^{-5}", L"6 \cdot 10^{-5}", L"9 \cdot 10^{-5}"]),
-    ([0, 5e-5, 1e-4, 1.5e-4], [L"0", L"5\cdot 10^{-5}", L"10^{-4}", L"1.5 \cdot 10^{-4}"]),
-]
-its = [100, 300, 600, 961]
-ϵ   = 0
+profile_records = [100, 300, 600, 961]
+profiles = [[κprofile(c, nearest_index(c, reference_times[it])) for c in cases] for it in profile_records]
 
-κprofile(c, it) = abs.(interior(Field(mean(c[:Abz][it] + c[:Abx][it], dims=1) / (mean(c[:Gbz][it], dims=1) + ϵ) / 2), 1, 1, 2:128))
-
-axref = nothing
-for (col, it) in enumerate(its)
-    ax = Axis(fig[1, col];
-              xlabel = L"\kappa \text{ [m}^2\text{s}^{-1}\text{]}",
-              xticks = xticks_list[col],
-              title  = L"t = \text{%$(Oceananigans.Utils.prettytime(reference_times[it]))}",
-              ylabel = col == 1 ? L"\text{Depth [km]}" : "",
-              yticks = col == 1 ? ticks([-2, -1, 0]) : ([-2, -1, 0], ["", "", ""]))
-    for (i, c) in enumerate(cases[1:end])
-        κ = κprofile(c, nearest_index(c, reference_times[it]))
-        lines!(ax, κ, zC, color = (colors[i], 0.1))
-        lines!(ax, running_mean(κ, mvv), running_mean(zC, mvv), color = colors[i], linewidth = 1.5, label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
-    end
-    ylims!(ax, -2, 0)
-    xlims!(ax, 0, 5e-5)
-    if col == 1; global axref = ax; end
-end
-Legend(fig[1, 5], axref)
-
-for extension in ("pdf", "png")
-    CairoMakie.save(path * "diffusivity-internal-tide." * extension, fig)
-end
+plot_internal_tide_diffusivity_profiles(profiles, reference_times[profile_records], zC, labels, colors, linestyles, path) #src
 # ![Numerical diffusivity profiles](diffusivity-internal-tide.png)
+#
+# AB2-SE is about twice as diffusive as WRK3-SE, and in the interior it mixes as much as the low-order spatial scheme of
+# WRK3-UP, even though it takes a step 0.29 times as long. Near the bottom, where the staircase bathymetry lowers the
+# order of the advection operators, all schemes mix alike.
 
+# ## Diffusivity history
+#
+# For the depth–time picture the denominator is regularized by ``10^{-7}`` so that unstratified levels do not divide by
+# zero, and each profile history is smoothed by a box mean over ±4 levels and ±6 outputs. The time mean of the profiles
+# uses trapezoidal weights over the 40 days.
 
-difference = true
-ϵκ         = 1e-3 * 1e-4
-vertical_window     = 4
-temporal_window     = 6
-ncols      = 3
-κfloor     = 1e-9
-κmax       = 1.5e-5
-
-tdays = reference_times ./ 86400
-
+ϵκ = 1e-3 * 1e-4
 κprof(c, it) = abs.(interior(Field(mean(c[:Abz][it] + c[:Abx][it], dims=1) /
                                    (mean(c[:Gbz][it], dims=1) + ϵκ) / 2), 1, 1, 2:128))
 
@@ -172,116 +104,55 @@ function boxmean(A, nz, nt)
     return B
 end
 
+vertical_window = 4
+temporal_window = 6
 κs = [boxmean(reduce(hcat, [κprof(c, nearest_index(c, t)) for t in reference_times]), vertical_window, temporal_window) for c in cases]
 
-iref   = findfirst(v -> v.label == "WRK3-SE", variants)
-panels = difference ? [i for i in eachindex(cases) if i != iref] : collect(eachindex(cases))
-fields = difference ? [κs[i] .- κs[iref] for i in panels] : [κs[i] for i in panels]
-crange = difference ? (-κmax, κmax) : (0, 4e-5)
-
-tticks    = ticks([0, 10, 20, 30, 40])
-zticks    = ticks([-2, -1, 0])
-cbticks   = ([-κmax, -κmax/2, 0.0, κmax/2, κmax],
-             [L"-1.5\cdot 10^{-5}", L"-7.5\cdot 10^{-6}", L"0", L"7.5\cdot 10^{-6}", L"1.5\cdot 10^{-5}"])
-κticks    = ([0.0, 2e-5, 4e-5, 6e-5], [L"0", L"2\cdot 10^{-5}", L"4\cdot 10^{-5}", L"6\cdot 10^{-5}"])
-κlogticks = ([1e-7, 1e-6, 1e-5, 1e-4], [L"10^{-7}", L"10^{-6}", L"10^{-5}", L"10^{-4}"])
-
-nrows = cld(length(panels), ncols)
-fig   = Figure(size = (1250, 640), fontsize = 15)
-
-gtop = GridLayout(fig[1, 1])       # independent column sizing, so the log axis cannot
-gbot = GridLayout(fig[2, 1])       # push the Hovmöller columns out of alignment
-
-# ── summary row ───────────────────────────────────────────────────────────────────────────────────
+tdays = reference_times ./ 86400
 averaging_durations = diff(tdays)
 averaging_weights = [averaging_durations[1] / 2; (averaging_durations[1:end-1] .+ averaging_durations[2:end]) ./ 2; averaging_durations[end] / 2]
 averaging_weights ./= sum(averaging_weights)
 time_averaged_profiles = [values * averaging_weights for values in κs]
 
-axg = Axis(gtop[1, 1]; xlabel = L"\text{time [days]}", xticks = tticks, yticks = κticks,
-           ylabel = L"\langle \kappa \rangle_z \text{ [m}^2\text{s}^{-1}\text{]}")
-axp = Axis(gtop[1, 2]; xlabel = L"\kappa \text{ [m}^2\text{s}^{-1}\text{]}",
-           xscale = log10, xticks = κlogticks,
-           ylabel = L"\text{Depth [km]}", yticks = zticks,
-           title  = L"\text{Time mean: 0–40 days}", titlealign = :left, titlesize = 13)
+# The lower panels show each configuration minus WRK3-SE.
 
-for (i, c) in enumerate(cases)
-    lines!(axg, tdays, vec(mean(κs[i], dims = 1));
-           color = colors[i], linestyle = linestyles[i], linewidth = 1.8, label = latexstring(raw"\text{" * replace(labels[i], "-SM05" => "-F1") * "}"))
-    lines!(axp, max.(time_averaged_profiles[i], κfloor), zC;
-           color = colors[i], linestyle = linestyles[i], linewidth = 1.8)
-end
-xlims!(axg, 0, 40)
-ylims!(axp, -2, 0); xlims!(axp, 1e-7, 2e-4)
+reference_index = findfirst(v -> v.label == "WRK3-SE", variants)
+panels = [i for i in eachindex(cases) if i != reference_index]
+fields = [κs[i] .- κs[reference_index] for i in panels]
 
-Legend(gtop[1, 3], axg; framevisible = true, labelsize = 12, patchsize = (22, 12))
-colsize!(gtop, 1, Relative(0.56))
-colsize!(gtop, 2, Relative(0.24))
-
-# ── Hovmöller panels ──────────────────────────────────────────────────────────────────────────────
-hm = nothing
-for (r, i) in enumerate(panels)
-    row, col = cld(r, ncols), mod1(r, ncols)
-    bottom   = r + ncols > length(panels)
-
-    ax = Axis(gbot[row, col]; title = latexstring(raw"\text{" * replace(labels[i], "-SM05" => "-F1") * "}"), titlealign = :left, titlesize = 13, titlegap = 3,
-              ylabel        = col == 1 ? L"\text{Depth [km]}" : "",
-              yticks        = col == 1 ? zticks : ([-2, -1, 0], ["", "", ""]),
-              xticks        = tticks,
-              xticksvisible = bottom, xticklabelsvisible = bottom,
-              xlabel        = bottom ? L"\text{time [days]}" : "")
-
-    global hm = heatmap!(ax, tdays, zC, fields[r]'; colorrange = crange, colormap =  Reverse(:RdBu),
-                         lowclip = :darkblue, highclip = :darkred, rasterize = 2)
-    ylims!(ax, -2, 0); xlims!(ax, 0, 40)
-end
-
-Colorbar(gbot[1:nrows, ncols+1], hm; ticks = cbticks,
-         label = difference ? L"\kappa - \kappa_{\text{WRK3-SE}} \text{ [m}^2\text{s}^{-1}\text{]}" :
-                             L"\kappa \text{ [m}^2\text{s}^{-1}\text{]}")
-
-for c in 1:ncols; colsize!(gbot, c, Auto(1.0)); end   # equal-width panels
-
-rowsize!(fig.layout, 1, Relative(0.33))
-rowgap!(gbot, 8); colgap!(gbot, 10)
-rowgap!(fig.layout, 14)
-
-for extension in ("pdf", "png")
-    CairoMakie.save(path * "diffusivity-hovmoller-internal-tide." * extension, fig)
-end
+plot_internal_tide_diffusivity_history(tdays, zC, κs, time_averaged_profiles, panels, fields, labels, colors, linestyles, path) #src
 # ![Numerical diffusivity history and differences](diffusivity-hovmoller-internal-tide.png)
+#
+# WRK3-SE-F1, SRK3-SE and MRK4-SE are indistinguishable from WRK3-SE: neither the barotropic treatment nor the
+# arrangement of the Runge–Kutta stages leaves a mark on the mixing. The largest differences are those of AB2-SE and
+# WRK3-UP.
 
-# compute_rpe_density integrates ρ z with ρ = ρ₀(1 - b/g): g/ρ₀ turns it into the buoyancy form -∫ b z, in m² s⁻²
+# ## Energetics
+#
+# Numerical mixing and numerical damping also show up in the energy budget. The turbulent kinetic energy (TKE) is the
+# kinetic energy minus that of the horizontally averaged flow. The reference potential energy (RPE) is the potential
+# energy of the adiabatically sorted state; only irreversible mixing raises it, so its growth measures the spurious
+# mixing accumulated by each discretization. The reference and
+# available potential energies come from `compute_rpe_density`, which integrates ``\rho z`` with
+# ``\rho = \rho_0 (1 - b / g)``; the factor ``g / \rho_0`` turns them into the buoyancy form ``-\int b z``, in
+# m² s⁻², shown as changes from the third output. The curves are running means over 25 outputs.
+
 g, ρ₀ = 9.80655, 1000.0
 potential_energy_scale = 1e3 * g / ρ₀
 
-fig = Figure(size = (820, 300))
-ax1 = Axis(fig[1, 1], title=L"\text{TKE}\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]",                    xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=WilkinsonTicks(4))
-ax2 = Axis(fig[1, 2], title=L"\Delta\text{RPE}\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]",  xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=ticks([0, 2, 4, 6]))
-ax3 = Axis(fig[1, 3], title=L"\Delta\text{APE}\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]",  xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=ticks([0, 2, 4, 6]))
-ax4 = Axis(fig[1, 4], title=L"\eta^2 \text{ [cm}^2\text{]}",  xlabel=L"\text{time [days]}", xticks=ticks([0, 10, 20, 30, 40]), yticks=ticks([0, 10, 20, 30, 40]))
-for (i, c) in enumerate(cases)
-    times = c[:Abx].times ./ 86400
-    lines!(ax1, running_mean(times, 12), 1e3 * running_mean(c[:KE] .- c[:MKE], 12), color = colors[i], label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
-    lines!(ax2, running_mean(times[3:end], 12), potential_energy_scale * running_mean(c[:RPE][3:end] .- c[:RPE][3], 12), color = colors[i], linestyle = linestyles[i])
-    lines!(ax3, running_mean(times[3:end], 12), potential_energy_scale * running_mean(c[:APE][3:end] .- c[:APE][3], 12), color = colors[i], label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
-    lines!(ax4, running_mean(times, 12), running_mean(c[:η2] .* 1e4, 12), color = colors[i], label = replace(labels[i], "SM05" => "F1"), linestyle = linestyles[i])
-end
-
-xlims!(ax1, 0, 40); xlims!(ax2, 0, 40); xlims!(ax3, 0, 40); xlims!(ax4, 0, 40)
-Legend(fig[1, 5], ax3)
-nothing
-for extension in ("pdf", "png")
-    CairoMakie.save(path * "energetics-internal-tide." * extension, fig)
-end
+plot_internal_tide_energetics(cases, labels, colors, linestyles, potential_energy_scale, path) #src
 # ![Energy histories](energetics-internal-tide.png)
+#
+# The TKE of AB2-SE saturates after about 20 days, well below that of the Runge–Kutta runs, and the RPE of AB2-SE grows
+# twice as much as theirs. Only WRK3-UP mixes more, as its higher TKE feeds the low-order advection.
+
+# ## Timestep refinement
+#
+# AB2-SE, WRK3-SE, SRK3-SE and MRK4-SE also ran at one fourth and one eighth of their production step; the production
+# runs are the curves at the nominal step. The figure compares the rectified flow, the time-mean numerical diffusivity
+# and the turbulent kinetic energy.
 
 production_only && exit()
-
-
-# ══ Temporal-resolution test: rectified flow, numerical diffusivity and TKE (section 5.1) ══════════════════════
-#
-# The curves at the nominal step are the production runs.
 
 refinement_schemes = [("AB2-SE",  "QuasiAdamsBashforth2", :black),
                       ("WRK3-SE", "SplitRungeKutta3",     :blue),
@@ -297,9 +168,9 @@ curves = [(n == 1 ? label : "$label, Δt/$n", refinement_case(label, timestepper
           for (label, timestepper, color) in refinement_schemes
           for (n, linestyle) in ((1, :solid), (4, :dash), (8, :dot))]
 
-depths_in_kilometers = zu ./ 1000
+# The rectified flow is the mean of ``u'`` over ``x`` and over the last ten days, in which the tide cancels. The
+# diffusivity is the trapezoidal time mean of the box-averaged profiles used above.
 
-"Time-mean of u' over x and t: the tide cancels, the rectified flow survives."
 function rectified_profile(c; days = 10)
     t   = c[:u].times ./ 86400
     i0  = findfirst(≥(t[end] - days), t)
@@ -311,7 +182,6 @@ function rectified_profile(c; days = 10)
     return acc ./ n
 end
 
-"Time mean of the box-averaged diffusivity profile, as in the summary row of the Hovmöller figure."
 function time_mean_diffusivity(c)
     t = c[:Abz].times ./ 86400
     κ = boxmean(reduce(hcat, [κprof(c, it) for it in eachindex(t)]), vertical_window, temporal_window)
@@ -320,41 +190,15 @@ function time_mean_diffusivity(c)
     return κ * (w ./ sum(w))
 end
 
-refinement_label(lab) = latexstring(raw"\text{" * replace(lab, "-" => "‐", "Δt" => raw"}\Delta t\text{") * "}")
-
-refinement = [(; label = refinement_label(lab), color = clr, linestyle = ls,
-                 u = rectified_profile(c), κ = max.(time_mean_diffusivity(c), κfloor),
+κfloor = 1e-9
+refinement = [(; label, color, linestyle, u = rectified_profile(c), κ = max.(time_mean_diffusivity(c), κfloor),
                  t = c[:Abx].times ./ 86400, tke = 1e3 .* (c[:KE] .- c[:MKE]))
-              for (lab, c, ls, clr) in curves]
+              for (label, c, linestyle, color) in curves]
 
-uticks = ([0.0, 1e-3, 2e-3, 3e-3], [L"0", L"1", L"2", L"3"])
-tticks = ticks([0, 20, 40])
-
-fig = Figure(size = (1600, 540), fontsize = 26)
-
-axu = Axis(fig[1, 1]; xlabel = L"\langle u^\prime \rangle_{x,t} \text{ [10}^{-3}\text{ m s}^{-1}\text{]}", xticks = uticks,
-           ylabel = L"\text{Depth [km]}", yticks = ticks([-2.0, -1.6, -1.2]))
-axκ = Axis(fig[1, 2]; xlabel = L"\kappa \text{ [m}^2\text{s}^{-1}\text{]}", xscale = log10, xticks = κlogticks,
-           ylabel = L"\text{Depth [km]}", yticks = zticks)
-axk = Axis(fig[1, 3]; xlabel = L"\text{time [days]}", xticks = tticks,
-           ylabel = L"\text{TKE}\;[10^{-3}\,\mathrm{m^2\,s^{-2}}]", yticks = WilkinsonTicks(3))
-
-for r in refinement
-    style = (; color = r.color, linestyle = r.linestyle, linewidth = 2)
-    lines!(axu, r.u, depths_in_kilometers; style...)
-    lines!(axκ, r.κ, zC; style...)
-    lines!(axk, running_mean(r.t, 12), running_mean(r.tke, 12); label = r.label, style...)
-end
-vlines!(axu, 0; color = (:black, 0.3), linewidth = 0.8)
-ylims!(axu, -2, -1.2)
-ylims!(axκ, -2, 0); xlims!(axκ, 1e-7, 2e-4)
-xlims!(axk, 0, 40)
-
-Legend(fig[1, 4], axk; framevisible = true, labelsize = 24, patchsize = (40, 14), rowgap = 8, patchlabelgap = 10)
-
-
-for extension in ("pdf", "png")
-    CairoMakie.save(path * "rectified-internal-tide." * extension, fig)
-end
+depths_in_kilometers = nodes(cases[1][:u])[3] ./ 1000
+plot_internal_tide_refinement(refinement, depths_in_kilometers, zC, path) #src
 # ![Timestep refinement](rectified-internal-tide.png)
-
+#
+# The Runge–Kutta curves do not move when the step is refined, while AB2-SE approaches them as its step shrinks: its
+# lower energy and larger mixing come from the time discretization. Even at one eighth of its step, 0.41 minutes,
+# AB2-SE does not reach the Runge–Kutta solutions at 11.3 minutes.

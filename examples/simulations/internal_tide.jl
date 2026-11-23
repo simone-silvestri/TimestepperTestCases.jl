@@ -1,3 +1,9 @@
+# # Internal tide campaign
+#
+# In this script, we run the fifteen internal-tide simulations of the manuscript: every discretization at its production
+# time step, and AB2-SE, WRK3-SE, SRK3-SE and MRK4-SE at one fourth and one eighth of it. Each run lasts 40 days and
+# writes its output to the working directory.
+
 using TimestepperTestCases
 using Oceananigans
 using Oceananigans.Units

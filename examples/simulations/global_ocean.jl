@@ -1,3 +1,9 @@
+# # Global ocean campaign
+#
+# In this script, we time every discretization of the quarter-degree global configuration with `global_ocean_cost`,
+# and then integrate the six five-year cases with the settings of the published runs. It needs a GPU and an environment that
+# provides NumericalEarth, WorldOceanAtlasTools and CUDA.
+
 using TimestepperTestCases
 using NumericalEarth
 using WorldOceanAtlasTools

@@ -1,3 +1,9 @@
+# # AB2-SE and the output schedule
+#
+# In this script, we run AB2-SE twice, saving output every 18 steps and every hour. Output saved at fixed times shortens
+# the step that lands on each output time, and the quasi-AB2 scheme restarts a shortened step with forward Euler. We
+# record the time step, the restarts and the horizontally averaged variance budget at every step of both runs.
+
 using TimestepperTestCases, Oceananigans, JLD2, Statistics
 using Oceananigans.Units
 using Oceananigans.Fields: location

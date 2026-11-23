@@ -82,8 +82,6 @@ To redraw from a cache, pass the directory that holds it; delete a cache file to
 - The global `_surface` files are a subset of the original output: daily `u` and `v` over the final 365 days, with the
   original grid, iterations, times and field metadata, compressed with shuffle and Zstandard. The `_average` and
   `_dissipation` files are the original outputs.
-- The global campaign did not write volume-integrated kinetic energy, temperature or salinity, so those histories cannot be
-  recovered from the record.
 - `reported_timings.csv` holds the final timings of Table 3. The raw timing logs and the per-run cost records are not in
   the record.
 - The source snapshot of version 1.0 (`analysis_source.tar.gz`) sets the channel sponge width to 9Ly/10 and leaves the

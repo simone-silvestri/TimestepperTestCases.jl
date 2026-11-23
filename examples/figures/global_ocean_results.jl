@@ -1,8 +1,8 @@
 # # Global ocean: numerical diffusivity
 #
-# Run `julia --project=examples examples/figures/global_ocean_results.jl /path/to/global_ocean` to reproduce these figures.
-# The six campaign files are named `global_ocean_<label>_dissipation.jld2`. Compact reductions are saved in
-# `data/global_ocean/`; pass that directory to redraw the figures without the original three-dimensional fields.
+# In this example, we diagnose the numerical diffusivity of the six five-year global runs from their buoyancy-variance
+# budgets, the `global_ocean_<label>_dissipation.jld2` files of the record. The latitude–depth section is Figure 16 of
+# the manuscript. Run it with `julia --project=examples examples/figures/global_ocean_results.jl /path/to/global_ocean`.
 
 using TimestepperTestCases
 using Oceananigans
@@ -14,6 +14,15 @@ include("../shared/global_plots.jl") #src
 
 directory = isempty(ARGS) ? joinpath(@__DIR__, "..", "..", "global_ocean") : first(ARGS)
 labels = ["AB2-SE", "WRK3-SE-SM05", "WRK3-SE", "SRK3-SE", "MRK4-SE", "WRK3-UP"]
+
+# ## Reducing the budgets
+#
+# Each file holds the three-dimensional variance tendencies and squared buoyancy gradients, averaged over 90-day windows.
+# We first reduce every window to sums by depth, by distance from topography and by latitude band, keeping the tendency
+# and the gradient separate so that the diffusivity can be formed after summing. The staggered terms are moved to cell
+# centers, and cells with nonfinite metrics are left out of both sums. The reductions are cached in `data/global_ocean/`;
+# passing that directory redraws the figures without the three-dimensional fields.
+
 budgets = map(labels) do label
     @info "Reading global buoyancy-variance budget" label
     filename = "global_ocean_$(label)_dissipation.jld2"
@@ -22,10 +31,15 @@ end
 
 # ## Numerical diffusivity
 #
-# Form κ = −ΣP/(2ΣG) after integrating the variance tendency P and squared buoyancy gradient G over each region.
-# Both quantities already include cell volumes. The reduction places staggered diagnostics at cell centers and
-# excludes nonfinite metric values from both integrals. The first budget output straddles the diagnostic startup;
-# the eight complete 90-day windows end at days 1170 through 1800. Spatial averages use these same windows in all cases.
+# Over any region, the numerical diffusivity is
+#
+# ```math
+# \kappa = - \frac{\sum P}{2 \sum G},
+# ```
+#
+# where ``P`` is the variance tendency and ``G`` the squared buoyancy gradient, both already multiplied by the cell
+# volume. The budget joins at day 1095, so its first window is incomplete; we use the eight complete windows, which end at
+# days 1170 to 1800, in every case.
 
 @assert all(budget -> budget.window_ends ≈ collect(1170:90:1800), budgets)
 numerical_diffusivity(P, G) = @. -P / (2G)
@@ -40,12 +54,22 @@ end
 
 plot_global_diffusivity_profile(profiles) #src
 # ![Depth profiles](global_diffusivity_profile.png)
+#
+# Unlike in the idealized cases, the Runge–Kutta runs stay close to AB2-SE at every depth. Only WRK3-UP departs, with a
+# global diffusivity about twice as large: in this eddy-permitting configuration the spatial discretization, rather
+# than the time stepping, appears to control the numerical mixing.
+#
+# Near land the WENO stencils lose order, so we also split the profiles by distance from topography. `wall_distance`
+# counts the cells to the nearest land along the grid lines, the only directions a WENO stencil reaches, from one to
+# five cells and beyond.
 
 plot_global_diffusivity_wall_distance(profiles) #src
 # ![Profiles by distance from topography](global_diffusivity_wall_distance.png)
 
-# The first contour panel shows WRK3-SE on a logarithmic scale from 10⁻⁶ to 10⁻³ m² s⁻¹; values below this range
-# use the lowest color. The remaining panels show signed differences from WRK3-SE on a separate diverging scale.
+# ## Latitude–depth sections
+#
+# Summing over quarter-degree latitude bands instead gives the sections of Figure 16. The first panel shows WRK3-SE on a
+# logarithmic scale from 10⁻⁶ to 10⁻³ m² s⁻¹, and the others the difference of each configuration from WRK3-SE.
 
 sections = map(labels, budgets) do label, budget
     latitudes = (budget.latitude_edges[1:end-1] + budget.latitude_edges[2:end]) / 2
@@ -55,10 +79,15 @@ end
 
 plot_global_diffusivity_section(sections) #src
 # ![Latitude–depth sections](global_diffusivity_section.png)
-
-# ## Evolution over the complete budget windows
 #
-# Each point is placed at the midpoint of its 90-day window. The deep-ocean integral uses levels below 1000 m.
+# WRK3-UP raises the diffusivity almost everywhere, while the differences of the other cases are small and change sign
+# from one latitude to the next.
+
+# ## Evolution in time
+#
+# Finally, we form the diffusivity of each 90-day window separately, for the whole ocean and for the levels below
+# 1000 m, and place it at the middle of its window. This shows whether the differences between cases persist through
+# the budget period or come from a few windows.
 
 function diffusivity_in_layer(budget, levels)
     P = vec(sum(view(budget.wall_tendency, :, levels, :); dims=(1, 2)))

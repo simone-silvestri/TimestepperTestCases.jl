@@ -1,6 +1,8 @@
 # # Time discretization of free-surface ocean models
 #
-# This example reproduces the amplification, filtering, and coupled modal analyses of Sections 2–4. The numerical implementation is provided by TimestepperTheory. Each experiment shows its computations and passes the results to a plotting function in `time_discretization_figures.jl`.
+# In this example, we reproduce the amplification, filtering and coupled modal analyses of Sections 2–4 of the
+# manuscript, and with them Figures 1–9. The numerical implementation is provided by TimestepperTheory. Each experiment
+# shows its computations and passes the results to a plotting function in `time_discretization_figures.jl`.
 
 using TimestepperTheory
 using LinearAlgebra

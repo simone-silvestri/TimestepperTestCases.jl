@@ -1,5 +1,8 @@
 # # Progressive forcing weights for MRK4
 #
+# In this example, we compute the weights with which the progressive forcing of MRK4 reconstructs the slow forcing
+# within each stage, and check them against the routine used by the evolution matrices.
+#
 # For $a=0.23$, the stage durations are $\gamma_m\Delta t$, with
 # ```math
 # (\gamma_1,\gamma_2,\gamma_3,\gamma_4)=(0.23,1/3,1/2,1).
@@ -34,14 +37,14 @@ end
 # 1&0&0\\1&0.23&0.23^2\\1&1/3&1/9\\1&1/2&1/4
 # \end{bmatrix},\qquad C^4=\underset{C}{\operatorname{argmin}}\,\|VC-I\|_F^2.
 # ```
-# Compute these weights directly and compare with the routine used by the evolution matrices:
+# We compute these weights directly and compare them with the routine used by the evolution matrices:
 
 c = [0.0, a, 1 / 3, 1 / 2]
 V = [cⱼ^p for cⱼ in c, p in 0:2]
 C = V \ Matrix{Float64}(I, 4, 4)
 @assert C ≈ reconstruction_weights(4, γ)
 
-# A quadratic must be recovered exactly. For example, samples of $2-3s+4s^2$ give coefficients $(2,-3,4)$:
+# A quadratic is recovered exactly: samples of $2-3s+4s^2$ give the coefficients $(2,-3,4)$.
 
 G = @. 2 - 3c + 4c^2
 @assert C * G ≈ [2, -3, 4]
